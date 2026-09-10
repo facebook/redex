@@ -363,6 +363,28 @@ TEST_F(PostVerify, CompanionWithKeptMethodNotRelocated) {
   EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "keptMethod"));
 }
 
+// @Synchronized companion: must NOT be relocated because @Synchronized
+// generates MONITOR_ENTER on the companion instance.
+TEST_F(PostVerify, CompanionWithSynchronizedNotRelocated) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithSynchronized;");
+  auto* companion_cls =
+      find_class_named(classes, "LCompanionWithSynchronized$Companion;");
+  EXPECT_NE(nullptr, outer_cls);
+  EXPECT_NE(nullptr, companion_cls);
+  // The Companion sfield should still be present — companion not relocated.
+  EXPECT_NE(nullptr, find_sfield_named(*outer_cls, "Companion"));
+}
+
+// T262896337: D8 reuses the new-instance register for getClass() after
+// sput-object.  Phase 5 must not nullify new-instance here — it would NPE.
+TEST_F(PostVerify, CompanionWithClinitTagNotCorrupted) {
+  auto* outer_cls = find_class_named(classes, "LCompanionWithClinitTag;");
+  EXPECT_NE(nullptr, outer_cls);
+  auto* clinit = find_dmethod_named(*outer_cls, "<clinit>");
+  ASSERT_NE(nullptr, clinit);
+  EXPECT_NE(nullptr, find_instruction(clinit, DOPCODE_NEW_INSTANCE));
+}
+
 // Named companion object — must not be relocated by the pass because the inner
 // class name (NamedCompanionClass$Custom) does not end with $Companion.
 TEST_F(PostVerify, NamedCompanionNotRelocated) {
@@ -378,26 +400,4 @@ TEST_F(PostVerify, NamedCompanionNotRelocated) {
   // funZ should still be on the companion class, not relocated to outer.
   EXPECT_NE(nullptr, find_vmethod_named(*companion_cls, "funZ"));
   EXPECT_EQ(nullptr, find_dmethod_named(*outer_cls, "funZ"));
-}
-
-// T262896337: D8 reuses the new-instance register for getClass() after
-// sput-object.  Phase 5 must not nullify new-instance here — it would NPE.
-TEST_F(PostVerify, CompanionWithClinitTagNotCorrupted) {
-  auto* outer_cls = find_class_named(classes, "LCompanionWithClinitTag;");
-  EXPECT_NE(nullptr, outer_cls);
-  auto* clinit = find_dmethod_named(*outer_cls, "<clinit>");
-  ASSERT_NE(nullptr, clinit);
-  EXPECT_NE(nullptr, find_instruction(clinit, DOPCODE_NEW_INSTANCE));
-}
-
-// @Synchronized companion: must NOT be relocated because @Synchronized
-// generates MONITOR_ENTER on the companion instance.
-TEST_F(PostVerify, CompanionWithSynchronizedNotRelocated) {
-  auto* outer_cls = find_class_named(classes, "LCompanionWithSynchronized;");
-  auto* companion_cls =
-      find_class_named(classes, "LCompanionWithSynchronized$Companion;");
-  EXPECT_NE(nullptr, outer_cls);
-  EXPECT_NE(nullptr, companion_cls);
-  // The Companion sfield should still be present — companion not relocated.
-  EXPECT_NE(nullptr, find_sfield_named(*outer_cls, "Companion"));
 }

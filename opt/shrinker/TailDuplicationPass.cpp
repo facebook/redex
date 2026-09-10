@@ -15,10 +15,12 @@
 #include "DedupBlocks.h"
 #include "DexAssessments.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "ScopedMetrics.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {
@@ -72,7 +74,7 @@ bool make_hot_tail_unique(cfg::ControlFlowGraph& cfg,
                      *target_succ->case_key());
         break;
       }
-      FALLTHROUGH_INTENDED;
+      [[fallthrough]];
     case cfg::EDGE_GOTO:
     case cfg::EDGE_GHOST:
       cfg.add_edge(target_copy, target_succ->target(), target_succ->type());

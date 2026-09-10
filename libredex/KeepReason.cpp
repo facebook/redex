@@ -10,6 +10,7 @@
 #include <ostream>
 
 #include "ConcurrentContainers.h"
+#include "DexClass.h"
 #include "ProguardPrintConfiguration.h"
 #include "Show.h"
 

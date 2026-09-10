@@ -7,13 +7,26 @@
 
 #include "ProguardReporting.h"
 
+#include <json/value.h>
+#include <json/writer.h>
+
+#include <fstream>
 #include <iostream>
 #include <ostream>
+#include <sstream>
+#include <unordered_map>
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexStore.h"
 #include "DexUtil.h"
+#include "KeepReason.h"
 #include "MethodUtil.h"
+#include "ProguardConfiguration.h"
+#include "ProguardMatcher.h"
+#include "ProguardParser.h"
+#include "ProguardPrintConfiguration.h"
+#include "Show.h"
 
 std::string_view extract_suffix(std::string_view class_name) {
   auto i = class_name.find_last_of('.');
@@ -214,4 +227,251 @@ void redex::print_classes(std::ostream& output,
       redex::print_class(output, pg_map, cls);
     }
   }
+}
+
+namespace {
+
+std::string proguard_rule_kind(const keep_rules::KeepSpec& keep_rule) {
+  auto keep_style = keep_rules::show_keep_style(keep_rule);
+  if (!keep_style.empty() && keep_style[0] == '-') {
+    keep_style.erase(0, 1);
+  }
+  return keep_style;
+}
+
+void append_proguard_rule_warnings(Json::Value& warnings,
+                                   int rule_id,
+                                   const keep_rules::KeepSpec& keep_rule) {
+  auto append_warning = [&](const std::string& message) {
+    Json::Value warning;
+    warning["rule_id"] = rule_id;
+    warning["source"] =
+        keep_rule.source_filename + ":" + std::to_string(keep_rule.source_line);
+    warning["message"] = message;
+    warnings.append(warning);
+  };
+  if (keep_rule.allowoptimization) {
+    append_warning("allowoptimization is parsed but not implemented by Redex");
+  }
+}
+
+Json::Value make_proguard_parser_diagnostic_json(
+    const keep_rules::proguard_parser::CommandDiagnostic& diagnostic) {
+  Json::Value value;
+  value["command"] = diagnostic.command;
+  value["source_filename"] = diagnostic.filename;
+  value["source_line"] = diagnostic.line;
+  value["source"] = diagnostic.filename + ":" + std::to_string(diagnostic.line);
+  value["context"] = diagnostic.context;
+  return value;
+}
+
+Json::Value make_proguard_rule_json(
+    int rule_id,
+    const keep_rules::KeepSpec& keep_rule,
+    const std::string& kind,
+    const std::string& text,
+    const keep_rules::ProguardRuleRecorder* recorder,
+    const ConcurrentSet<const keep_rules::KeepSpec*>* used_rules,
+    const ConcurrentSet<const keep_rules::KeepSpec*>* unused_rules) {
+  Json::Value rule;
+  rule["id"] = rule_id;
+  rule["kind"] = kind;
+  rule["text"] = text;
+  rule["source_filename"] = keep_rule.source_filename;
+  rule["source_line"] = keep_rule.source_line;
+  rule["source"] =
+      keep_rule.source_filename + ":" + std::to_string(keep_rule.source_line);
+  rule["mark_classes"] = keep_rule.mark_classes;
+  rule["mark_conditionally"] = keep_rule.mark_conditionally;
+  rule["allowshrinking"] = keep_rule.allowshrinking;
+  rule["allowoptimization"] = keep_rule.allowoptimization;
+  rule["allowobfuscation"] = keep_rule.allowobfuscation;
+  rule["includedescriptorclasses"] = keep_rule.includedescriptorclasses;
+  if (recorder != nullptr) {
+    rule["matched"] = used_rules->count(&keep_rule) != 0u;
+    rule["unused"] = unused_rules->count(&keep_rule) != 0u;
+  }
+  return rule;
+}
+
+template <class DexMember>
+Json::Value make_proguard_lens_item_json(
+    const char* kind,
+    const std::string& name,
+    const DexMember* member,
+    const std::unordered_map<const keep_rules::KeepSpec*, int>& rule_ids) {
+  Json::Value item;
+  item["kind"] = kind;
+  item["name"] = name;
+  auto current_name = show(member);
+  item["current_name"] = current_name;
+  item["renamed"] = current_name != name;
+  item["referenced_state"] = member->rstate.str();
+  item["present"] = true;
+  item["can_delete"] = member->rstate.can_delete();
+  item["can_rename"] = member->rstate.can_rename();
+  if (keep_reason::Reason::record_keep_reasons()) {
+    Json::Value reason_ids(Json::arrayValue);
+    Json::Value reasons(Json::arrayValue);
+    for (const auto* reason :
+         UnorderedIterable(member->rstate.keep_reasons())) {
+      std::ostringstream reason_text;
+      reason_text << *reason;
+      reasons.append(reason_text.str());
+      if (reason->type == keep_reason::KEEP_RULE) {
+        auto it = rule_ids.find(reason->keep_rule);
+        if (it != rule_ids.end()) {
+          reason_ids.append(it->second);
+        }
+      }
+    }
+    item["reason_ids"] = reason_ids;
+    item["reasons"] = reasons;
+  }
+  return item;
+}
+
+} // namespace
+
+void redex::dump_proguard_lens_json(
+    const std::string& path,
+    const DexStoresVector& stores,
+    const char* phase,
+    const keep_rules::ProguardConfiguration* pg_config,
+    const keep_rules::ProguardRuleRecorder* recorder,
+    const keep_rules::proguard_parser::Stats* parser_stats,
+    const keep_rules::proguard_parser::Diagnostics* diagnostics,
+    size_t blocklisted_rules) {
+  Json::Value root;
+  root["schema_version"] = 1;
+  root["phase"] = phase;
+  root["rules"] = Json::arrayValue;
+  root["items"] = Json::arrayValue;
+  root["warnings"] = Json::arrayValue;
+
+  std::unordered_map<const keep_rules::KeepSpec*, int> rule_ids;
+  if (pg_config != nullptr) {
+    int rule_id = 1;
+    for (const auto& keep_rule : pg_config->keep_rules) {
+      rule_ids[keep_rule] = rule_id;
+      root["rules"].append(make_proguard_rule_json(
+          rule_id,
+          *keep_rule,
+          proguard_rule_kind(*keep_rule),
+          keep_rules::show_keep(*keep_rule),
+          recorder,
+          recorder != nullptr ? &recorder->used_keep_rules : nullptr,
+          recorder != nullptr ? &recorder->unused_keep_rules : nullptr));
+      append_proguard_rule_warnings(root["warnings"], rule_id, *keep_rule);
+      rule_id++;
+    }
+    for (const auto& keep_rule : pg_config->assumenosideeffects_rules) {
+      root["rules"].append(make_proguard_rule_json(
+          rule_id,
+          *keep_rule,
+          "assumenosideeffects",
+          keep_rules::show_simple_keep_rule(*keep_rule, "-assumenosideeffects"),
+          recorder,
+          recorder != nullptr ? &recorder->used_assumenosideeffect_rules
+                              : nullptr,
+          recorder != nullptr ? &recorder->unused_assumenosideeffect_rules
+                              : nullptr));
+      append_proguard_rule_warnings(root["warnings"], rule_id, *keep_rule);
+      rule_id++;
+    }
+    for (const auto& keep_rule : pg_config->assumevalues_rules) {
+      root["rules"].append(make_proguard_rule_json(
+          rule_id,
+          *keep_rule,
+          "assumevalues",
+          keep_rules::show_simple_keep_rule(*keep_rule, "-assumevalues"),
+          recorder,
+          recorder != nullptr ? &recorder->used_assumevalues_rules : nullptr,
+          recorder != nullptr ? &recorder->unused_assumevalues_rules
+                              : nullptr));
+      append_proguard_rule_warnings(root["warnings"], rule_id, *keep_rule);
+      rule_id++;
+    }
+  }
+
+  if (parser_stats != nullptr) {
+    root["parse_stats"]["parse_errors"] =
+        Json::Value::UInt64(parser_stats->parse_errors);
+    root["parse_stats"]["unknown_tokens"] =
+        Json::Value::UInt64(parser_stats->unknown_tokens);
+    root["parse_stats"]["unimplemented"] =
+        Json::Value::UInt64(parser_stats->unimplemented);
+    root["parse_stats"]["unknown_commands"] =
+        Json::Value::UInt64(parser_stats->unknown_commands);
+    root["parse_stats"]["blocklisted_rules"] =
+        Json::Value::UInt64(blocklisted_rules);
+    const auto* skipped_commands =
+        diagnostics != nullptr ? &diagnostics->skipped_commands : nullptr;
+    const auto* unknown_commands =
+        diagnostics != nullptr ? &diagnostics->unknown_commands : nullptr;
+
+    root["parse_stats"]["skipped_commands"] = Json::arrayValue;
+    if (skipped_commands != nullptr) {
+      for (const auto& diagnostic : *skipped_commands) {
+        Json::Value diagnostic_json =
+            make_proguard_parser_diagnostic_json(diagnostic);
+        root["parse_stats"]["skipped_commands"].append(diagnostic_json);
+
+        Json::Value warning = diagnostic_json;
+        warning["message"] = "ProGuard command skipped by Redex's parser";
+        root["warnings"].append(warning);
+      }
+    }
+    root["parse_stats"]["unknown_command_details"] = Json::arrayValue;
+    if (unknown_commands != nullptr) {
+      for (const auto& diagnostic : *unknown_commands) {
+        Json::Value diagnostic_json =
+            make_proguard_parser_diagnostic_json(diagnostic);
+        root["parse_stats"]["unknown_command_details"].append(diagnostic_json);
+
+        Json::Value warning = diagnostic_json;
+        warning["message"] = "unknown ProGuard command ignored by Redex";
+        root["warnings"].append(warning);
+      }
+    }
+    if (parser_stats->unimplemented > 0 &&
+        (skipped_commands == nullptr || skipped_commands->empty())) {
+      Json::Value warning;
+      warning["message"] =
+          "one or more ProGuard commands were skipped by Redex's parser";
+      warning["count"] = Json::Value::UInt64(parser_stats->unimplemented);
+      root["warnings"].append(warning);
+    }
+    if (parser_stats->unknown_commands > 0 &&
+        (unknown_commands == nullptr || unknown_commands->empty())) {
+      Json::Value warning;
+      warning["message"] =
+          "one or more unknown ProGuard commands were ignored by Redex";
+      warning["count"] = Json::Value::UInt64(parser_stats->unknown_commands);
+      root["warnings"].append(warning);
+    }
+  }
+
+  for (const auto& store : stores) {
+    for (const auto& dex : store.get_dexen()) {
+      for (const auto* cls : dex) {
+        root["items"].append(make_proguard_lens_item_json(
+            "class", show_deobfuscated(cls), cls, rule_ids));
+        for (const auto* method : cls->get_all_methods()) {
+          root["items"].append(make_proguard_lens_item_json(
+              "method", show_deobfuscated(method), method, rule_ids));
+        }
+        for (const auto* field : cls->get_all_fields()) {
+          root["items"].append(make_proguard_lens_item_json(
+              "field", show_deobfuscated(field), field, rule_ids));
+        }
+      }
+    }
+  }
+
+  std::ofstream ofs(path);
+  Json::StreamWriterBuilder builder;
+  builder["indentation"] = "  ";
+  ofs << Json::writeString(builder, root) << "\n";
 }

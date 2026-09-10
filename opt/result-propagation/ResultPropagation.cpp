@@ -6,7 +6,6 @@
  */
 
 #include "ResultPropagation.h"
-#include <optional>
 
 #include <vector>
 

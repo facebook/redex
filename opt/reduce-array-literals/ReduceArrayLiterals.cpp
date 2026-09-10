@@ -26,6 +26,7 @@
 #include "LiveRange.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -251,7 +252,7 @@ class Analyzer final
             index && is_literal(*index));
       if (is_array_construction_in_progress(array, index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %" PRIu64 " of %u", index_literal,
+        TRACE(RAL, 4, "[RAL]    index %" PRId64 " of %u", index_literal,
               array->length);
         if (is_next_index(*array, index_literal)) {
           TRACE(RAL, 4, "[RAL]    is next");
@@ -317,7 +318,7 @@ class Analyzer final
             index && is_literal(*index));
       if (is_array_construction_in_progress(array, index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %" PRIu64 " of %u", index_literal,
+        TRACE(RAL, 4, "[RAL]    index %" PRId64 " of %u", index_literal,
               array->length);
         if (is_next_index(*array, index_literal)) {
           TRACE(RAL, 4, "[RAL]    is next");

@@ -1054,6 +1054,12 @@ class ControlFlowGraph {
   bool structural_equals(const ControlFlowGraph& other,
                          const InstructionEquality& instruction_equals) const;
 
+  template <class ForwardIt>
+  bool insert(const InstructionIterator& position,
+              const ForwardIt& begin_index,
+              const ForwardIt& end_index,
+              bool before);
+
  private:
   friend class Block;
 
@@ -1146,12 +1152,6 @@ class ControlFlowGraph {
   // NOTE: this will result in an empty CFG, same as if the default
   // constructor has been called.
   void clear();
-
-  template <class ForwardIt>
-  bool insert(const InstructionIterator& position,
-              const ForwardIt& begin_index,
-              const ForwardIt& end_index,
-              bool before);
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.
@@ -1588,9 +1588,13 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
 
   // We might need to propagate source blocks if we create a block.
   // Find the latest source block in the current block in case.
+  // NOTE: when `pos` is `b->end()` we must not dereference it; treat that
+  // case as "no matching position MIE in this block" and scan the entire
+  // block for the latest source block.
+  const bool pos_is_end = (pos == b->end());
   SourceBlock* last_src_block = nullptr;
   for (const auto& mie : *b) {
-    if (mie.pos == pos->pos) {
+    if (!pos_is_end && mie.pos == pos->pos) {
       break;
     }
     if (mie.type == MFLOW_SOURCE_BLOCK) {
@@ -1825,6 +1829,12 @@ template <class ForwardIt>
 bool Block::push_back(const ForwardIt& begin, const ForwardIt& end) {
   return m_parent->push_back(this, begin, end);
 }
+
+/**
+ * Check whether, possibly at the end of a chain of gotos, the block will
+ * unconditionally throw.
+ */
+bool block_eventually_throws(Block* block);
 
 } // namespace cfg
 

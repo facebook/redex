@@ -11,6 +11,7 @@
 
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "Trace.h"
 
 using namespace copy_propagation_impl;
 

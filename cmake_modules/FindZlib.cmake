@@ -49,7 +49,7 @@ if ( _zlib_roots )
     find_path( ZLIB_INCLUDE_DIR NAMES zlib.h
         PATHS ${_zlib_roots} NO_DEFAULT_PATH
         PATH_SUFFIXES "include" )
-    find_library( ZLIB_LIBRARIES NAMES libz.a libz.so zlib
+    find_library( ZLIB_LIBRARIES NAMES libz.a libz.so zlib z libz.tbd
         PATHS ${_zlib_roots} NO_DEFAULT_PATH
         PATH_SUFFIXES "lib" )
 else ()
@@ -71,6 +71,14 @@ if (ZLIB_INCLUDE_DIR AND (PARQUET_MINIMAL_DEPENDENCY OR ZLIB_LIBRARIES))
   endif()
   set(ZLIB_STATIC_LIB ${ZLIB_LIBS}/${CMAKE_STATIC_LIBRARY_PREFIX}${ZLIB_LIB_NAME}${ZLIB_MSVC_STATIC_LIB_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
   set(ZLIB_SHARED_LIB ${ZLIB_LIBS}/${CMAKE_SHARED_LIBRARY_PREFIX}${ZLIB_LIB_NAME}${ZLIB_MSVC_SHARED_LIB_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX})
+  # On macOS SDKs, zlib may resolve to libz.tbd. Fall back to the located path
+  # when synthesized static/shared filenames do not exist.
+  if (NOT EXISTS "${ZLIB_STATIC_LIB}" AND EXISTS "${ZLIB_LIBRARIES}")
+    set(ZLIB_STATIC_LIB ${ZLIB_LIBRARIES})
+  endif()
+  if (NOT EXISTS "${ZLIB_SHARED_LIB}" AND EXISTS "${ZLIB_LIBRARIES}")
+    set(ZLIB_SHARED_LIB ${ZLIB_LIBRARIES})
+  endif()
 else ()
   set(ZLIB_FOUND FALSE)
 endif ()

@@ -103,9 +103,9 @@ void scan_any_init_reachables(
   // If trace_callbacks, include external overrides (potential callbacks)
   for (const auto* vmethod : owning_cls->get_vmethods()) {
     bool overrides_external = false;
-    const auto& overriddens =
+    const auto& overridden_methods =
         mog::get_overridden_methods(method_override_graph, vmethod);
-    for (const auto* overridden : UnorderedIterable(overriddens)) {
+    for (const auto* overridden : UnorderedIterable(overridden_methods)) {
       if (overridden->is_external()) {
         overrides_external = true;
       }
@@ -327,8 +327,8 @@ bool extends_android_sdk(const DexClass* cls) {
  * hierarchy instead of checking its name. The reason is that the type name can
  * be obfuscated before running the analysis, so it's not always reliable.
  *
- * An anonymous class can either extend an abstract type or extend j/l/Object;
- * and implement one interface.
+ * An anonymous can either extend an abstract type or extend j/l/Object; and
+ * implement one interface.
  */
 bool is_likely_anonymous_class(const DexType* type) {
   const auto* cls = type_class(type);
@@ -428,9 +428,9 @@ void GlobalTypeAnalysis::find_any_init_reachables(
     }
     for (const auto* vmethod : cls->get_vmethods()) {
       bool overrides_external = false;
-      const auto& overriddens =
+      const auto& overridden_methods =
           mog::get_overridden_methods(method_override_graph, vmethod);
-      for (const auto* overridden : UnorderedIterable(overriddens)) {
+      for (const auto* overridden : UnorderedIterable(overridden_methods)) {
         if (overridden->is_external()) {
           overrides_external = true;
         }

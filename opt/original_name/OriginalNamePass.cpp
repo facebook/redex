@@ -18,6 +18,7 @@
 #include "DexStoreUtil.h"
 
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"

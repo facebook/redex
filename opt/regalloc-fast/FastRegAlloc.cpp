@@ -6,9 +6,11 @@
  */
 
 #include "FastRegAlloc.h"
+#include "ConfigFiles.h"
 
 #include "DexUtil.h"
 #include "LinearScan.h"
+#include "PassManager.h"
 #include "Trace.h"
 #include "Walkers.h"
 

@@ -6,12 +6,10 @@
  */
 
 #include "TypeUtil.h"
-#include "ClassUtil.h"
-#include <boost/algorithm/string/predicate.hpp>
 
 #include "Debug.h"
 #include "DexUtil.h"
-#include "IRCode.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "Lazy.h"
 #include "RedexContext.h"
 #include "Show.h"
@@ -31,6 +29,7 @@ namespace type {
 
 #define FOR_EACH DEFINE_CACHED_TYPE
 WELL_KNOWN_TYPES
+KOTLIN_JVM_INTERNAL_TYPES
 #undef FOR_EACH
 
 namespace pseudo {
@@ -42,6 +41,7 @@ namespace pseudo {
 
 #define FOR_EACH DEFINE_CACHED_PSEUDO_TYPE
 PRIMITIVE_PSEUDO_TYPE_FIELDS
+KOTLIN_JVM_INTERNAL_FIELDS
 #undef FOR_EACH
 
 } // namespace pseudo
@@ -552,7 +552,7 @@ bool is_kotlin_function_interface(const DexType* type) {
     return false;
   }
   auto suffix = name.substr(prefix.length());
-  const auto ends_with_semicolon = boost::ends_with(suffix, ";");
+  const auto ends_with_semicolon = suffix.ends_with(";");
   redex_assert(ends_with_semicolon);
   suffix = suffix.substr(0, suffix.length() - 1);
   return !suffix.empty() &&
@@ -564,68 +564,12 @@ bool is_kotlin_function_interface(const DexType* type) {
 }
 
 bool is_kotlin_lambda(const DexClass* cls) {
-  if (const auto* super_cls = cls->get_super_class();
-      super_cls == type::kotlin_jvm_internal_Lambda()) {
-    if (!klass::maybe_non_d8_desugared_anonymous_class(cls)) {
-      return false;
-    }
-  } else if (super_cls == type::java_lang_Object()) {
-    if (!klass::maybe_d8_desugared_anonymous_class(cls)) {
-      return false;
-    }
-  } else {
-    return false;
-  }
-  const auto* intfs = cls->get_interfaces();
-  if (intfs->size() != 1) {
-    return false;
-  }
-  const auto* intf = intfs->at(0);
-  return is_kotlin_function_interface(intf);
+  return KotlinLambdaAnalyzer::for_class(cls).has_value();
 }
 
 bool is_kotlin_class(DexClass* cls) {
   const auto* src_string = cls->get_source_file();
-  return (src_string != nullptr) &&
-         boost::algorithm::ends_with(src_string->str(), ".kt");
-}
-
-bool is_kotlin_non_capturing_lambda(const DexClass* cls) {
-  if (!is_kotlin_lambda(cls)) {
-    return false;
-  }
-
-  if (cls->get_ifields().empty()) {
-    return true;
-  }
-
-  return false;
-}
-
-bool is_trivial_kotlin_lambda(const DexClass* cls, size_t max_instructions) {
-  if (!is_kotlin_non_capturing_lambda(cls)) {
-    return false;
-  }
-
-  const DexMethod* const invoke = get_kotlin_lambda_invoke_method(cls);
-  return invoke != nullptr &&
-         invoke->get_code()->count_opcodes() <= max_instructions;
-}
-
-DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls) {
-  always_assert(is_kotlin_lambda(cls));
-  DexMethod* result = nullptr;
-  for (auto* method : cls->get_vmethods()) {
-    if (method->get_name()->str() == "invoke" && is_public(method) &&
-        !is_synthetic(method) && method->get_code() != nullptr) {
-      if (result != nullptr) {
-        // Multiple invoke methods found, ill-formed lambda.
-        return nullptr;
-      }
-      result = method;
-    }
-  }
-  return result;
+  return (src_string != nullptr) && src_string->str().ends_with(".kt");
 }
 
 bool is_kotlin_internal_type(const DexType* type) {

@@ -13,6 +13,7 @@
 #include "DexUtil.h"
 #include "ObfuscateUtils.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Trace.h"
 #include "VirtualRenamer.h"
 #include "Walkers.h"

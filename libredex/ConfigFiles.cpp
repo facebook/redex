@@ -21,7 +21,6 @@
 #include "DexClass.h"
 #include "FrameworkApi.h"
 #include "GlobalConfig.h"
-#include "InlinerConfig.h"
 #include "MethodProfiles.h"
 #include "ProguardMap.h"
 #include "Trace.h"
@@ -437,6 +436,9 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
     }
 
     std::vector<std::string> coldstart_classes_with_method_profile_symbols;
+    coldstart_classes_with_method_profile_symbols.reserve(
+        coldstart_classes.size() + coldstart_20pct_classes.size() +
+        coldstart_1pct_classes.size());
 
     for (auto& cls_name : coldstart_classes) {
       if (cls_name.find(COLD_START_20PCT_END) != std::string::npos) {
@@ -544,7 +546,7 @@ const UnorderedSet<std::string>& ConfigFiles::get_live_class_split_list() {
 }
 
 bool ConfigFiles::is_relocated_class(std::string_view name) const {
-  return boost::algorithm::ends_with(name, CLASS_SPLITTING_RELOCATED_SUFFIX);
+  return name.ends_with(CLASS_SPLITTING_RELOCATED_SUFFIX);
 }
 
 void ConfigFiles::remove_relocated_part(std::string_view* name) {
@@ -937,8 +939,8 @@ void ConfigFiles::build_cls_interdex_groups() {
     }
 
     DexType* type = DexType::get_type(cls_name);
-    if ((type != nullptr) && m_cls_to_interdex_group.count(type) == 0) {
-      m_cls_to_interdex_group[type] = group_id;
+    if (type != nullptr) {
+      m_cls_to_interdex_group.try_emplace(type, group_id);
     }
   }
 

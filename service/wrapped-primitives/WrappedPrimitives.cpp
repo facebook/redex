@@ -6,7 +6,6 @@
  */
 
 #include "WrappedPrimitives.h"
-#include <optional>
 
 #include <inttypes.h>
 
@@ -92,12 +91,13 @@ bool contains_relevant_invoke(
 std::optional<std::pair<const DexType*, int64_t>>
 extract_object_with_attr_value(const ConstantValue& value) {
   auto obj_or_none = value.maybe_get<ObjectWithImmutAttrDomain>();
-  if (obj_or_none && obj_or_none->get_constant()) {
+  if (obj_or_none != std::nullopt &&
+      obj_or_none->get_constant() != std::nullopt) {
     auto object = *obj_or_none->get_constant();
     always_assert(object.attributes.size() == 1);
     auto signed_value =
         object.attributes.front().value.maybe_get<SignedConstantDomain>();
-    if (signed_value && signed_value.value().get_constant()) {
+    if (signed_value && signed_value.value().get_constant() != std::nullopt) {
       auto primitive_value = *signed_value.value().get_constant();
       return std::pair<const DexType*, int64_t>(object.type, primitive_value);
     } else {
@@ -212,7 +212,7 @@ WrappedPrimitives::build_known_definitions(
         auto dest_reg = insn->dest();
         const auto& value = reg_env.get(dest_reg);
         auto maybe_pair = extract_object_with_attr_value(value);
-        if (maybe_pair) {
+        if (maybe_pair != std::nullopt) {
           // Store a mapping of primary instruction to its dest register and
           // value. This may be useful later for ambiguous data flow into a
           // wrapped API method.
@@ -316,10 +316,10 @@ void WrappedPrimitives::optimize_method(
 
         for (size_t i = 0; i < srcs_size; i++) {
           auto current_reg = insn->src(i);
-          TRACE(WP, 2, "  Checking v%d", current_reg);
+          TRACE(WP, 2, "  Checking v%u", current_reg);
           const auto& value = reg_env.get(current_reg);
           auto maybe_pair = extract_object_with_attr_value(value);
-          if (maybe_pair) {
+          if (maybe_pair != std::nullopt) {
             const auto* wrapper_type = maybe_pair->first;
             auto literal = maybe_pair->second;
             TRACE(WP,
@@ -346,7 +346,7 @@ void WrappedPrimitives::optimize_method(
             // fallback to check if N known ObjectWithImmutAttr instances are
             // flowing into this call.
             TRACE(WP, 2,
-                  "  v%d is not a known object (i = %zu); will fall back and "
+                  "  v%u is not a known object (i = %zu); will fall back and "
                   "look for "
                   "multiple incoming definitions",
                   current_reg, i);

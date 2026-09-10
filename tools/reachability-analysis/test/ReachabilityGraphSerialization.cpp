@@ -8,6 +8,7 @@
 #include "Reachability.h"
 
 #include <fstream>
+#include <unistd.h>
 
 #include "Creators.h"
 #include "Debug.h"
@@ -44,11 +45,11 @@ int main(int argc, char** argv) {
   g_redex = new RedexContext();
 
   const auto& graph = generate_graph();
-  std::ofstream os;
-  os.open(outfile);
-  dump_graph(os, *graph);
+  {
+    std::ofstream os;
+    os.open(outfile);
+    dump_graph(os, *graph);
+  }
 
-  delete g_redex;
-
-  return 0;
+  _exit(0); // Do not clean up.
 }

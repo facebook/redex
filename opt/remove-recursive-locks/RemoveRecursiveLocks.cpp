@@ -196,7 +196,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
     // OK, undo and return.
     LockType new_locks = locks ^ (1 << (max_d - 1));
     always_assert_log(
-        new_locks < locks, "%d x %zu -> %d", locks, max_d, new_locks);
+        new_locks < locks, "%u x %zu -> %u", locks, max_d, new_locks);
     auto ret = exit_state_at_source;
     ret.set(def, LockDepths(new_locks));
     return ret;
@@ -246,7 +246,7 @@ struct LocksIterator : public ir_analyzer::BaseIRAnalyzer<LockEnvironment> {
     }
 
     LockType new_locks = old ^ (1 << (max_old_d - 1));
-    always_assert_log(new_locks < old, "%d x %zu -> %d", old, max_d, new_locks);
+    always_assert_log(new_locks < old, "%u x %zu -> %u", old, max_d, new_locks);
     current_state->set(def, LockDepths(new_locks));
   }
 

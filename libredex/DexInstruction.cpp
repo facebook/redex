@@ -12,7 +12,6 @@
 #include "DexIdx.h"
 #include "DexMethodHandle.h"
 #include "DexOutput.h"
-#include "Macros.h"
 #include "Show.h"
 #include "Trace.h"
 #include "Warning.h"
@@ -451,13 +450,13 @@ DexInstruction* DexInstruction::set_src(size_t i, uint16_t vreg) {
       m_arg[1] = (m_arg[1] & 0xfff0) | vreg;
       return this;
     case 4:
-      m_arg[0] = (m_arg[1] & 0xff0f) | (vreg << 4);
+      m_arg[1] = (m_arg[1] & 0xff0f) | (vreg << 4);
       return this;
     case 5:
-      m_arg[0] = (m_arg[1] & 0xf0ff) | (vreg << 8);
+      m_arg[1] = (m_arg[1] & 0xf0ff) | (vreg << 8);
       return this;
     case 6:
-      m_arg[0] = (m_arg[1] & 0x0fff) | (vreg << 12);
+      m_arg[1] = (m_arg[1] & 0x0fff) | (vreg << 12);
       return this;
     default:
       not_reached();
@@ -843,7 +842,7 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     // While nops allow any upper byte (except the ones above), we do not want
     // to distinguish that.
     fopcode = DexOpcode::DOPCODE_NOP;
-    FALLTHROUGH_INTENDED;
+    [[fallthrough]];
   case DOPCODE_MOVE:
   case DOPCODE_MOVE_WIDE:
   case DOPCODE_MOVE_OBJECT:

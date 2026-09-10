@@ -175,7 +175,7 @@ void Impl::hash(const std::string& str) {
 void Impl::hash(const DexString* s) { hash(s->str()); }
 
 void Impl::hash(bool value) {
-  TRACE(HASHER, 4, "[hasher] %u", value);
+  TRACE(HASHER, 4, "[hasher] %d", value);
   boost::hash_combine(m_hash, value);
 }
 void Impl::hash(uint8_t value) {

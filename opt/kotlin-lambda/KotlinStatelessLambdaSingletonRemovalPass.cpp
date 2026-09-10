@@ -7,51 +7,19 @@
 
 #include "KotlinStatelessLambdaSingletonRemovalPass.h"
 
-#include "ConfigFiles.h"
 #include "DexUtil.h"
 #include "KotlinInstanceRewriter.h"
-#include "MethodProfiles.h"
 #include "PassManager.h"
-#include "TypeUtil.h"
-
-bool KotlinStatelessLambdaSingletonRemovalPass::is_hot_lambda(
-    const DexClass* cls,
-    const method_profiles::MethodProfiles& method_profiles) const {
-  for (const auto* method : cls->get_vmethods()) {
-    if (method->get_name()->str() == "invoke" &&
-        method->get_code() != nullptr) {
-      for (const auto& [interaction_id, stats_map] :
-           method_profiles.all_interactions()) {
-        auto it = stats_map.find(method);
-        if (it != stats_map.end() &&
-            it->second.call_count > m_exclude_hot_call_count_threshold) {
-          return true;
-        }
-      }
-      break;
-    }
-  }
-  return false;
-}
 
 void KotlinStatelessLambdaSingletonRemovalPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& conf, PassManager& mgr) {
+    DexStoresVector& stores, ConfigFiles& /* conf */, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   KotlinInstanceRewriter rewriter;
   ConcurrentMap<DexFieldRef*, std::set<std::pair<IRInstruction*, DexMethod*>>>
       concurrentLambdaMap;
 
-  const auto& method_profiles = conf.get_method_profiles();
-  const bool has_method_profiles = method_profiles.has_stats();
-
-  auto is_excludable =
-      [this, &method_profiles, has_method_profiles](DexClass* cls) -> bool {
-    redex_assert(type::is_kotlin_non_capturing_lambda(cls));
-    return has_method_profiles && is_hot_lambda(cls, method_profiles);
-  };
-
-  KotlinInstanceRewriter::Stats stats = rewriter.collect_instance_usage(
-      scope, concurrentLambdaMap, is_excludable, m_exclude_hot);
+  KotlinInstanceRewriter::Stats stats =
+      rewriter.collect_instance_usage(scope, concurrentLambdaMap);
 
   stats += rewriter.remove_escaping_instance(scope, concurrentLambdaMap);
   stats += rewriter.transform(concurrentLambdaMap);

@@ -644,7 +644,7 @@ struct Matcher {
         }
         default:
           not_reached_log("Unexpected string directive: 0x%x",
-                          (int)replace_info.string);
+                          static_cast<unsigned int>(replace_info.string));
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
         switch (replace_info.literal) {
@@ -692,7 +692,7 @@ struct Matcher {
           break;
         default:
           not_reached_log("Unexpected type directive 0x%x",
-                          (int)replace_info.type);
+                          static_cast<unsigned int>(replace_info.type));
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
         switch (replace_info.field) {
@@ -704,7 +704,7 @@ struct Matcher {
           break;
         default:
           not_reached_log("Unexpected field directive 0x%x",
-                          (int)replace_info.field);
+                          static_cast<unsigned int>(replace_info.field));
         }
       }
     }

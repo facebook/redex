@@ -25,6 +25,7 @@
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
+#include "IRInstruction.h"
 #include "InlineEnumValues.h"
 #include "MatchFlow.h"
 #include "OptimizeEnumsAnalysis.h"
@@ -33,6 +34,7 @@
 #include "PassManager.h"
 #include "ProguardMap.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -659,7 +661,7 @@ class OptimizeEnums {
         if (!check_required_access_flags(synth_access, field->get_access())) {
           continue;
         }
-        s << field->get_name()->str_copy() << ", ";
+        s << field->get_name()->str() << ", ";
       }
       TRACE(ENUM, 2, "Unexpected synthetic fields found on %s %s", SHOW(cls),
             s.str().c_str());

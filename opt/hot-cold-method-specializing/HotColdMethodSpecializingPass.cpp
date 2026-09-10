@@ -7,17 +7,17 @@
 
 #include "HotColdMethodSpecializingPass.h"
 
-#include "Debug.h"
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Show.h"
 #include "Shrinker.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

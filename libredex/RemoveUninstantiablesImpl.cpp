@@ -18,6 +18,7 @@
 #include "NullPointerExceptionUtil.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
+#include "SourceBlocks.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -140,10 +141,12 @@ Stats replace_uninstantiable_refs(
     case OPCODE_INVOKE_SUPER:
       // Note that we don't want to call resolve_method here: The most precise
       // class information is already present in the supplied method reference,
-      // which gives us the best change of finding an uninstantiable type.
+      // which gives us the best chance of finding an uninstantiable type.
       if (scoped_uninstantiable_types.count(insn->get_method()->get_class()) !=
           0u) {
-        m.replace(it, npe_creator.get_insns(insn));
+        auto* sb = source_blocks::get_last_source_block_before(it.block(),
+                                                               it.unwrap());
+        m.replace_mie(it, npe_creator.get_insns(insn, sb));
         stats.invokes++;
       }
       continue;
@@ -166,14 +169,18 @@ Stats replace_uninstantiable_refs(
 
     if (opcode::is_an_iget(op) && (scoped_uninstantiable_types.count(
                                        insn->get_field()->get_class()) != 0u)) {
-      m.replace(it, npe_creator.get_insns(insn));
+      auto* sb =
+          source_blocks::get_last_source_block_before(it.block(), it.unwrap());
+      m.replace_mie(it, npe_creator.get_insns(insn, sb));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
     if (opcode::is_an_iput(op) && (scoped_uninstantiable_types.count(
                                        insn->get_field()->get_class()) != 0u)) {
-      m.replace(it, npe_creator.get_insns(insn));
+      auto* sb =
+          source_blocks::get_last_source_block_before(it.block(), it.unwrap());
+      m.replace_mie(it, npe_creator.get_insns(insn, sb));
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
@@ -239,11 +246,11 @@ Stats reduce_uncallable_instance_methods(
             method->is_virtual()
                 ? resolve_method_deprecated(method, MethodSearch::Super, method)
                 : nullptr;
+        auto* method_cls = type_class(method->get_class());
         if (overridden_method == nullptr && method->is_virtual() &&
             !is_implementation_method(method)) {
           class_post_processing.update(
-              type_class(method->get_class()),
-              [method](DexClass*, ClassPostProcessing& cpp, bool) {
+              method_cls, [method](DexClass*, ClassPostProcessing& cpp, bool) {
                 cpp.abstract_vmethods.insert(method);
               });
           std::lock_guard<std::mutex> lock_guard(stats_mutex);
@@ -254,10 +261,10 @@ Stats reduce_uncallable_instance_methods(
                    !is_implementation_method(method)) {
           // We require same visibility, as we are going to remove the method
           // and rewrite all references to the overridden method. TODO: Consider
-          // upgrading the visibility of the overriden method.
+          // upgrading the visibility of the overridden method.
           always_assert(overridden_method != method);
           class_post_processing.update(
-              type_class(method->get_class()),
+              method_cls,
               [method,
                overridden_method](DexClass*, ClassPostProcessing& cpp, bool) {
                 cpp.remove_vmethods.emplace(method, overridden_method);
@@ -276,7 +283,7 @@ Stats reduce_uncallable_instance_methods(
       uncallable_instance_methods);
 
   // Post-processing:
-  // 1. make methods abstract (stretty straightforward), and
+  // 1. make methods abstract (pretty straightforward), and
   // 2. remove methods (per class in parallel for best performance, and rewrite
   // all invocation references)
   std::vector<DexClass*> classes_with_removed_vmethods;

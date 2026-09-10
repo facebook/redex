@@ -18,6 +18,7 @@
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 void ClinitOutlinePass::bind_config() {

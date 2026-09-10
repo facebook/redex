@@ -40,14 +40,7 @@
   FOR_EACH(dalvik_annotation_optimization_NeverCompile,                  \
            "Ldalvik/annotation/optimization/NeverCompile;")              \
   FOR_EACH(dalvik_annotation_optimization_NeverInline,                   \
-           "Ldalvik/annotation/optimization/NeverInline;")               \
-  FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")   \
-  FOR_EACH(kotlin_coroutines_jvm_internal_ContinuationImpl,              \
-           "Lkotlin/coroutines/jvm/internal/ContinuationImpl;")          \
-  FOR_EACH(kotlin_coroutines_jvm_internal_RestrictedSuspendLambda,       \
-           "Lkotlin/coroutines/jvm/internal/RestrictedSuspendLambda;")   \
-  FOR_EACH(kotlin_coroutines_jvm_internal_SuspendLambda,                 \
-           "Lkotlin/coroutines/jvm/internal/SuspendLambda;")
+           "Ldalvik/annotation/optimization/NeverInline;")
 
 #define PRIMITIVE_PSEUDO_TYPE_FIELDS                                       \
   FOR_EACH(Void_TYPE, "Ljava/lang/Void;.TYPE:Ljava/lang/Class;")           \
@@ -89,6 +82,28 @@
            "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")         \
   FOR_EACH(java_lang_Objects_clone,                                           \
            "[Ljava/lang/Object;.clone:()Ljava/lang/Object;")                  \
+  FOR_EACH(java_lang_Class_cast,                                              \
+           "Ljava/lang/Class;.cast:(Ljava/lang/Object;)Ljava/lang/Object;")   \
   FOR_EACH(java_lang_Class_forName,                                           \
            "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/"             \
-           "lang/Class;")
+           "lang/Class;")                                                     \
+  FOR_EACH(java_lang_Class_isInstance,                                        \
+           "Ljava/lang/Class;.isInstance:(Ljava/lang/Object;)Z")
+
+#define KOTLIN_JVM_INTERNAL_TYPES                                              \
+  FOR_EACH(kotlin_jvm_internal_Lambda, "Lkotlin/jvm/internal/Lambda;")         \
+  FOR_EACH(kotlin_jvm_internal_Ref_IntRef, "Lkotlin/jvm/internal/Ref$IntRef;") \
+  FOR_EACH(kotlin_jvm_internal_Ref_ObjectRef,                                  \
+           "Lkotlin/jvm/internal/Ref$ObjectRef;")                              \
+  FOR_EACH(kotlin_coroutines_jvm_internal_ContinuationImpl,                    \
+           "Lkotlin/coroutines/jvm/internal/ContinuationImpl;")                \
+  FOR_EACH(kotlin_coroutines_jvm_internal_RestrictedSuspendLambda,             \
+           "Lkotlin/coroutines/jvm/internal/RestrictedSuspendLambda;")         \
+  FOR_EACH(kotlin_coroutines_jvm_internal_SuspendLambda,                       \
+           "Lkotlin/coroutines/jvm/internal/SuspendLambda;")
+
+#define KOTLIN_JVM_INTERNAL_FIELDS                       \
+  FOR_EACH(kotlin_jvm_internal_RefIntRef_element,        \
+           "Lkotlin/jvm/internal/Ref$IntRef;.element:I") \
+  FOR_EACH(kotlin_jvm_internal_RefObjectRef_element,     \
+           "Lkotlin/jvm/internal/Ref$ObjectRef;.element:Ljava/lang/Object;")

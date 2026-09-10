@@ -57,7 +57,9 @@
 #include "PassManager.h"
 #include "RedexContext.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
+#include "InitClassesWithSideEffects.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "Trace.h"

@@ -36,6 +36,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -486,15 +487,33 @@ std::tuple<bool, size_t, size_t> process_code_ifs_impl(
       src->push_back(cloned_insn);
     }
 
-    // After removing edges by adding return instructions to predecessors, the
-    // profiling data in `b` is stale: it was valid when `b` had more
-    // predecessors. Scale `b` down by exactly the inflow that left it. Every
-    // SourceBlock in the block is scaled, chain included: they annotate the
-    // same program point, so they all describe the same reduced execution
-    // count. Only do this while `b` still has predecessors (is still
-    // reachable).
+    // After removing edges by adding return instructions to predecessors,
+    // we need to normalize the source blocks in the destination block `b`.
+    // The profiling data in `b` was valid when `b` had more predecessors,
+    // but becomes inconsistent after predecessor paths are eliminated.
+    // Only normalize if `b` still has predecessors (is still reachable).
+    // Scale `b` down by exactly the inflow that left it. Every SourceBlock in
+    // the block is scaled, chain included: they annotate the same program
+    // point, so they all describe the same reduced execution count.
+    //
+    // This supersedes the idom-normalize below rather than stacking with it:
+    // `normalize(idom_sb, sb, ...)` has factor `caller_val / callee_val`, so it
+    // sets `b`'s val equal to its dominator's -- the `count(b) ==
+    // count(idom(b))` assumption that is false for loop headers.
     if (n_slots > 0 && !b->preds().empty()) {
       source_blocks::apportion::shrink_by_departed(b, leaving_share);
+    } else if (!insns_to_add.empty() && !b->preds().empty()) {
+      auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
+      auto* idom = doms.get_idom(b);
+      if (idom != nullptr) {
+        auto* idom_sb = source_blocks::get_last_source_block(idom);
+        if (idom_sb != nullptr) {
+          source_blocks::foreach_source_block(b, [&](auto* sb) {
+            source_blocks::normalize::normalize(
+                idom_sb, sb, std::min(idom_sb->vals_size, sb->vals_size));
+          });
+        }
+      }
     }
   }
 

@@ -6,7 +6,9 @@
  */
 
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "RedexTest.h"
+#include "TypeUtil.h"
 
 class DexUtilTest : public RedexTest {};
 
@@ -87,4 +89,62 @@ TEST_F(DexUtilTest, is_valid_identifier_range) {
   std::string mod = s;
   mod[mod.length() / 2] = ';';
   EXPECT_FALSE(is_valid_identifier(mod.substr(2, mod.length() - 4)));
+}
+
+// Verifies that create_abstract_method_error_block emits the exact 6
+// instructions, in order, with the expected types/methods/registers wired up.
+// This is the bytecode that BridgeSynthInlinePass uses to replace the body of
+// synthetic bridge methods whose body is invoke-super to an abstract method
+// (which would itself throw AbstractMethodError if dispatched).
+TEST_F(DexUtilTest, create_abstract_method_error_block_emits_throw_sequence) {
+  std::vector<IRInstruction*> block;
+  const auto* msg = DexString::make_string("redex-synthesized: LFoo;.bar:()V");
+  create_abstract_method_error_block(msg, block);
+
+  ASSERT_EQ(block.size(), 6u);
+
+  // 1: new-instance Ljava/lang/AbstractMethodError;
+  EXPECT_EQ(block[0]->opcode(), OPCODE_NEW_INSTANCE);
+  ASSERT_NE(block[0]->get_type(), nullptr);
+  EXPECT_STREQ(block[0]->get_type()->c_str(),
+               "Ljava/lang/AbstractMethodError;");
+
+  // 2: move-result-pseudo-object v0  (captures the new-instance)
+  EXPECT_EQ(block[1]->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  EXPECT_EQ(block[1]->dest(), 0u);
+
+  // 3: const-string "<message>"
+  EXPECT_EQ(block[2]->opcode(), OPCODE_CONST_STRING);
+  EXPECT_EQ(block[2]->get_string(), msg);
+
+  // 4: move-result-pseudo-object v1  (captures the const-string)
+  EXPECT_EQ(block[3]->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  EXPECT_EQ(block[3]->dest(), 1u);
+
+  // 5: invoke-direct {v0, v1},
+  // Ljava/lang/AbstractMethodError;.<init>:(Ljava/lang/String;)V
+  EXPECT_EQ(block[4]->opcode(), OPCODE_INVOKE_DIRECT);
+  EXPECT_EQ(block[4]->srcs_size(), 2u);
+  EXPECT_EQ(block[4]->src(0), 0u);
+  EXPECT_EQ(block[4]->src(1), 1u);
+  ASSERT_NE(block[4]->get_method(), nullptr);
+  EXPECT_STREQ(block[4]->get_method()->get_class()->c_str(),
+               "Ljava/lang/AbstractMethodError;");
+  EXPECT_STREQ(block[4]->get_method()->get_name()->c_str(), "<init>");
+  ASSERT_NE(block[4]->get_method()->get_proto(), nullptr);
+  EXPECT_EQ(block[4]->get_method()->get_proto()->get_rtype(), type::_void());
+  ASSERT_NE(block[4]->get_method()->get_proto()->get_args(), nullptr);
+  EXPECT_EQ(block[4]->get_method()->get_proto()->get_args()->size(), 1u);
+
+  // 6: throw v0
+  EXPECT_EQ(block[5]->opcode(), OPCODE_THROW);
+  EXPECT_EQ(block[5]->srcs_size(), 1u);
+  EXPECT_EQ(block[5]->src(0), 0u);
+
+  // create_abstract_method_error_block returns owned IRInstructions for the
+  // caller to insert into an IRCode/CFG; free them here since the test never
+  // hands them off.
+  for (auto* insn : block) {
+    delete insn;
+  }
 }

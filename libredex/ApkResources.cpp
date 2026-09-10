@@ -12,6 +12,7 @@
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <cstdint>
 #include <map>
+#include <stack>
 #include <string>
 #include <string_view>
 
@@ -407,7 +408,7 @@ void TableSnapshot::get_configurations(
     auto configs = m_table_parser.get_configs(package_id, type_id);
     for (const auto& c : configs) {
       always_assert_log(sizeof(android::ResTable_config) >= dtohl(c->size),
-                        "Config at %p has unexpected size %d", c,
+                        "Config at %p has unexpected size %u", c,
                         dtohl(c->size));
       android::ResTable_config swapped;
       swapped.copyFromDtoH(*c);
@@ -1232,7 +1233,7 @@ class NodeAttributeTransformer : public XmlElementCollector {
             node, extension, &new_attr, attribute_count(), pool_lookup);
         if (ordinal >= 0) {
           TRACE(RES, 9,
-                "Node has %d attributes, class will be added at ordinal %d",
+                "Node has %d attributes, class will be added at ordinal %u",
                 extension->attributeCount, (uint32_t)ordinal);
           // Make a copy of the extension to begin changes. First, set the
           // element's name to "view".
@@ -1246,7 +1247,7 @@ class NodeAttributeTransformer : public XmlElementCollector {
             new_extension.styleIndex = htods(dtohs(extension->styleIndex) + 1);
           }
           TRACE(RES, 9, "Replacing node extension at 0x%lx",
-                get_file_offset(extension));
+                static_cast<unsigned long>(get_file_offset(extension)));
           m_file_manipulator->replace_at(extension, new_extension);
 
           // Note the place where the new attribute should be inserted.
@@ -1258,7 +1259,8 @@ class NodeAttributeTransformer : public XmlElementCollector {
           android::ResXMLTree_node new_node = *node;
           new_node.header.size = htodl(dtohl(node->header.size) +
                                        sizeof(android::ResXMLTree_attribute));
-          TRACE(RES, 9, "Replacing node at 0x%lx", get_file_offset(node));
+          TRACE(RES, 9, "Replacing node at 0x%lx",
+                static_cast<unsigned long>(get_file_offset(node)));
           m_file_manipulator->replace_at(node, new_node);
           m_changes++;
         } else {

@@ -48,6 +48,16 @@ IRInstruction::IRInstruction(const IRInstruction& other)
 }
 
 IRInstruction& IRInstruction::operator=(const IRInstruction& other) {
+  if (this == &other) {
+    return *this;
+  }
+  // Free old resources before overwriting.
+  if (m_num_srcs > MAX_NUM_INLINE_SRCS) {
+    delete[] m_srcs;
+  }
+  if (has_data()) {
+    delete m_data;
+  }
   m_opcode = other.m_opcode;
   m_num_srcs = other.m_num_srcs;
   m_dest = other.m_dest;
@@ -229,7 +239,14 @@ uint16_t IRInstruction::size() const {
     op = OPCODE_INVOKE_STATIC;
   }
   if (opcode::is_an_internal(op)) {
-    return opcode::is_injection_id(op) ? 2 : opcode::is_unreachable(op) ? 1 : 0;
+    if (opcode::is_r_const(op)) {
+      return 3;
+    } else if (opcode::is_injection_id(op)) {
+      return 2;
+    } else if (opcode::is_unreachable(op)) {
+      return 1;
+    }
+    return 0;
   }
   static int args[] = {
       0, /* FMT_f00x   */

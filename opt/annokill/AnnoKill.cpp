@@ -16,6 +16,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "Timer.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 constexpr const char* METRIC_ANNO_KILLED = "num_anno_killed";
@@ -47,7 +48,7 @@ AnnoKill::AnnoKill(Scope& scope,
       m_kill_bad_signatures(kill_bad_signatures) {
   TRACE(ANNO,
         2,
-        "only_force_kill=%u kill_bad_signatures=%d",
+        "only_force_kill=%d kill_bad_signatures=%d",
         m_only_force_kill,
         kill_bad_signatures);
   // Load annotations that should not be deleted.

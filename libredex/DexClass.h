@@ -717,7 +717,7 @@ struct DexTryItem {
   DexTryItem(uint32_t start_addr, uint32_t insn_count)
       : m_start_addr(start_addr) {
     always_assert_log(insn_count <= std::numeric_limits<uint16_t>::max(),
-                      "too many instructions in a single try region %d > 2^16",
+                      "too many instructions in a single try region %u > 2^16",
                       insn_count);
     m_insn_count = insn_count;
   }

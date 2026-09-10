@@ -60,3 +60,10 @@ class Tool {
  protected:
   bool m_verbose;
 };
+
+void load_root_dexen(DexStore& store,
+                     const std::string& dexen_dir_str,
+                     bool balloon = false,
+                     bool throw_on_balloon_error = true,
+                     bool verbose = true,
+                     int support_dex_version = 35);

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "RClass.h"
 
 /**
  * Change sget instructions on known resource class fields to a special IR
@@ -32,6 +33,11 @@ class MaterializeResourceConstantsPass : public Pass {
     };
   }
 
+  struct Stats {
+    size_t deleted_clinits{0};
+    size_t instructions_created{0};
+  };
+
   std::string get_config_doc() override {
     return trim(R"(
 A pass that replaces all instructions of the form `sget vx, Lsome/path/R$sometype;.SomeResourceId:I`
@@ -49,6 +55,10 @@ Note that this pass also simplifies the clinit of all R$ classes to resolve the 
   }
   void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override {}
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  static Stats run_impl(const resources::RClassReader& r_class_reader,
+                        Scope& scope,
+                        bool replace_const_instructions,
+                        bool create_init_class_insns = true);
 
  private:
   bool m_replace_const_instructions{false};

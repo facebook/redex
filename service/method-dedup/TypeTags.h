@@ -7,7 +7,11 @@
 
 #pragma once
 
-#include "DexUtil.h"
+#include <cstddef>
+#include <cstdint>
+#include <unordered_map>
+
+class DexType;
 
 class TypeTags {
 

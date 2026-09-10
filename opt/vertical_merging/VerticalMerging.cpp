@@ -452,7 +452,7 @@ void record_blocklist(
       if (strstr(cls->get_name()->c_str(), name.c_str()) != nullptr) {
         TRACE(VMERGE,
               5,
-              "%s | %s | %u",
+              "%s | %s | %d",
               SHOW(cls),
               cls->rstate.str().c_str(),
               can_delete(cls));

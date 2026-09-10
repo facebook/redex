@@ -10,6 +10,7 @@
 #include "ControlFlow.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "SourceBlocksUtils.h"
 
 namespace npe {
 
@@ -33,8 +34,8 @@ class NullPointerExceptionCreator {
   explicit NullPointerExceptionCreator(cfg::ControlFlowGraph* cfg)
       : m_cfg(cfg) {}
 
-  std::vector<IRInstruction*> get_insns(
-      IRInstruction* implicitly_throwing_npe_insn) {
+  std::vector<MethodItemEntry> get_insns(
+      IRInstruction* implicitly_throwing_npe_insn, SourceBlock* sb = nullptr) {
     // clang-format off
     // const-string "<message>"
     // move-result-pseudo-object v1
@@ -108,9 +109,23 @@ class NullPointerExceptionCreator {
     IRInstruction* throw_inst =
         (new IRInstruction(OPCODE_THROW))->set_src(0, m_state->exception_reg);
 
-    return {const_inst,  const_move_result_pseudo_object_insn,
-            new_inst,    new_move_result_pseudo_object_insn,
-            invoke_insn, throw_inst};
+    std::vector<MethodItemEntry> result;
+    result.emplace_back(const_inst);
+    result.emplace_back(const_move_result_pseudo_object_insn);
+    if (sb != nullptr) {
+      result.emplace_back(source_blocks::clone_as_synthetic(sb));
+    }
+    result.emplace_back(new_inst);
+    result.emplace_back(new_move_result_pseudo_object_insn);
+    if (sb != nullptr) {
+      result.emplace_back(source_blocks::clone_as_synthetic(sb));
+    }
+    result.emplace_back(invoke_insn);
+    if (sb != nullptr) {
+      result.emplace_back(source_blocks::clone_as_synthetic(sb));
+    }
+    result.emplace_back(throw_inst);
+    return result;
   }
 };
 

@@ -20,6 +20,7 @@
 #include "MethodUtil.h"
 #include "PassManager.h"
 #include "ScopedCFG.h"
+#include "Show.h"
 #include "StringTreeSet.h"
 #include "SwitchEquivFinder.h"
 #include "SwitchEquivPrerequisites.h"
@@ -204,7 +205,7 @@ void gather_possible_transformations(
     if (ends_in_if_statment(b) &&
         find_determining_reg(*fixpoint, b, &determining_reg)) {
       // Keep going, maybe this block is a useful starting point.
-      TRACE(CCB, 2, "determining_reg is %d for B%zu", determining_reg, b->id());
+      TRACE(CCB, 2, "determining_reg is %u for B%zu", determining_reg, b->id());
       auto* last_insn = b->get_last_insn()->insn;
       auto root_branch = cfg.find_insn(last_insn);
       auto finder = std::make_unique<SwitchEquivFinder>(
@@ -375,7 +376,7 @@ Stats apply_transform(const PassState& pass_state,
     constexpr int16_t STRING_TREE_NO_ENTRY = 0;
     int16_t counter = STRING_TREE_NO_ENTRY + 1;
     for (const auto& type : ordered_types) {
-      auto string_name = java_names::internal_to_external(type->str_copy());
+      auto string_name = java_names::internal_to_external(type->str());
       int16_t ordinal = counter++;
       string_tree_items.emplace(string_name, ordinal);
       auto* block = key_to_case.at(type);

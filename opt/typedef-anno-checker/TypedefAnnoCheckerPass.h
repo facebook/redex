@@ -12,7 +12,6 @@
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
-#include <optional>
 
 #include "TypeInference.h"
 #include <utility>
@@ -41,7 +40,6 @@ class TypedefAnnoCheckerPass : public Pass {
     size_t max_patcher_iteration{10};
     UnorderedSet<const DexType*> generated_type_annos;
     UnorderedSet<std::string> do_not_check_list;
-    bool skip_anonymous_classes{true};
   };
 
   void bind_config() override {
@@ -118,38 +116,40 @@ class TypedefAnnoChecker {
         m_intdef_constants(intdef_constants),
         m_method_override_graph(method_override_graph) {}
 
-  bool is_value_of_opt(const DexMethod* m);
-  bool is_delegate(const DexMethod* m);
-  bool is_generated(const DexMethod* m) const;
-  bool should_not_check(const DexMethod* m) const;
-
   void run(DexMethod* m);
-
-  void check_instruction(DexMethod* m,
-                         const type_inference::TypeInference* inference,
-                         IRInstruction* insn,
-                         const std::optional<const DexType*>& return_annotation,
-                         live_range::UseDefChains* ud_chains,
-                         TypeEnvironments& envs);
-
-  bool check_typedef_value(DexMethod* m,
-                           const std::optional<const DexType*>& annotation,
-                           live_range::UseDefChains* ud_chains,
-                           IRInstruction* insn,
-                           const src_index_t src,
-                           const type_inference::TypeInference* inference,
-                           TypeEnvironments& envs);
 
   bool complete() { return m_good; }
 
   std::string error() { return m_error; }
 
  private:
-  void add_error(const std::string& error, bool double_newline = true);
+  bool should_skip_method(const DexMethod* m) const;
+
+  void check_instruction(IRInstruction* insn);
+
+  // Resolve a method and collect its overrides into a set.
+  UnorderedBag<const DexMethod*> resolve_callees(const DexMethod* method);
+
+  // Returns nullopt if the value is safe, or the error message string if not.
+  std::optional<std::string> check_typedef_value(
+      const std::optional<const DexType*>& annotation,
+      IRInstruction* insn,
+      src_index_t src);
+
+  void add_error(const std::string& error);
+  std::string format_source_loc(const IRInstruction* insn) const;
 
   bool m_good{true};
   std::string m_error;
   TypedefAnnoCheckerPass::Config m_config;
+  UnorderedMap<const IRInstruction*, const DexPosition*> m_insn_positions;
+
+  // Per-method state, set in run()
+  DexMethod* m_method{nullptr};
+  const type_inference::TypeInference* m_inference{nullptr};
+  const live_range::UseDefChains* m_ud_chains{nullptr};
+  const TypeEnvironments* m_envs{nullptr};
+  std::optional<const DexType*> m_return_annotation;
 
   const StrDefConstants& m_strdef_constants;
   const IntDefConstants& m_intdef_constants;

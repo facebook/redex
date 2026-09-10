@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <optional>
 
 #include "Creators.h"
 #include "DexClass.h"

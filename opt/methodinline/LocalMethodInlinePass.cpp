@@ -24,8 +24,10 @@
  */
 
 #include "LocalMethodInlinePass.h"
+#include "ConfigFiles.h"
 
 #include "MethodInliner.h"
+#include "PassManager.h"
 
 void LocalMethodInlinePass::run_pass(DexStoresVector& stores,
                                      ConfigFiles& conf,

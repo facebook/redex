@@ -7,6 +7,8 @@
 
 #include "Creators.h"
 
+#include <bit>
+
 #include <boost/range/adaptor/reversed.hpp>
 
 #include "Debug.h"
@@ -15,7 +17,6 @@
 #include "MethodUtil.h"
 #include "RedexContext.h"
 #include "Show.h"
-#include "StlUtil.h"
 #include "Transform.h"
 
 namespace {
@@ -403,7 +404,7 @@ void MethodBlock::load_const(Location& loc, double value) {
   always_assert(loc.is_wide());
   IRInstruction* load = new IRInstruction(OPCODE_CONST_WIDE);
   load->set_dest(loc.get_reg());
-  load->set_literal(std20::bit_cast<int64_t>(value));
+  load->set_literal(std::bit_cast<int64_t>(value));
   loc.type = type::_double();
   push_instruction(load);
 }
@@ -726,10 +727,10 @@ DexMethod* MethodCreator::create() {
   // now allocate the rest at the start
   size_t temp_reg{0};
   for (size_t i = 0; i < meth_code->get_registers_size(); ++i) {
-    if (reg_map.find(i) != reg_map.end()) {
+    if (!reg_map.emplace(i, temp_reg).second) {
       continue;
     }
-    reg_map[i] = temp_reg++;
+    temp_reg++;
   }
   always_assert(temp_reg == param_reg);
   transform::remap_registers(meth_code, reg_map);

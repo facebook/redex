@@ -7,13 +7,27 @@
 
 #pragma once
 
+#include <cstdint>
 #include <iosfwd>
 #include <string>
+#include <vector>
 
 #include "ProguardConfiguration.h"
 
 namespace keep_rules {
 namespace proguard_parser {
+
+struct CommandDiagnostic {
+  std::string command;
+  std::string filename;
+  uint32_t line{0};
+  std::string context;
+};
+
+struct Diagnostics {
+  std::vector<CommandDiagnostic> skipped_commands;
+  std::vector<CommandDiagnostic> unknown_commands;
+};
 
 struct Stats {
   size_t unknown_tokens{0};
@@ -31,9 +45,16 @@ struct Stats {
 };
 
 Stats parse_file(const std::string& filename, ProguardConfiguration* pg_config);
+Stats parse_file(const std::string& filename,
+                 ProguardConfiguration* pg_config,
+                 Diagnostics* diagnostics);
 Stats parse(std::istream& config,
             ProguardConfiguration* pg_config,
             const std::string& filename = "");
+Stats parse(std::istream& config,
+            ProguardConfiguration* pg_config,
+            const std::string& filename,
+            Diagnostics* diagnostics);
 
 /*
  * Typically used to remove keep rules that we wish to apply only to optimizers

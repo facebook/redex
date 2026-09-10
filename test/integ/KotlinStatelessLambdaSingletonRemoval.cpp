@@ -6,7 +6,6 @@
  */
 
 #include <algorithm>
-#include <string>
 #include <string_view>
 #include <tuple>
 
@@ -14,9 +13,12 @@
 #include <gtest/gtest.h>
 
 #include "DexUtil.h"
+#include "IRList.h"
+#include "IROpcode.h"
+#include "InsertSourceBlocks.h"
 #include "KotlinStatelessLambdaSingletonRemovalPass.h"
 #include "RedexTest.h"
-#include "Resolver.h"
+#include "ScopedCFG.h"
 #include "Show.h"
 
 namespace {
@@ -25,7 +27,7 @@ using ::testing::IsNull;
 using ::testing::Not;
 using ::testing::NotNull;
 
-class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
+class KotlinStatelessLambdaSingletonRemovalTest : public RedexIntegrationTest {
  protected:
   void set_root_method(std::string_view full_name) {
     auto* method = DexMethod::get_method(full_name)->as_def();
@@ -98,17 +100,17 @@ class KotlinLambdaSingletonRemovalTest : public RedexIntegrationTest {
   }
 };
 
-TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view lambda_class_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
   constexpr std::string_view root_method_name =
-      "LKotlinLambdaSingletonRemoval;.foo:()V";
+      "LKotlinStatelessLambdaSingletonRemoval;.foo:()V";
   constexpr std::string_view clinit_method_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;.<clinit>:()V";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;.<clinit>:()V";
   constexpr std::string_view singleton_field_name =
-      "LKotlinLambdaSingletonRemoval$foo$1;.INSTANCE:"
-      "LKotlinLambdaSingletonRemoval$foo$1;";
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;.INSTANCE:"
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
   set_root_method(root_method_name);
 
   auto* lambda_class = type_class(DexType::make_type(lambda_class_name));
@@ -148,7 +150,7 @@ TEST_F(KotlinLambdaSingletonRemovalTest, LambdaSingletonIsRemoved) {
   check_opcode_absent(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   auto scope = build_class_scope(stores);
   constexpr std::string_view class_name = "LKotlinInstanceRemovalNamedEquiv;";
   constexpr std::string_view root_method =
@@ -194,12 +196,12 @@ TEST_F(KotlinLambdaSingletonRemovalTest, NoEffectOnNamedClass) {
   check_opcode_present(code_clinit, OPCODE_SPUT_OBJECT);
 }
 
-class KotlinLambdaSingletonNoopTest
-    : public KotlinLambdaSingletonRemovalTest,
+class KotlinStatelessLambdaSingletonNoopTest
+    : public KotlinStatelessLambdaSingletonRemovalTest,
       public ::testing::WithParamInterface<
           std::tuple<std::string_view, std::string_view>> {};
 
-TEST_P(KotlinLambdaSingletonNoopTest, main) {
+TEST_P(KotlinStatelessLambdaSingletonNoopTest, main) {
   auto scope = build_class_scope(stores);
   const auto& class_name = std::get<0>(GetParam());
   const auto& root_method_name = std::get<1>(GetParam());
@@ -242,12 +244,142 @@ TEST_P(KotlinLambdaSingletonNoopTest, main) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    KotlinLambdaSingletonNoopTests,
-    KotlinLambdaSingletonNoopTest,
+    KotlinStatelessLambdaSingletonNoopTests,
+    KotlinStatelessLambdaSingletonNoopTest,
     ::testing::ValuesIn(
         std::initializer_list<std::tuple<std::string_view, std::string_view>>{
             {"LKotlinStatefulLambda;", "LKotlinStatefulLambda;.foo:()V"},
             {"LKotlinAnonymousClassImplementingFunction$foo$addfn$1;",
              "LKotlinAnonymousClassImplementingFunction;.foo:()V"}}));
+
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest,
+       SourceBlockCoverageAfterRemoval) {
+  auto scope = build_class_scope(stores);
+  constexpr std::string_view lambda_class_name =
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
+  constexpr std::string_view root_method_name =
+      "LKotlinStatelessLambdaSingletonRemoval;.foo:()V";
+  set_root_method(root_method_name);
+
+  for (auto* cls : scope) {
+    cls->set_deobfuscated_name(cls->get_name()->str());
+    for (auto* m : cls->get_all_methods()) {
+      m->set_deobfuscated_name(show(m));
+    }
+  }
+
+  auto* lambda_class = type_class(DexType::make_type(lambda_class_name));
+  ASSERT_THAT(lambda_class, NotNull());
+
+  auto* isbp = new InsertSourceBlocksPass();
+  auto* klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  std::vector<Pass*> passes{isbp, klr};
+  run_passes(passes);
+
+  auto* root_method = DexMethod::get_method(root_method_name)->as_def();
+  auto* code = root_method->get_code();
+  ASSERT_THAT(code, NotNull());
+
+  check_opcode_absent(code, OPCODE_SGET_OBJECT);
+
+  cfg::ScopedCFG cfg{code};
+  bool found_invoke = false;
+  for (auto* block : cfg->blocks()) {
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
+        continue;
+      }
+      auto* ref = it->insn->get_method();
+      if (ref->get_name()->str() != "<init>" ||
+          ref->get_class() != DexType::get_type(lambda_class_name)) {
+        continue;
+      }
+      found_invoke = true;
+      bool has_sb = false;
+      for (auto prev = it; prev != block->begin();) {
+        --prev;
+        if (prev->type == MFLOW_SOURCE_BLOCK) {
+          has_sb = true;
+          break;
+        }
+        if (prev->type == MFLOW_OPCODE) {
+          break;
+        }
+      }
+      EXPECT_TRUE(has_sb)
+          << "Missing source block before INVOKE_DIRECT <init> in block B"
+          << block->id() << " - uncovered throw-delineated block\n"
+          << SHOW(*cfg);
+    }
+  }
+  EXPECT_TRUE(found_invoke) << "INVOKE_DIRECT <init> not found after pass";
+}
+
+TEST_F(KotlinStatelessLambdaSingletonRemovalTest,
+       ThrowDelineatedCoverageAfterInvokeDirect) {
+  auto scope = build_class_scope(stores);
+  constexpr std::string_view lambda_class_name =
+      "LKotlinStatelessLambdaSingletonRemoval$foo$1;";
+  constexpr std::string_view root_method_name =
+      "LKotlinStatelessLambdaSingletonRemoval;.foo:()V";
+  set_root_method(root_method_name);
+
+  for (auto* cls : scope) {
+    cls->set_deobfuscated_name(cls->get_name()->str());
+    for (auto* m : cls->get_all_methods()) {
+      m->set_deobfuscated_name(show(m));
+    }
+  }
+
+  auto* lambda_class = type_class(DexType::make_type(lambda_class_name));
+  ASSERT_THAT(lambda_class, NotNull());
+
+  auto* isbp = new InsertSourceBlocksPass();
+  auto* klr = new KotlinStatelessLambdaSingletonRemovalPass();
+  std::vector<Pass*> passes{isbp, klr};
+  run_passes(passes);
+
+  auto* root_method = DexMethod::get_method(root_method_name)->as_def();
+  auto* code = root_method->get_code();
+  ASSERT_THAT(code, NotNull());
+
+  cfg::ScopedCFG cfg{code};
+  bool found_invoke = false;
+  for (auto* block : cfg->blocks()) {
+    for (auto it = block->begin(); it != block->end(); ++it) {
+      if (it->type != MFLOW_OPCODE) {
+        continue;
+      }
+      if (it->insn->opcode() != OPCODE_INVOKE_DIRECT) {
+        continue;
+      }
+      auto* ref = it->insn->get_method();
+      if (ref->get_name()->str() != "<init>" ||
+          ref->get_class() != DexType::get_type(lambda_class_name)) {
+        continue;
+      }
+      found_invoke = true;
+      bool has_sb_after = false;
+      for (auto check_it = std::next(it); check_it != block->end();
+           ++check_it) {
+        if (check_it->type == MFLOW_SOURCE_BLOCK) {
+          has_sb_after = true;
+          break;
+        }
+        if (check_it->type == MFLOW_OPCODE) {
+          break;
+        }
+      }
+      EXPECT_TRUE(has_sb_after)
+          << "Missing source block after INVOKE_DIRECT <init> in block B"
+          << block->id() << " - uncovered throw-delineated segment\n"
+          << SHOW(*cfg);
+    }
+  }
+  EXPECT_TRUE(found_invoke) << "INVOKE_DIRECT <init> not found after pass";
+}
 
 } // namespace

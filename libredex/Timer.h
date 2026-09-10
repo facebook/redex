@@ -39,11 +39,18 @@ struct Timer {
  private:
   static std::mutex& get_s_lock();
   static times_t& get_s_times();
-  static unsigned s_indent;
+  static int s_indent;
   std::string m_msg;
   std::chrono::high_resolution_clock::time_point m_start;
   bool m_indent;
 };
+
+// Helper to record a chrome trace event without exposing ChromeTraceWriter
+// in this header. Defined in Timer.cpp.
+void maybe_record_chrome_trace(
+    const std::string& name,
+    std::chrono::high_resolution_clock::time_point start,
+    std::chrono::high_resolution_clock::time_point end);
 
 // An accumulating thread-safe timer with a scope-based approach.
 // Note: uses uint64_t microseconds to simplify and use optimized atomic.

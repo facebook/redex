@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include "ArscStats.h"
-#include "Debug.h"
 #include "androidfw/ResourceTypes.h"
 #include "arsc/TestStructures.h"
 #include "utils/Serialize.h"

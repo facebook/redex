@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <optional>
-
 #include <functional>
 
 #include "ClassHierarchy.h"

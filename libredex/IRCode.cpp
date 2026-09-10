@@ -740,7 +740,7 @@ namespace {
 
 using RegMap = transform::RegMap;
 
-const char* DEBUG_ONLY show_reg_map(RegMap& map) {
+DEBUG_ONLY const char* show_reg_map(RegMap& map) {
   for (auto pair : UnorderedIterable(map)) {
     TRACE(INL, 5, "%u -> %u", pair.first, pair.second);
   }
@@ -876,7 +876,7 @@ void IRCode::split_and_insert_try_regions(
         valid_addr += insn_size;
       }
     }
-    not_reached_log("no valid address for %d", requested_addr);
+    not_reached_log("no valid address for %u", requested_addr);
   };
 
   constexpr uint32_t max = std::numeric_limits<uint16_t>::max();

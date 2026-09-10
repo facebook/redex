@@ -14,6 +14,8 @@
 #include "Debug.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Show.h"
+#include "Trace.h"
 
 namespace {
 

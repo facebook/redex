@@ -7,6 +7,8 @@
 
 #include "TypeTags.h"
 
+#include "Debug.h"
+
 void TypeTags::set_type_tag(const DexType* type, uint32_t type_tag) {
   m_type_to_tag[type] = type_tag;
   m_tag_to_type[type_tag] = type;

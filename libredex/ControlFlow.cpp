@@ -47,7 +47,7 @@ bool edge_type_structural_equals(const cfg::CompactEdgeVector& e1,
   }
 
   return std::all_of(edge_types.begin(), edge_types.end(),
-                     [](const size_t& count) { return count == 0; });
+                     [](const ssize_t& count) { return count == 0; });
 }
 
 // return true if `it` should be the last instruction of this block
@@ -592,6 +592,20 @@ bool Block::cannot_throw() const {
     }
   }
   return true;
+}
+
+bool block_eventually_throws(Block* block) {
+  UnorderedSet<Block*> visited{block};
+  for (; block->goes_to_only_edge() != nullptr;
+       block = block->goes_to_only_edge()) {
+    if (!visited.insert(block->goes_to_only_edge()).second) {
+      // non-terminating loop
+      return false;
+    }
+  }
+  auto last_insn_it = block->get_last_insn();
+  return last_insn_it != block->end() &&
+         last_insn_it->insn->opcode() == OPCODE_THROW;
 }
 
 std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
@@ -1397,7 +1411,7 @@ void ControlFlowGraph::sanity_check() const {
 
   auto used_regs = compute_registers_size();
   always_assert_log(used_regs <= m_registers_size,
-                    "used regs %d > registers size %d. %s", used_regs,
+                    "used regs %u > registers size %u. %s", used_regs,
                     m_registers_size, SHOW(*this));
 
   no_dangling_dex_positions();

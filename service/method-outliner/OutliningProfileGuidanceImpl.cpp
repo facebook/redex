@@ -127,7 +127,7 @@ void gather_sufficiently_warm_and_hot_methods(
     if (has_method_profiles) {
       break;
     }
-    FALLTHROUGH_INTENDED;
+    [[fallthrough]];
   case PerfSensitivity::kAlwaysWarm:
     walk::methods(scope,
                   [sufficiently_warm_methods,
@@ -143,7 +143,7 @@ void gather_sufficiently_warm_and_hot_methods(
     if (has_method_profiles) {
       break;
     }
-    FALLTHROUGH_INTENDED;
+    [[fallthrough]];
   case PerfSensitivity::kAlwaysHot:
     walk::methods(
         scope,

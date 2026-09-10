@@ -17,6 +17,7 @@
 
 #include "ConfigFiles.h"
 #include "Debug.h"
+#include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IOUtil.h"
@@ -278,7 +279,7 @@ void ObfuscateResourcesPass::run_pass(DexStoresVector& stores,
     for (const auto& p : plugin_registry.get_plugins()) {
       auto reachable_ids = p->get_reachable_resources(
           resources->get_base_assets_dir(), res_table->name_to_ids);
-      TRACE(OBFUS_RES, 2, "Plugin %s keeping %zu name(s) from obfuscation",
+      TRACE(OBFUS_RES, 2, "Plugin %s preventing %zu name(s) from obfuscation",
             p->get_name().c_str(), reachable_ids.size());
       for (auto id : UnorderedIterable(reachable_ids)) {
         auto search = res_table->id_to_name.find(id);

@@ -2414,7 +2414,7 @@ TEST_F(CommonSubexpressionEliminationTest, if_ne) {
 }
 
 TEST_F(CommonSubexpressionEliminationTest, if_lt_after_join) {
-  // When control-flow joins from two paths, we lose the branch conditions.
+  // When control-flow joints from two paths, we lose the branch conditions.
   const auto* code_str = R"(
     (
       (load-param v0)

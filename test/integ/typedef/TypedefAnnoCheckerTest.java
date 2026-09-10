@@ -8,6 +8,7 @@
 package com.facebook.redextest;
 
 import integ.TestIntDef;
+import integ.TestIntDefNoBool;
 import integ.TestStringDef;
 
 @interface NotSafeAnno {}
@@ -355,6 +356,31 @@ public class TypedefAnnoCheckerTest {
 
   @TestStringDef public String testNullString() {
     return null;
+  }
+
+  // Simulates the ModelGen pattern: an untyped source (like Parcel.readInt())
+  // passes a value to a typedef-annotated parameter. The checker should NOT
+  // flag this if the source class is in do_not_check_list.
+  static void testUntypedSourceToTypedSink() {
+    int val = UntypedSource.readInt();
+    testValidIntAnnoReturn(val);
+  }
+
+  // Test that a boolean parameter returned as an IntDef that does NOT contain
+  // both 0 and 1 is flagged as an error. The compiler optimizes `flag ? 1 : 0`
+  // to use the boolean value directly, producing an IOPCODE_LOAD_PARAM def.
+  // TestIntDefNoBool has {0, 2, 3} but not 1, so this should fail.
+  static @TestIntDefNoBool int testBoolParamInvalidIntDef(boolean flag) {
+    int res = flag ? 1 : 0;
+    return res;
+  }
+
+  // Test that an XOR-optimized ternary with an IntDef that does NOT contain
+  // both 0 and 1 is flagged as an error. The compiler optimizes `flag ? 0 : 1`
+  // to XOR. TestIntDefNoBool has {0, 2, 3} but not 1, so this should fail.
+  static @TestIntDefNoBool int testXORInvalidIntDef(boolean flag) {
+    int res = flag ? 0 : 1;
+    return res;
   }
 
 }

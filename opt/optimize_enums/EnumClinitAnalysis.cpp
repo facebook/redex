@@ -11,6 +11,7 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "Trace.h"
 
 /* clang-format off */
@@ -99,6 +100,7 @@ using CombinedAnalyzer =
                                 cp::HeapEscapeAnalyzer,
                                 cp::StringAnalyzer,
                                 cp::ConstantClassObjectAnalyzer,
+                                cp::ResourceIdAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 
 class EnumOrdinalAnalyzer
@@ -176,7 +178,7 @@ class EnumOrdinalAnalyzer
       cp::semantically_inline_method(
           method->get_code(),
           insn,
-          CombinedAnalyzer(state, nullptr, nullptr, nullptr, nullptr),
+          CombinedAnalyzer(state, nullptr, nullptr, nullptr, nullptr, nullptr),
           env);
       return true;
     }
@@ -264,7 +266,8 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
   auto& cfg = code->cfg();
   auto fp_iter = std::make_unique<cp::intraprocedural::FixpointIterator>(
       cfg,
-      CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr, nullptr));
+      CombinedAnalyzer(cls->get_type(), nullptr, nullptr, nullptr, nullptr,
+                       nullptr));
   fp_iter->run(ConstantEnvironment());
 
   // XXX we can't use collect_return_state below because it doesn't capture the
@@ -353,6 +356,15 @@ EnumAttributes analyze_enum_clinit(const DexClass* cls,
           if (auto primitive_const = primitive_value->get_constant()) {
             attributes.m_field_map[enum_ifield][*ordinal_value]
                 .primitive_value = *primitive_const;
+            continue;
+          }
+        } else if (auto resource_id_value =
+                       env_value.maybe_get<ConstantResourceIdDomain>()) {
+          if (auto primitive_const = resource_id_value->get_constant()) {
+            auto& enum_field_value =
+                attributes.m_field_map[enum_ifield][*ordinal_value];
+            enum_field_value.primitive_value = primitive_const->id;
+            enum_field_value.is_resource_id = true;
             continue;
           }
         }

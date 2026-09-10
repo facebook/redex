@@ -10,8 +10,7 @@
 #include <ostream>
 #include <sstream>
 
-namespace {
-std::string show_keep_style(const keep_rules::KeepSpec& keep_rule) {
+std::string keep_rules::show_keep_style(const keep_rules::KeepSpec& keep_rule) {
   if (keep_rule.mark_classes && !keep_rule.mark_conditionally &&
       !keep_rule.allowshrinking) {
     return "-keep";
@@ -39,6 +38,7 @@ std::string show_keep_style(const keep_rules::KeepSpec& keep_rule) {
   return "-invalidkeep";
 }
 
+namespace {
 std::string show_keep_modifiers(const keep_rules::KeepSpec& keep_rule) {
   std::string modifiers;
   if (keep_rule.allowoptimization) {
@@ -56,8 +56,8 @@ std::string show_keep_modifiers(const keep_rules::KeepSpec& keep_rule) {
 
 std::string keep_rules::show_keep(const KeepSpec& keep_rule, bool show_source) {
   std::ostringstream text;
-  text << show_keep_style(keep_rule) << show_keep_modifiers(keep_rule) << " "
-       << keep_rule;
+  text << keep_rules::show_keep_style(keep_rule)
+       << show_keep_modifiers(keep_rule) << " " << keep_rule;
   if (show_source) {
     std::ostringstream source;
     source << keep_rule.source_filename << ":" << keep_rule.source_line;

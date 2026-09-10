@@ -26,6 +26,7 @@ from pyredex.logger import get_store_logs_temp_file
 IS_WINDOWS: bool = os.name == "nt"
 LOGGER: logging.Logger = logging.getLogger(__name__)
 
+
 _BACKTRACE_PATTERN: typing.Pattern[str] = re.compile(
     r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$"
 )

@@ -79,8 +79,8 @@ std::string make_big_string(size_t len) {
   return result;
 }
 
-UNUSED void assert_u16_string(const std::u16string& actual_str,
-                              const std::string& expected) {
+DEBUG_ONLY void assert_u16_string(const std::u16string& actual_str,
+                                  const std::string& expected) {
   std::u16string expected_str(expected.begin(), expected.end());
   ASSERT_EQ(actual_str, expected_str);
 }
@@ -977,8 +977,8 @@ void delete_resources(const std::string& arsc_file_path,
   reloaded_file.finalize_resource_table({});
 }
 
-UNUSED int32_t load_global_strings(const RedexMappedFile& arsc_file,
-                                   android::ResStringPool* pool) {
+DEBUG_ONLY int32_t load_global_strings(const RedexMappedFile& arsc_file,
+                                       android::ResStringPool* pool) {
   apk::TableParser parser;
   parser.visit((void*)arsc_file.const_data(), arsc_file.size());
   auto* pool_header = parser.m_global_pool_header;

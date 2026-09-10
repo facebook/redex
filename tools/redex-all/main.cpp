@@ -19,6 +19,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <fcntl.h>
@@ -39,6 +40,8 @@
 #include <boost/program_options/variables_map.hpp>
 
 #include "AggregateException.h"
+#include "ChromeTraceWriter.h"
+#include "ClassOrderSample.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h" // To set s_DEBUG.
@@ -67,6 +70,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ProguardPrintConfiguration.h" // New ProGuard configuration
+#include "ProguardReporting.h"
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexProperties.h"
@@ -75,9 +79,9 @@
 #include "RedexResources.h"
 #include "Sanitizers.h"
 // NOLINTNEXTLINE(facebook-unused-include-check)
-#include "ClassOrderSample.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
+// NOLINTNEXTLINE(facebook-unused-include-check)
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
@@ -122,9 +126,10 @@ struct Arguments {
   bool properties_check_allow_disabled{false};
   std::optional<std::string> assert_abort;
   std::optional<std::string> crash_file;
+  bool chrome_trace{false};
 };
 
-UNUSED void dump_args(const Arguments& args) {
+DEBUG_ONLY void dump_args(const Arguments& args) {
   std::cout << "out_dir: " << args.out_dir << '\n';
   std::cout << "verify_none_mode: " << args.redex_options.verify_none_enabled
             << '\n';
@@ -497,6 +502,11 @@ Arguments parse_args(int argc, char* argv[]) {
 
   od.add_options()("crash-file", po::value<std::string>(),
                    "Path to a file crash data should be written to.");
+  od.add_options()(
+      "chrome-trace",
+      "Write a Chrome Trace Event JSON file (redex-chrome-trace.json) to the "
+      "meta output directory for visualization in Perfetto or "
+      "chrome://tracing.");
 
   // For testing purposes.
   od.add_options()("assert-abort", po::value<std::string>(),
@@ -529,6 +539,10 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("crash-file") != 0u) {
     args.crash_file = vm["crash-file"].as<std::string>();
+  }
+
+  if (vm.count("chrome-trace") != 0u) {
+    args.chrome_trace = true;
   }
 
   if (vm.count("assert-abort") != 0u) {
@@ -574,7 +588,10 @@ Arguments parse_args(int argc, char* argv[]) {
     reflected_config["properties"] = reflect_property_definitions();
 
     std::cout << reflected_config << std::flush;
-    exit(EXIT_SUCCESS);
+    // Use _exit() to avoid running static destructors, which can crash
+    // when ConcurrentContainer destructors access already-destroyed
+    // AccumulatingTimer globals during exit() tear-down.
+    _exit(EXIT_SUCCESS);
   }
 
   if (vm.count("show-passes") != 0u) {
@@ -1260,10 +1277,16 @@ void dump_keep_reasons(const ConfigFiles& conf,
   }
 }
 
-void process_proguard_rules(ConfigFiles& conf,
-                            Scope& scope,
-                            Scope& external_classes,
-                            keep_rules::ProguardConfiguration& pg_config) {
+void process_proguard_rules(
+    ConfigFiles& conf,
+    const DexStoresVector& stores,
+    Scope& scope,
+    Scope& external_classes,
+    keep_rules::ProguardConfiguration& pg_config,
+    bool dump_proguard_lens,
+    const keep_rules::proguard_parser::Stats& parser_stats,
+    const keep_rules::proguard_parser::Diagnostics& parser_diagnostics,
+    size_t blocklisted_rules) {
   bool keep_all_annotation_classes;
   conf.get_json_config().get("keep_all_annotation_classes", true,
                              keep_all_annotation_classes);
@@ -1302,6 +1325,17 @@ void process_proguard_rules(ConfigFiles& conf,
                         }()
                             .c_str());
     }
+  }
+  if (dump_proguard_lens) {
+    redex::dump_proguard_lens_json(
+        conf.metafile("redex-proguard-lens-initial.json"),
+        stores,
+        "initial",
+        &pg_config,
+        &proguard_rule_recorder,
+        &parser_stats,
+        &parser_diagnostics,
+        blocklisted_rules);
   }
 }
 
@@ -1431,16 +1465,20 @@ void redex_frontend(ConfigFiles& conf, /* input */
                     Arguments& args, /* inout */
                     keep_rules::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
+                    bool dump_proguard_lens,
                     Json::Value& stats) {
   Timer redex_frontend_timer("Redex_frontend");
 
   g_redex->load_pointers_cache();
 
   keep_rules::proguard_parser::Stats parser_stats{};
+  keep_rules::proguard_parser::Diagnostics parser_diagnostics{};
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
-    parser_stats +=
-        keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
+    parser_stats += keep_rules::proguard_parser::parse_file(
+        pg_config_path,
+        &pg_config,
+        dump_proguard_lens ? &parser_diagnostics : nullptr);
   }
 
   size_t blocklisted_rules{0};
@@ -1551,7 +1589,15 @@ void redex_frontend(ConfigFiles& conf, /* input */
     init_reachable_classes(scope, ReachableClassesConfig(json_config));
   });
   Timer::scope("Processing proguard rules", [&] {
-    process_proguard_rules(conf, scope, external_classes, pg_config);
+    process_proguard_rules(conf,
+                           stores,
+                           scope,
+                           external_classes,
+                           pg_config,
+                           dump_proguard_lens,
+                           parser_stats,
+                           parser_diagnostics,
+                           blocklisted_rules);
   });
 
   TRACE(NATIVE, 2, "Blanket native classes: %zu",
@@ -2044,6 +2090,11 @@ int check_pass_properties(const Arguments& args) {
 
 // NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[]) {
+  // Start chrome tracing as early as possible so the epoch predates all
+  // timers. Will be disabled after argument parsing if --chrome-trace
+  // was not requested.
+  ChromeTraceWriter::init();
+
   signal(SIGABRT, debug_backtrace_handler);
   signal(SIGINT, debug_backtrace_handler);
   signal(SIGSEGV, crash_backtrace_handler);
@@ -2062,6 +2113,10 @@ int main(int argc, char* argv[]) {
   redex_debug::disable_stack_trace_for_exc_type(
       RedexError::REJECTED_CODING_PATTERN);
 
+  // Duplicate classes in the input are an input error, not a Redex crash.
+  redex_debug::set_exc_type_as_abort(RedexError::DUPLICATE_CLASSES);
+  redex_debug::disable_stack_trace_for_exc_type(RedexError::DUPLICATE_CLASSES);
+
   // Input type check issues are a straight issue, not a Redex crash.
   redex_debug::set_exc_type_as_abort(RedexError::TYPE_CHECK_ERROR);
   redex_debug::disable_stack_trace_for_exc_type(RedexError::TYPE_CHECK_ERROR);
@@ -2076,6 +2131,8 @@ int main(int argc, char* argv[]) {
       concurrent_container_destruction_scope;
 
   std::string stats_output_path;
+  std::optional<std::string> chrome_trace_path;
+  bool chrome_trace_enabled{false};
   Json::Value stats;
   double cpu_time_s;
 
@@ -2096,6 +2153,12 @@ int main(int argc, char* argv[]) {
     // TODO: Make the command line -jarpath option like a colon separated
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
+
+    if (args.chrome_trace) {
+      chrome_trace_enabled = true;
+    } else {
+      ChromeTraceWriter::disable();
+    }
 
     if (args.crash_file) {
       set_crash_fd(crash_file.open(*args.crash_file));
@@ -2203,10 +2266,13 @@ int main(int argc, char* argv[]) {
       }
     }
 
+    bool dump_proguard_lens =
+        args.config.get("dump_proguard_lens", false).asBool();
+
     {
       auto profile_frontend =
           ScopedCommandProfiling::maybe_from_env("FRONTEND_", "frontend");
-      redex_frontend(conf, args, *pg_config, stores, stats);
+      redex_frontend(conf, args, *pg_config, stores, dump_proguard_lens, stats);
       conf.parse_global_config();
       if (args.redex_options.instrument_pass_enabled) {
         auto* global_resources_config =
@@ -2251,6 +2317,11 @@ int main(int argc, char* argv[]) {
       maybe_dump_jemalloc_profile("MALLOC_PROFILE_DUMP_AFTER_ALL_PASSES");
     });
 
+    if (dump_proguard_lens) {
+      redex::dump_proguard_lens_json(
+          conf.metafile("redex-proguard-lens-final.json"), stores, "final");
+    }
+
     if (args.stop_pass_idx == std::nullopt) {
       // Call redex_backend by default
       auto profile_backend =
@@ -2268,6 +2339,10 @@ int main(int argc, char* argv[]) {
 
     stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());
+
+    if (chrome_trace_enabled) {
+      chrome_trace_path = conf.metafile("redex-chrome-trace.json");
+    }
 
     const bool dump_strings =
         args.config.get("dump-string-locales", false).asBool();
@@ -2300,6 +2375,10 @@ int main(int argc, char* argv[]) {
   {
     std::ofstream out(stats_output_path);
     out << stats;
+  }
+
+  if (chrome_trace_path) {
+    ChromeTraceWriter::write(*chrome_trace_path);
   }
 
   TRACE(MAIN, 1, "Done.");

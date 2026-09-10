@@ -8,7 +8,6 @@
 #include <gtest/gtest.h>
 #include <limits>
 
-#include "Debug.h"
 #include "androidfw/ResourceTypes.h"
 #include "utils/Serialize.h"
 #include "utils/Visitor.h"

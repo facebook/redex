@@ -9,13 +9,11 @@
 
 #include <algorithm>
 #include <iterator>
-#include <sstream>
 #include <vector>
 
-#include "Debug.h"
 #include <sparta/WeakTopologicalOrdering.h>
 
-#include "ConfigFiles.h"
+#include "Debug.h"
 #include "DexClass.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"

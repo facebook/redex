@@ -13,6 +13,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "InitClassesWithSideEffects.h"
 #include "InterDexPassMetrics.h"
 #include "JsonWrapper.h"
 #include "PassManager.h"
@@ -70,7 +71,15 @@ void InterDexPass::bind_config() {
        "optimization introduces a new method reference without declaring it "
        "explicitly to the InterDex pass");
 
-  bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
+  bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs,
+       "When enabled, reorders classes across dex files to minimize "
+       "cross-dex references (method, field, type, and string refs shared "
+       "across multiple dex files). This is a heuristic optimization that "
+       "is sensitive to small input changes -- minor code changes can cause "
+       "substantially different class orderings, introducing significant "
+       "variance in compressed APK size. The stablesize build flavor "
+       "disables this option to produce stable, comparable size "
+       "measurements for BSB (Build Size Bot) checks.");
   bind("minimize_cross_dex_refs_method_ref_weight",
        m_minimize_cross_dex_refs_config.method_ref_weight,
        m_minimize_cross_dex_refs_config.method_ref_weight);

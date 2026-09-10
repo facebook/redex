@@ -116,6 +116,14 @@ void ThrowPropagator::insert_unreachable(
         template_source_block, m_method, SourceBlock::Val(0, 0));
     auto new_block_it = new_block->begin();
     new_block->insert_before(new_block_it, std::move(new_source_block));
+
+    auto last_insn_it = block->get_last_insn();
+    if (last_insn_it != block->end()) {
+      auto end_sb = source_blocks::clone_as_synthetic(
+          template_source_block, m_method, SourceBlock::Val(0, 0));
+      source_blocks::impl::BlockAccessor::insert_source_block_after(
+          block, last_insn_it, std::move(end_sb));
+    }
   }
   m_cfg.copy_succ_edges_of_type(block, new_block, cfg::EDGE_THROW);
   auto* existing_goto_edge = m_cfg.get_succ_edge_of_type(block, cfg::EDGE_GOTO);

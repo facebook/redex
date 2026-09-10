@@ -11,6 +11,7 @@
 #include "CFGMutation.h"
 #include "ClassHierarchy.h"
 #include "ConcurrentContainers.h"
+#include "ControlFlow.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexUtil.h"
@@ -19,6 +20,7 @@
 #include "Mutators.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "Trace.h"
 #include "TypeInference.h"
 #include "Walkers.h"
 

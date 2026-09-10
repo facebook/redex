@@ -27,11 +27,11 @@ void print_method_seeds(std::ostream& output,
                         const bool allowobfuscation_filter) {
 
   for (DexMethod* method : methods) {
-    if (impl::KeepState::has_keep(method) ||
+    if (!impl::KeepState::has_keep(method) ||
         (allowshrinking_filter && !impl::KeepState::allowshrinking(method)) ||
         (allowobfuscation_filter &&
          !impl::KeepState::allowobfuscation(method))) {
-      return;
+      continue;
     }
     redex::print_method(output, pg_map, class_name, method);
   }
@@ -49,7 +49,7 @@ void print_field_seeds(std::ostream& output,
         (allowshrinking_filter && !impl::KeepState::allowshrinking(field)) ||
         (allowobfuscation_filter &&
          !impl::KeepState::allowobfuscation(field))) {
-      return;
+      continue;
     }
     redex::print_field(output, pg_map, class_name, field);
   };

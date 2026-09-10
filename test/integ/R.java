@@ -85,4 +85,33 @@ public class R {
     static int MyButton_thingy = com.redextest.R.styleable.MyButton_thingy;
     static int MyButton_whatever = com.redextest.R.styleable.MyButton_whatever;
   }
+
+  static class drawable_a {
+    public static final int Zero = 0x7f090000;
+    public static final int One = 0x7f090001;
+    public static final int Two = 0x7f090002;
+  }
+
+  static class drawable_b {
+    public static final int One = drawable_a.One;
+  }
+
+  static class drawable_c {
+    public static final int Four;
+    static {
+      Four = 0x7f090004;
+    }
+  }
+  static class drawable_d {
+    public static final int Four = drawable_c.Four;
+    public static final int[] Five;
+    static {
+      // N.B. This hypothetical code does not get converted into R_CONST opcodes
+      // today. Array handling throughout RClass is simply looking at integer
+      // arrays / SignedConstantDomain values as understood by constant
+      // propagation. Consider updating MaterializeResourceConstantsPass and/or
+      // analyzers to make this nicer.
+      Five = new int[] {0x7f0a0000, 0x7f0a0001, 0x7f0a0002};
+    }
+  }
 }

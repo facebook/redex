@@ -23,7 +23,6 @@
 #include "SignedConstantDomain.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
-#include "Transform.h"
 #include "TypeInference.h"
 #include "TypeUtil.h"
 
@@ -34,88 +33,6 @@ bool enable_replacing_areequal = false;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
-
-// Whether the check-cast `primary`, whose result holds `value`, may throw
-// ClassCastException.
-static bool is_possibly_throwing_check_cast(const IRInstruction* primary,
-                                            const ConstantValue& value) {
-  if (!opcode::is_check_cast(primary->opcode()) || value.is_zero()) {
-    return false;
-  }
-  const DexType* src_type = get_object_constant_type(value);
-  return src_type == nullptr ||
-         !type::check_cast(src_type, primary->get_type());
-}
-
-/*
- * Replace an instruction that has a single destination register with a `const`
- * load. `env` holds the state of the registers after `insn` has been
- * evaluated. So, `env.get(dest)` holds the _new_ value of the destination
- * register.
- */
-bool Transform::replace_with_const(const ConstantEnvironment& env,
-                                   const cfg::InstructionIterator& cfg_it,
-                                   const XStoreRefs* xstores,
-                                   const DexType* declaring_type) {
-  auto* insn = cfg_it->insn;
-  auto value = env.get(insn->dest());
-  auto replacement = ConstantValue::apply_visitor(
-      value_to_instruction_visitor(insn, xstores, declaring_type), value);
-  if (replacement.empty()) {
-    return false;
-  }
-  if (opcode::is_a_move_result_pseudo(insn->opcode())) {
-    auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
-    // Materializing a constant into a move-result-pseudo's dest replaces -- and
-    // therefore deletes -- the primary instruction. Keep a check-cast that
-    // could throw, since deleting it would drop the exception.
-    if (is_possibly_throwing_check_cast(primary_it->insn, value)) {
-      return false;
-    }
-    always_assert(!replacement.empty());
-    if (replacement.size() == 1) {
-      always_assert(opcode::is_a_literal_const(replacement.front()->opcode()));
-      // The move-result-pseudo instruction might be in a different block. We
-      // cannot use the CFGMutator's replace functionality, as it would put the
-      // replacement into the wrong block --- the block of the primary
-      // instruction, not the following block. This is not generally a problem,
-      // except that we might later want to run forward_targets, which requires
-      // blocks, their recorded entry/state states and containing instructions
-      // to be consistent. So we work around that here by directly inserting in
-      // the right place...
-      cfg_it.cfg().insert_after(cfg_it, replacement);
-      m_mutation->remove(primary_it);
-    } else {
-      always_assert(opcode::may_throw(replacement.front()->opcode()));
-      m_mutation->replace(primary_it, replacement);
-    }
-  } else {
-    m_mutation->replace(cfg_it, replacement);
-  }
-  ++m_stats.materialized_consts;
-  return true;
-}
-
-/*
- * Add an const after load param section for a known value load_param.
- * This will depend on future run of RemoveUnusedArgs pass to get the win of
- * removing not used arguments.
- */
-void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     const cfg::InstructionIterator& cfg_it,
-                                     const XStoreRefs* xstores,
-                                     const DexType* declaring_type) {
-  auto* insn = cfg_it->insn;
-  auto value = env.get(insn->dest());
-  auto replacement = ConstantValue::apply_visitor(
-      value_to_instruction_visitor(insn, xstores, declaring_type), value);
-  if (replacement.empty()) {
-    return;
-  }
-  m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
-                              replacement.end());
-  ++m_stats.added_param_const;
-}
 
 // Verify that Intrinsics.areEqual has the expected semantics.
 // Returns std::nullopt on success, or an error message on failure.
@@ -171,6 +88,120 @@ std::optional<std::string> verify_areequal_semantics() {
            SHOW(non_equals.front());
   }
   return std::nullopt;
+}
+
+namespace {
+
+struct ClassLiteralMethodsReplacerContext {
+  const DexMethodRef* class_isinstance{nullptr};
+  std::optional<reg_t> class_isinstance_temp_reg{std::nullopt};
+
+  const DexMethodRef* class_cast{nullptr};
+  std::optional<reg_t> class_cast_temp_reg{std::nullopt};
+
+  reg_t get_class_isinstance_temp_reg(cfg::ControlFlowGraph& cfg) {
+    if (!class_isinstance_temp_reg) {
+      class_isinstance_temp_reg = cfg.allocate_temp();
+    }
+    return *class_isinstance_temp_reg;
+  }
+
+  reg_t get_class_cast_temp_reg(cfg::ControlFlowGraph& cfg) {
+    if (!class_cast_temp_reg) {
+      class_cast_temp_reg = cfg.allocate_temp();
+    }
+    return *class_cast_temp_reg;
+  }
+};
+
+} // namespace
+
+struct Transform::Context {
+  ClassLiteralMethodsReplacerContext clmr;
+};
+
+// Whether the check-cast `primary`, whose result holds `value`, may throw
+// ClassCastException.
+static bool is_possibly_throwing_check_cast(const IRInstruction* primary,
+                                            const ConstantValue& value) {
+  if (!opcode::is_check_cast(primary->opcode()) || value.is_zero()) {
+    return false;
+  }
+  const DexType* src_type = get_object_constant_type(value);
+  return src_type == nullptr ||
+         !type::check_cast(src_type, primary->get_type());
+}
+
+/*
+ * Replace an instruction that has a single destination register with a `const`
+ * load. `env` holds the state of the registers after `insn` has been
+ * evaluated. So, `env.get(dest)` holds the _new_ value of the destination
+ * register.
+ */
+bool Transform::replace_with_const(const ConstantEnvironment& env,
+                                   const cfg::InstructionIterator& cfg_it,
+                                   const XStoreRefs* xstores,
+                                   const DexType* declaring_type) {
+  auto* insn = cfg_it->insn;
+  auto value = env.get(insn->dest());
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
+  if (replacement.empty()) {
+    return false;
+  }
+  if (opcode::is_a_move_result_pseudo(insn->opcode())) {
+    auto primary_it = cfg_it.cfg().primary_instruction_of_move_result(cfg_it);
+    // Materializing a constant into a move-result-pseudo's dest replaces -- and
+    // therefore deletes -- the primary instruction. Keep a check-cast that
+    // could throw, since deleting it would drop the exception.
+    if (is_possibly_throwing_check_cast(primary_it->insn, value)) {
+      return false;
+    }
+    always_assert(!replacement.empty());
+    if (replacement.size() == 1) {
+      IROpcode opcode = replacement.front()->opcode();
+      always_assert(opcode::is_a_literal_const(opcode) ||
+                    opcode == IOPCODE_R_CONST);
+      // The move-result-pseudo instruction might be in a different block. We
+      // cannot use the CFGMutator's replace functionality, as it would put the
+      // replacement into the wrong block --- the block of the primary
+      // instruction, not the following block. This is not generally a problem,
+      // except that we might later want to run forward_targets, which requires
+      // blocks, their recorded entry/state states and containing instructions
+      // to be consistent. So we work around that here by directly inserting in
+      // the right place...
+      cfg_it.cfg().insert_after(cfg_it, replacement);
+      m_mutation->remove(primary_it);
+    } else {
+      always_assert(opcode::may_throw(replacement.front()->opcode()));
+      m_mutation->replace(primary_it, replacement);
+    }
+  } else {
+    m_mutation->replace(cfg_it, replacement);
+  }
+  ++m_stats.materialized_consts;
+  return true;
+}
+
+/*
+ * Add an const after load param section for a known value load_param.
+ * This will depend on future run of RemoveUnusedArgs pass to get the win of
+ * removing not used arguments.
+ */
+void Transform::generate_const_param(const ConstantEnvironment& env,
+                                     const cfg::InstructionIterator& cfg_it,
+                                     const XStoreRefs* xstores,
+                                     const DexType* declaring_type) {
+  auto* insn = cfg_it->insn;
+  auto value = env.get(insn->dest());
+  auto replacement = ConstantValue::apply_visitor(
+      value_to_instruction_visitor(insn, xstores, declaring_type), value);
+  if (replacement.empty()) {
+    return;
+  }
+  m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
+                              replacement.end());
+  ++m_stats.added_param_const;
 }
 
 bool is_known_non_null(const ConstantValue& val) {
@@ -340,11 +371,8 @@ bool Transform::replace_kotlin_areequal(
   if (!is_known_non_null(env.get(insn->src(0)))) {
     return false;
   }
-  auto* object_equals =
-      DexMethod::get_method("Ljava/lang/Object;.equals:(Ljava/lang/Object;)Z");
-  if (object_equals == nullptr) {
-    return false;
-  }
+  auto* object_equals = method::java_lang_Object_equals();
+  always_assert(object_equals != nullptr);
   insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
   insn->set_method(object_equals);
   ++m_stats.kotlin_areequal_replaced;
@@ -729,6 +757,114 @@ void try_simplify(const ConstantEnvironment& env,
   }
 }
 
+struct ClassLiteralMethodsReplacer {
+
+  static bool matches(const DexMethodRef* ref,
+                      const Transform::Context& context) {
+    return ref == context.clmr.class_isinstance ||
+           ref == context.clmr.class_cast;
+  }
+
+  static const DexType* maybe_get_class(const IRInstruction* insn,
+                                        const ConstantEnvironment& env) {
+    const auto& val = env.get(insn->src(0));
+    if (val.is_top() || val.is_bottom()) {
+      return nullptr;
+    }
+    const auto* class_val =
+        boost::get<ConstantClassObjectDomain>(&val.variant());
+    if (class_val == nullptr) {
+      return nullptr;
+    }
+    redex_assert(!class_val->is_top());
+    if (class_val->is_bottom()) {
+      return nullptr;
+    }
+    redex_assert(class_val->get_constant());
+    return *class_val->get_constant();
+  }
+
+  static void replace_class_isinstance(const IRInstruction* insn,
+                                       const ConstantEnvironment& env,
+                                       const cfg::InstructionIterator& cfg_it,
+                                       cfg::CFGMutation& mutation,
+                                       Transform::Stats& stats,
+                                       Transform::Context& context) {
+    const auto* class_type = maybe_get_class(insn, env);
+    if (class_type == nullptr) {
+      return;
+    }
+
+    // Replace with direct instance-of.
+    auto* repl = new IRInstruction(OPCODE_INSTANCE_OF);
+    repl->set_src(0, insn->src(1));
+    repl->set_type(class_type);
+
+    auto* move = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+    // Find move-result.
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
+    move->set_dest(move_result_it.is_end()
+                       ? context.clmr.get_class_isinstance_temp_reg(cfg)
+                       : move_result_it->insn->dest());
+
+    mutation.replace(cfg_it, {repl, move});
+    ++stats.class_isinstance_replaced;
+  }
+
+  static void replace_class_cast(const IRInstruction* insn,
+                                 const ConstantEnvironment& env,
+                                 const cfg::InstructionIterator& cfg_it,
+                                 cfg::CFGMutation& mutation,
+                                 Transform::Stats& stats,
+                                 Transform::Context& context) {
+    const auto* class_type = maybe_get_class(insn, env);
+    if (class_type == nullptr) {
+      return;
+    }
+
+    // Replace with direct checkcast.
+    auto* repl = new IRInstruction(OPCODE_CHECK_CAST);
+    repl->set_src(0, insn->src(1));
+    repl->set_type(class_type);
+
+    auto* move = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+    // Find move-result.
+    auto& cfg = cfg_it.cfg();
+    auto move_result_it = cfg.move_result_of(cfg_it);
+    move->set_dest(move_result_it.is_end()
+                       ? context.clmr.get_class_cast_temp_reg(cfg)
+                       : move_result_it->insn->dest());
+
+    mutation.replace(cfg_it, {repl, move});
+    ++stats.class_cast_replaced;
+  }
+
+  static void replace(const IRInstruction* insn,
+                      const DexMethodRef* ref,
+                      const ConstantEnvironment& env,
+                      const cfg::InstructionIterator& cfg_it,
+                      cfg::CFGMutation& mutation,
+                      Transform::Stats& stats,
+                      Transform::Context& context) {
+    if (ref == context.clmr.class_isinstance) {
+      replace_class_isinstance(insn, env, cfg_it, mutation, stats, context);
+      return;
+    }
+    if (ref == context.clmr.class_cast) {
+      replace_class_cast(insn, env, cfg_it, mutation, stats, context);
+      return;
+    }
+  }
+
+  static ClassLiteralMethodsReplacerContext create_context() {
+    return ClassLiteralMethodsReplacerContext{
+        .class_isinstance = method::java_lang_Class_isInstance(),
+        .class_cast = method::java_lang_Class_cast(),
+    };
+  }
+};
+
 } // namespace
 
 bool Transform::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) const {
@@ -742,7 +878,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& /*wps*/,
                                      const cfg::InstructionIterator& cfg_it,
                                      const XStoreRefs* xstores,
-                                     const DexType* declaring_type) {
+                                     const DexType* declaring_type,
+                                     Context& context) {
   auto* insn = cfg_it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
@@ -861,6 +998,19 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
       break;
     }
     try_simplify(env, cfg_it, m_config, *m_mutation);
+    break;
+  }
+
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_DIRECT: {
+    // It is OK not to resolve the method, as these are core Java classes.
+    if (ClassLiteralMethodsReplacer::matches(insn->get_method(), context)) {
+      ClassLiteralMethodsReplacer::replace(
+          insn, insn->get_method(), env, cfg_it, *m_mutation, m_stats, context);
+      break;
+    }
+
     break;
   }
 
@@ -1032,7 +1182,7 @@ bool Transform::replace_with_throw(
   // We'll replace this instruction with a different instruction sequence that
   // unconditionally throws a null pointer exception.
 
-  m_mutation->replace(cfg_it, npe_creator->get_insns(insn));
+  m_mutation->replace_mie(cfg_it, npe_creator->get_insns(insn));
   ++m_stats.throws;
 
   if (insn->has_move_result_any()) {
@@ -1105,6 +1255,10 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
     cfg::ControlFlowGraph& cfg,
     const XStoreRefs* xstores,
     const DexType* declaring_type) {
+  Context context{
+      .clmr = ClassLiteralMethodsReplacer::create_context(),
+  };
+
   always_assert(m_mutation == nullptr);
   m_mutation = std::make_unique<cfg::CFGMutation>(cfg);
   npe::NullPointerExceptionCreator npe_creator(&cfg);
@@ -1126,7 +1280,8 @@ void Transform::legacy_apply_constants_and_prune_unreachable(
       auto* insn = cfg_it->insn;
       intra_cp.analyze_instruction(insn, &env, insn == last_insn->insn);
       if (!any_changes && (m_redundant_move_results.count(insn) == 0u)) {
-        simplify_instruction(env, wps, cfg_it, xstores, declaring_type);
+        simplify_instruction(env, wps, cfg_it, xstores, declaring_type,
+                             context);
       }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
@@ -1548,6 +1703,8 @@ void Transform::Stats::log_metrics(ScopedMetrics& sm, bool with_scope) const {
   TRACE(CONSTP, 3, "Null checks removed: %zu(%zu)", null_checks,
         null_checks_method_calls);
   sm.set_metric("added_param_const", added_param_const);
+  sm.set_metric("class_isinstance_replaced", class_isinstance_replaced);
+  sm.set_metric("class_cast_replaced", class_cast_replaced);
   sm.set_metric("kotlin_areequal_swapped", kotlin_areequal_swapped);
   sm.set_metric("kotlin_areequal_replaced", kotlin_areequal_replaced);
 }

@@ -12,6 +12,7 @@
 #include "ConstantPropagationAnalysis.h"
 #include "Debug.h"
 #include "PassManager.h"
+#include "Show.h"
 #include "Trace.h"
 #include "Walkers.h"
 #include "androidfw/ResourceTypes.h"
@@ -46,9 +47,9 @@ ResourcesInliningPass::filter_inlinable_resources(
         num_bools++;
       }
     }
-    TRACE(RIP, 1, "num_ints: %d", num_ints);
-    TRACE(RIP, 1, "num_bools: %d", num_bools);
-    TRACE(RIP, 1, "num_colors: %d", num_colors);
+    TRACE(RIP, 1, "num_ints: %u", num_ints);
+    TRACE(RIP, 1, "num_bools: %u", num_bools);
+    TRACE(RIP, 1, "num_colors: %u", num_colors);
   }
 
   UnorderedMap<uint32_t, resources::InlinableValue> refined_inlinable_resources;

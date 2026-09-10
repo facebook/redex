@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "DexClass.h"
+#include "IRInstruction.h"
 #include "MergerType.h"
 #include "MethodProfiles.h"
 #include "Model.h"

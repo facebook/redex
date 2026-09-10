@@ -250,7 +250,9 @@ message Locales {
 }
 
 // Optimization configuration used to generate Split APKs.
-message SplitsConfig { repeated SplitDimension split_dimension = 1; }
+message SplitsConfig {
+  repeated SplitDimension split_dimension = 1;
+}
 
 // Optimization configuration used to generate Standalone APKs.
 message StandaloneConfig {
@@ -297,7 +299,7 @@ message SplitDimension {
     SCREEN_DENSITY = 2;
     LANGUAGE = 3;
     TEXTURE_COMPRESSION_FORMAT = 4;
-    DEVICE_TIER = 6 [ deprecated = true ];
+    DEVICE_TIER = 6 [deprecated = true];
     COUNTRY_SET = 7;
     AI_MODEL_VERSION = 8;
     DEVICE_GROUP = 9;
@@ -349,7 +351,9 @@ message ApexConfig {
 }
 
 // Represents a set of ABIs which must be supported by a single APEX image.
-message SupportedAbiSet { repeated string abi = 1; }
+message SupportedAbiSet {
+  repeated string abi = 1;
+}
 
 message ApexEmbeddedApkConfig {
   // Android package name of the APK.

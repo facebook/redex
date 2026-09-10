@@ -14,6 +14,7 @@
 #include "Purity.h"
 #include "RedexTest.h"
 #include "Show.h"
+#include "SourceBlocks.h"
 #include "ThrowPropagationImpl.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
@@ -307,4 +308,91 @@ TEST_F(ThrowPropagationTest, dont_change_throw_result) {
   test(Scope{type_class(type::java_lang_Object()), foo_creator.create()},
        code_str,
        expected_str);
+}
+
+TEST_F(ThrowPropagationTest, source_block_coverage_preserved_after_split) {
+  ClassCreator foo_creator(DexType::make_type("LFoo;"));
+  foo_creator.set_super(type::java_lang_Object());
+
+  auto* method =
+      DexMethod::make_method("LFoo;.bar:()I")
+          ->make_concrete(ACC_STATIC | ACC_PUBLIC, false /* is_virtual */);
+  method->set_code(assembler::ircode_from_string(R"(
+        (const v0 0)
+        (throw v0)
+      )"));
+  foo_creator.add_method(method);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-static () "LFoo;.bar:()I")
+      (move-result v1)
+      (return-void)
+    )
+  )");
+
+  Scope scope{type_class(type::java_lang_Object()), foo_creator.create()};
+  auto no_return_methods = get_no_return_methods(scope);
+  auto override_graph = method_override_graph::build_graph(scope);
+  code->build_cfg();
+  auto& cfg = code->cfg();
+
+  const auto* src_str = DexString::make_string("LTest;.test:()V");
+  uint32_t sb_id = 0;
+  for (auto* block : cfg.blocks()) {
+    source_blocks::impl::BlockAccessor::push_source_block(
+        block,
+        std::make_unique<SourceBlock>(
+            src_str, sb_id++,
+            std::vector<SourceBlock::Val>{SourceBlock::Val(1.0f, 1.0f)}));
+  }
+
+  run_throw_propagation(no_return_methods, *override_graph, code.get());
+
+  for (auto* block : cfg.blocks()) {
+    if (block->get_first_insn() == block->end()) {
+      continue;
+    }
+    EXPECT_NE(source_blocks::get_first_source_block(block), nullptr)
+        << "Block B" << block->id()
+        << " missing source block after transformation";
+  }
+
+  for (auto* block : cfg.blocks()) {
+    bool found_invoke = false;
+    bool found_sb_after_invoke = false;
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_OPCODE &&
+          opcode::is_an_invoke(mie.insn->opcode())) {
+        found_invoke = true;
+      } else if (found_invoke && mie.type == MFLOW_SOURCE_BLOCK) {
+        found_sb_after_invoke = true;
+      }
+    }
+    if (found_invoke) {
+      EXPECT_TRUE(found_sb_after_invoke)
+          << "Block B" << block->id()
+          << " has uncovered throw-delineated segment after invoke";
+    }
+  }
+
+  bool has_invoke = false;
+  bool has_throw = false;
+  for (auto* block : cfg.blocks()) {
+    for (auto& mie : *block) {
+      if (mie.type != MFLOW_OPCODE) {
+        continue;
+      }
+      if (opcode::is_an_invoke(mie.insn->opcode())) {
+        has_invoke = true;
+      }
+      if (mie.insn->opcode() == OPCODE_THROW) {
+        has_throw = true;
+      }
+    }
+  }
+  EXPECT_TRUE(has_invoke);
+  EXPECT_TRUE(has_throw);
+
+  code->clear_cfg();
 }

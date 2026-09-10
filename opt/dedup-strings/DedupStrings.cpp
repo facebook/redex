@@ -23,6 +23,7 @@
 #include "RedexContext.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "Walkers.h"
 #include "locator.h"
 
@@ -515,7 +516,7 @@ DedupStrings::get_strings_to_dedup(
     if (total_size_reduction < hosting_code_size_increase) {
       TRACE(DS, 3,
             "[dedup strings] non perf sensitive string: {%s} ignored as %zu < "
-            "%u",
+            "%d",
             SHOW(s), total_size_reduction, hosting_code_size_increase);
       continue;
     }

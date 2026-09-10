@@ -36,6 +36,7 @@ namespace type {
 
 #define FOR_EACH DECLARE_TYPE
 WELL_KNOWN_TYPES
+KOTLIN_JVM_INTERNAL_TYPES
 #undef FOR_EACH
 #undef DECLARE_TYPE
 
@@ -44,6 +45,7 @@ namespace pseudo {
 
 #define FOR_EACH DECLARE_PSEUDO_TYPE_FIELD
 PRIMITIVE_PSEUDO_TYPE_FIELDS
+KOTLIN_JVM_INTERNAL_FIELDS
 #undef FOR_EACH
 } // namespace pseudo
 
@@ -283,43 +285,20 @@ inline bool can_access(const DexMethod* accessor, const DexClass* accessee) {
   return true;
 }
 
-/**
- * Return true if the cls is derived from Kotlin lambda.
- */
-bool is_kotlin_lambda(const DexClass* cls);
-
 bool is_kotlin_class(DexClass* cls);
 
 bool is_kotlin_function_interface(const DexType* type);
 
+/**
+ * Returns true if the class is a Kotlin lambda.
+ *
+ * If you need to analyze lambda properties (e.g., determining if a lambda is
+ * non-capturing or trivial), use KotlinLambdaAnalyzer instead to avoid
+ * redundant computation.
+ */
+bool is_kotlin_lambda(const DexClass* cls);
+
 bool is_kotlin_internal_type(const DexType* type);
-
-/*
- * Return true if the cls is kotlin non capturing lambda.
- */
-bool is_kotlin_non_capturing_lambda(const DexClass* cls);
-
-/*
- * Return true if the cls is a trivial kotlin non-capturing lambda.
- * A trivial lambda is a non-capturing lambda whose invoke method has
- * at most max_instructions instructions.
- *
- * The default of 4 instructions corresponds to a lambda with a single
- * statement, e.g., { true } compiles to:
- *
- *     const/4 v0, 0x1
- *     invoke-static {v0}, Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;
- *     move-result-object v0
- *     return-object v0
- */
-bool is_trivial_kotlin_lambda(const DexClass* cls,
-                              size_t max_instructions = 4u);
-
-/*
- * Return the invoke method of a kotlin lambda class.
- * Returns nullptr if no suitable invoke method is found.
- */
-DexMethod* get_kotlin_lambda_invoke_method(const DexClass* cls);
 
 bool is_min_sdk_acceptable(const DexType* source_type,
                            const DexType* target_type,

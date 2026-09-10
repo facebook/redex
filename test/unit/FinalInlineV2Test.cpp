@@ -321,6 +321,41 @@ TEST_F(FinalInlineTest, ReplaceSgetNoInitClass) {
   EXPECT_EQ(field->get_static_value()->value(), 0);
 }
 
+TEST_F(FinalInlineTest, dominatedSgetRConst) {
+  auto* field_bar = create_field_with_zero_value("LFoo;.bar:I", m_cc.get());
+  auto* field_baz = create_field_with_zero_value("LFoo;.baz:I", m_cc.get());
+  m_cc->add_method(assembler::method_from_string(R"(
+    (method (public static) "LFoo;.<clinit>:()V"
+     (
+      (r-const v0 2131230721)
+      (sput v0 "LFoo;.bar:I")
+      (sget "LFoo;.bar:I")
+      (move-result-pseudo v0)
+      (sput v0 "LFoo;.baz:I")
+      (return-void)
+     )
+    )
+  )"));
+  auto* cls = m_cc->create();
+
+  // Unlike with regular const instructions, we can't remove the sput to these
+  // fields since they would lose their resource ID properties
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (r-const v0 2131230721)
+      (sput v0 "LFoo;.bar:I")
+      (r-const v0 2131230721)
+      (sput v0 "LFoo;.baz:I")
+      (return-void)
+    )
+  )");
+
+  run({cls}, /* xstores */ nullptr);
+  EXPECT_CODE_EQ(cls->get_clinit()->get_code(), expected.get());
+  EXPECT_EQ(field_bar->get_static_value()->value(), 0);
+  EXPECT_EQ(field_baz->get_static_value()->value(), 0);
+}
+
 TEST_F(FinalInlineTest, encodeRConst) {
   ClassCreator cc2(DexType::make_type("LBar;"));
   cc2.add_method(assembler::method_from_string(R"(

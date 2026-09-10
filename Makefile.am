@@ -1,6 +1,9 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = . test
+SUBDIRS = .
+if ENABLE_TESTS
+SUBDIRS += test
+endif
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -50,7 +53,7 @@ DISABLED_WARNINGS = \
   -Wno-unused-value \
   -Wno-unused-variable
 
-AM_CXXFLAGS = --std=gnu++20 -O3 -Wall -Werror -Wextra $(DISABLED_WARNINGS) -g1
+AM_CXXFLAGS = --std=gnu++20 -O3 -Wall -Werror -Wextra -Wformat-signedness $(DISABLED_WARNINGS) -g1
 
 include $(top_srcdir)/Makefile.inc
 
@@ -63,7 +66,7 @@ AM_CPPFLAGS = $(COMMON_INCLUDES)
 AM_CPPFLAGS += $(BOOST_CPPFLAGS)
 AM_LDFLAGS = $(BOOST_LDFLAGS)
 
-noinst_LTLIBRARIES = libredex.la libopt.la
+noinst_LTLIBRARIES = libredex.la libopt.la libresource.la
 
 BUILT_SOURCES =
 
@@ -118,6 +121,7 @@ libredex_la_SOURCES = \
 	libredex/BundleResources.cpp \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
+	libredex/ChromeTraceWriter.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ClassUtil.cpp \
 	libredex/ClassChecker.cpp \
@@ -172,11 +176,11 @@ libredex_la_SOURCES = \
 	libredex/IRMetaIO.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
-	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/JavaParserUtil.cpp \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
+	libredex/KotlinLambdaAnalyzer.cpp \
 	libredex/Match.cpp \
 	libredex/MatchFlow.cpp \
 	libredex/MatchFlowDetail.cpp \
@@ -198,8 +202,8 @@ libredex_la_SOURCES = \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PluginRegistry.cpp \
-	libredex/PointsToSemantics.cpp \
-	libredex/PointsToSemanticsUtils.cpp \
+	service/points-to-semantics/PointsToSemantics.cpp \
+	service/points-to-semantics/PointsToSemanticsUtils.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
@@ -246,17 +250,6 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libredex/WorkQueue.cpp \
-	libresource/LocaleValue.cpp \
-	libresource/LocaleData.cpp \
-	libresource/ResourceTypes.cpp \
-	libresource/Serialize.cpp \
-	libresource/SharedBuffer.cpp \
-	libresource/String16.cpp \
-	libresource/String8.cpp \
-	libresource/TypeWrappers.cpp \
-	libresource/Unicode.cpp \
-	libresource/VectorImpl.cpp \
-	libresource/Visitor.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
 	service/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	service/class-merging/ApproximateShapeMerging.cpp \
@@ -364,7 +357,26 @@ libredex_la_SOURCES = \
 	util/JemallocUtil.cpp \
 	util/Sha1.cpp
 
+#
+# libresource: third-party Android resource library
+#
+
+libresource_la_CXXFLAGS = $(AM_CXXFLAGS) -Wno-format-signedness
+libresource_la_SOURCES = \
+	libresource/LocaleValue.cpp \
+	libresource/LocaleData.cpp \
+	libresource/ResourceTypes.cpp \
+	libresource/Serialize.cpp \
+	libresource/SharedBuffer.cpp \
+	libresource/String16.cpp \
+	libresource/String8.cpp \
+	libresource/TypeWrappers.cpp \
+	libresource/Unicode.cpp \
+	libresource/VectorImpl.cpp \
+	libresource/Visitor.cpp
+
 libredex_la_LIBADD = \
+	libresource.la \
 	$(BOOST_FILESYSTEM_LIB) \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
@@ -453,6 +465,7 @@ libopt_la_SOURCES = \
 	opt/interdex/SortRemainingClassesPass.cpp \
 	opt/kotlin-lambda/KotlinCompanionOptimizationPass.cpp \
 	opt/kotlin-lambda/KotlinStatelessLambdaSingletonRemovalPass.cpp \
+	opt/kotlin-lambda/KotlinLambdaDeduplicationPass.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/nopper/Nopper.cpp \
@@ -554,6 +567,7 @@ libopt_la_SOURCES = \
 	opt/type-analysis/CallGraphFileGenerationPass.cpp \
 	opt/type-analysis/GlobalTypeAnalysisPass.cpp \
 	opt/type-analysis/TypeAnalysisCallGraphGenerationPass.cpp \
+	opt/unconditionally-throwing-classes/UnconditionallyThrowingClassesPass.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/uses-names/UsesNames.cpp \

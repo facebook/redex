@@ -20,11 +20,11 @@
 #include "LocalDce.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
+#include "Show.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
 #include "Trace.h"
 #include "TypeReference.h"
-#include "Walkers.h"
 #include "WorkQueue.h"
 
 namespace {

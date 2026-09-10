@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "CFGMutation.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DeterministicContainers.h"
@@ -23,6 +24,7 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "SourceBlocks.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "UsedVarsAnalysis.h"
 #include "Walkers.h"
@@ -1532,6 +1534,10 @@ class EnumTransformer final {
           block->push_back({dasm(OPCODE_CONST, {1_v, 0_L}),
                             dasm(OPCODE_RETURN_OBJECT, {1_v})});
         }
+      } else if (pair.second.is_resource_id) {
+        int64_t value = pair.second.primitive_value;
+        block->push_back({dasm(IOPCODE_R_CONST, {1_v, {LITERAL, value}}),
+                          dasm(OPCODE_RETURN, {1_v})});
       } else {
         int64_t value = pair.second.primitive_value;
         if (type::is_wide_type(ifield_type)) {

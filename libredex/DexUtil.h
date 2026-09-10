@@ -8,7 +8,6 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
 #include <cctype>
 #include <functional>
 #include <optional>
@@ -17,10 +16,23 @@
 
 #include "Debug.h"
 #include "DeterministicContainers.h"
-#include "DexClass.h"
-#include "DexStore.h"
-#include "IRInstruction.h"
-#include "StringUtil.h"
+#include "DexAccess.h"
+
+class DexClass;
+class DexField;
+class DexStore;
+using DexStoresVector = std::vector<DexStore>;
+class DexMethod;
+class DexMethodRef;
+class DexString;
+class DexType;
+class IRCode;
+class IRInstruction;
+using Scope = std::vector<DexClass*>;
+
+namespace cfg {
+class ControlFlowGraph;
+} // namespace cfg
 
 /**
  * Given an instruction, determine which class' would get initialized, if any.
@@ -171,6 +183,13 @@ Scope build_class_scope(const T& dexen) {
 };
 Scope build_class_scope(const DexStoresVector& stores);
 
+/**
+ * Create a DexClass for java.lang.Object with standard virtual methods.
+ * Needed when no jar files are specified on the command line (common in tests).
+ * If Object already exists, this is a no-op.
+ */
+void create_object_class();
+
 Scope build_class_scope_for_packages(
     const DexStoresVector& stores,
     const UnorderedSet<std::string>& package_names);
@@ -203,13 +222,6 @@ void post_dexen_changes(const Scope& v, T& dexen) {
   }
 };
 void post_dexen_changes(const Scope& v, DexStoresVector& stores);
-
-void load_root_dexen(DexStore& store,
-                     const std::string& dexen_dir_str,
-                     bool balloon = false,
-                     bool throw_on_balloon_error = true,
-                     bool verbose = true,
-                     int support_dex_version = 35);
 
 /**
  * Creates a generated store based on the given classes.
@@ -264,30 +276,55 @@ bool is_valid_identifier(std::string_view s);
 
 namespace java_names {
 
-inline const std::string* primitive_desc_to_name(char desc) {
-  const static UnorderedMap<char, std::string> conversion_table{
-      {'V', "void"},    {'B', "byte"},  {'C', "char"},
-      {'S', "short"},   {'I', "int"},   {'J', "long"},
-      {'Z', "boolean"}, {'F', "float"}, {'D', "double"},
-  };
-  auto it = conversion_table.find(desc);
-  if (it != conversion_table.end()) {
-    return &it->second;
-  } else {
-    return nullptr;
+inline std::optional<std::string_view> primitive_desc_to_name(char desc) {
+  switch (desc) {
+  case 'B':
+    return "byte";
+  case 'C':
+    return "char";
+  case 'D':
+    return "double";
+  case 'F':
+    return "float";
+  case 'I':
+    return "int";
+  case 'J':
+    return "long";
+  case 'S':
+    return "short";
+  case 'V':
+    return "void";
+  case 'Z':
+    return "boolean";
+  default:
+    return std::nullopt;
   }
 }
 
 inline std::optional<char> primitive_name_to_desc(std::string_view name) {
-  const static UnorderedMap<std::string_view, char> conversion_table{
-      {"void", 'V'},    {"byte", 'B'},  {"char", 'C'},
-      {"short", 'S'},   {"int", 'I'},   {"long", 'J'},
-      {"boolean", 'Z'}, {"float", 'F'}, {"double", 'D'},
-  };
-  auto it = conversion_table.find(name);
-  if (it != conversion_table.end()) {
-    return it->second;
-  } else {
+  if (name.empty()) {
+    return std::nullopt;
+  }
+  switch (name[0]) {
+  case 'b':
+    return name == "byte"      ? std::optional<char>('B')
+           : name == "boolean" ? std::optional<char>('Z')
+                               : std::nullopt;
+  case 'c':
+    return name == "char" ? std::optional<char>('C') : std::nullopt;
+  case 'd':
+    return name == "double" ? std::optional<char>('D') : std::nullopt;
+  case 'f':
+    return name == "float" ? std::optional<char>('F') : std::nullopt;
+  case 'i':
+    return name == "int" ? std::optional<char>('I') : std::nullopt;
+  case 'l':
+    return name == "long" ? std::optional<char>('J') : std::nullopt;
+  case 's':
+    return name == "short" ? std::optional<char>('S') : std::nullopt;
+  case 'v':
+    return name == "void" ? std::optional<char>('V') : std::nullopt;
+  default:
     return std::nullopt;
   }
 }
@@ -320,10 +357,10 @@ inline std::string internal_to_external(std::string_view internal_name) {
     // as internal.
     return std::string(internal_name);
   } else {
-    const auto* maybe_external_name = primitive_desc_to_name(type);
+    const auto maybe_external_name = primitive_desc_to_name(type);
     always_assert_log(
         maybe_external_name, "%c is not a valid primitive type.", type);
-    return *maybe_external_name;
+    return std::string(*maybe_external_name);
   }
 }
 
@@ -363,7 +400,7 @@ inline std::string external_to_internal(std::string_view external_name) {
   internal_name.append(component_external_name);
 
   std::replace(internal_name.begin(), internal_name.end(), '.', '/');
-  if (!boost::algorithm::ends_with(internal_name, ";")) {
+  if (!internal_name.ends_with(";")) {
     internal_name.append(1, ';');
   }
   return internal_name;

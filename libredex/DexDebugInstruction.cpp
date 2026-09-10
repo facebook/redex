@@ -5,11 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexDebugInstruction.h"
 #include "Debug.h"
 #include "DexClass.h"
-
-#include "DexClass.h"
-#include "DexDebugInstruction.h"
 #include "DexDefs.h"
 #include "DexIdx.h"
 #include "DexOutput.h"

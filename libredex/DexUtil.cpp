@@ -7,20 +7,18 @@
 
 #include "DexUtil.h"
 
-#include <boost/filesystem/directory.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-#include <boost/regex.hpp> // NOLINT
 #include <string_view>
 
+#include "ControlFlow.h"
+#include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexLoader.h"
+#include "DexStore.h"
 #include "EditableCfgAdapter.h"
+#include "IRInstruction.h"
 #include "MethodUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "Trace.h"
 #include "TypeUtil.h"
 #include "UnknownVirtuals.h"
 
@@ -223,74 +221,6 @@ Scope build_class_scope_for_packages(
 void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
   DexStoreClassesIterator iter(stores);
   post_dexen_changes(v, iter);
-}
-
-void load_root_dexen(DexStore& store,
-                     const std::string& dexen_dir_str,
-                     bool balloon,
-                     bool throw_on_balloon_error,
-                     bool verbose,
-                     int support_dex_version) {
-  namespace fs = boost::filesystem;
-  fs::path dexen_dir_path(dexen_dir_str);
-  // NOLINTNEXTLINE(bugprone-assert-side-effect)
-  redex_assert(fs::is_directory(dexen_dir_path));
-
-  // Discover dex files
-  auto end = fs::directory_iterator();
-  std::vector<fs::path> dexen;
-  for (fs::directory_iterator it(dexen_dir_path); it != end; ++it) {
-    auto file = it->path();
-    if (fs::is_regular_file(file) &&
-        (file.extension().compare(std::string(".dex")) == 0)) {
-      dexen.emplace_back(file);
-    }
-  }
-
-  /*
-   * Comparator for dexen filename. 'classes.dex' should sort first,
-   * followed by [^\d]*[\d]+.dex ordered by N numerically.
-   */
-  auto dex_comparator = [](const fs::path& a, const fs::path& b) {
-    boost::regex s_dex_regex("[^0-9]*([0-9]+)\\.dex");
-
-    auto as = a.filename().string();
-    auto bs = b.filename().string();
-    boost::smatch amatch;
-    boost::smatch bmatch;
-    bool amatched = boost::regex_match(as, amatch, s_dex_regex);
-    bool bmatched = boost::regex_match(bs, bmatch, s_dex_regex);
-
-    if (!amatched && bmatched) {
-      return true;
-    } else if (amatched && !bmatched) {
-      return false;
-    } else if (!amatched && !bmatched) {
-      // Compare strings, probably the same
-      return strcmp(as.c_str(), bs.c_str()) > 0;
-    } else {
-      // Compare captures as integers
-      auto anum = std::stoi(amatch[1]);
-      auto bnum = std::stoi(bmatch[1]);
-      return bnum > anum;
-    }
-  };
-
-  // Sort all discovered dex files
-  std::sort(dexen.begin(), dexen.end(), dex_comparator);
-  // Load all discovered dex files
-  for (const auto& dex : dexen) {
-    if (verbose) {
-      TRACE(MAIN, 1, "Loading %s", dex.string().c_str());
-    }
-    // N.B. throaway stats for now
-    DexClasses classes = load_classes_from_dex(
-        DexLocation::make_location("dex", dex.string()),
-        /*stats=*/nullptr, /*input_dex_version=*/nullptr, balloon,
-        /* throw_on_balloon_error */ throw_on_balloon_error,
-        support_dex_version);
-    store.add_classes(std::move(classes));
-  }
 }
 
 void create_store(const std::string& store_name,
@@ -556,3 +486,122 @@ bool is_identifier(const std::string_view& ident) {
   return true;
 }
 } // namespace java_names
+
+void create_object_class() {
+  auto* type = type::java_lang_Object();
+  if (type_class(type) != nullptr) {
+    return;
+  }
+
+  std::vector<DexMethod*> object_methods;
+
+  // required sigs
+  auto* void_args = DexTypeList::make_type_list({});
+  auto* void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
+  auto* object_bool = DexProto::make_proto(
+      type::_boolean(),
+      DexTypeList::make_type_list({type::java_lang_Object()}));
+  auto* void_void = DexProto::make_proto(type::_void(), void_args);
+  auto* void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
+  auto* void_int = DexProto::make_proto(type::_int(), void_args);
+  auto* void_string = DexProto::make_proto(type::java_lang_String(), void_args);
+  auto* long_void = DexProto::make_proto(
+      type::_void(), DexTypeList::make_type_list({type::_long()}));
+  auto* long_int_void = DexProto::make_proto(
+      type::_void(),
+      DexTypeList::make_type_list({type::_long(), type::_int()}));
+
+  // required names
+  const auto* clone = DexString::make_string("clone");
+  const auto* equals = DexString::make_string("equals");
+  const auto* finalize = DexString::make_string("finalize");
+  const auto* getClass = DexString::make_string("getClass");
+  const auto* hashCode = DexString::make_string("hashCode");
+  const auto* notify = DexString::make_string("notify");
+  const auto* notifyAll = DexString::make_string("notifyAll");
+  const auto* toString = DexString::make_string("toString");
+  const auto* wait = DexString::make_string("wait");
+
+  // protected java.lang.Object.clone()Ljava/lang/Object;
+  auto* method = DexMethod::make_method_downcast(type, clone, void_object);
+  method->set_access(ACC_PROTECTED);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public java.lang.Object.equals(Ljava/lang/Object;)Z
+  method = DexMethod::make_method_downcast(type, equals, object_bool);
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // protected java.lang.Object.finalize()V
+  method = DexMethod::make_method_downcast(type, finalize, void_void);
+  method->set_access(ACC_PROTECTED);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.getClass()Ljava/lang/Class;
+  method = DexMethod::make_method_downcast(type, getClass, void_class);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public native java.lang.Object.hashCode()I
+  method = DexMethod::make_method_downcast(type, hashCode, void_int);
+  method->set_access(ACC_PUBLIC | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  method = DexMethod::make_method_downcast(type, notify, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.notifyAll()V
+  method = DexMethod::make_method_downcast(type, notifyAll, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public java.lang.Object.toString()Ljava/lang/String;
+  method = DexMethod::make_method_downcast(type, toString, void_string);
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final java.lang.Object.wait()V
+  method = DexMethod::make_method_downcast(type, wait, void_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final java.lang.Object.wait(J)V
+  method = DexMethod::make_method_downcast(type, wait, long_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  // public final native java.lang.Object.wait(JI)V
+  method = DexMethod::make_method_downcast(type, wait, long_int_void);
+  method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
+  method->set_virtual(true);
+  method->set_external();
+  object_methods.push_back(method);
+
+  ClassCreator cc(type);
+  cc.set_access(ACC_PUBLIC);
+  auto* object_class = cc.create();
+  for (auto const& m : object_methods) {
+    object_class->add_method(m);
+  }
+}

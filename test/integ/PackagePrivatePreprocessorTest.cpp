@@ -7,7 +7,6 @@
 
 #include "PackagePrivatePreprocessor.h"
 
-#include <boost/algorithm/string/join.hpp>
 #include <gtest/gtest.h>
 
 #include "JarLoader.h"

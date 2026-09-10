@@ -385,8 +385,7 @@ void DexEncodedValueAnnotation::encode(DexOutputIdx* dodx,
 
 static DexAnnotationElement get_annotation_element(DexIdx* idx,
                                                    const uint8_t*& encdata) {
-  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t sidx = read_uleb128(&encdata);
+  uint32_t sidx = idx->read_uleb128_checked(&encdata);
   const auto* name = idx->get_stringidx(sidx);
   always_assert_type_log(name != nullptr, INVALID_DEX,
                          "Invalid string idx in annotation element");
@@ -396,8 +395,7 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
 
 std::unique_ptr<DexEncodedValueArray> get_encoded_value_array(
     DexIdx* idx, const uint8_t*& encdata) {
-  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t size = read_uleb128(&encdata);
+  uint32_t size = idx->read_uleb128_checked(&encdata);
   using Vec = std::vector<std::unique_ptr<DexEncodedValue>>;
   auto evlist = Vec{};
   evlist.reserve(size);
@@ -608,10 +606,8 @@ std::unique_ptr<DexEncodedValue> DexEncodedValue::get_encoded_value(
   case DEVT_ANNOTATION: {
     always_assert_type_log(evarg == 0, INVALID_DEX, "evarg out of bounds");
     EncodedAnnotations eanno{};
-    always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-    uint32_t tidx = read_uleb128(&encdata);
-    always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-    uint32_t count = read_uleb128(&encdata);
+    uint32_t tidx = idx->read_uleb128_checked(&encdata);
+    uint32_t count = idx->read_uleb128_checked(&encdata);
     DexType* type = idx->get_typeidx(tidx);
     always_assert_type_log(type != nullptr, INVALID_DEX,
                            "Invalid DEVT_ANNOTATION within annotation type");
@@ -636,10 +632,8 @@ std::unique_ptr<DexAnnotation> DexAnnotation::get_annotation(
   uint8_t viz = *encdata++;
   always_assert_type_log(viz <= DAV_SYSTEM, INVALID_DEX,
                          "Invalid annotation visibility %d", viz);
-  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t tidx = read_uleb128(&encdata);
-  always_assert_type_log(encdata < idx->end(), INVALID_DEX, "Dex overflow");
-  uint32_t count = read_uleb128(&encdata);
+  uint32_t tidx = idx->read_uleb128_checked(&encdata);
+  uint32_t count = idx->read_uleb128_checked(&encdata);
   DexType* type = idx->get_typeidx(tidx);
   always_assert_type_log(type != nullptr, INVALID_DEX,
                          "Invalid annotation type");
@@ -742,6 +736,46 @@ bool field_annotation_compare(std::pair<DexFieldRef*, DexAnnotationSet*> a,
   return compare_dexfields(a.first, b.first);
 }
 
+namespace {
+void sort_annotation_set(DexAnnotationSet* aset) {
+  if (aset == nullptr) {
+    return;
+  }
+  auto& annos = aset->get_annotations();
+  std::sort(annos.begin(), annos.end(), [](const auto& a, const auto& b) {
+    return compare_dextypes(a->type(), b->type());
+  });
+}
+} // namespace
+
+void DexAnnotationDirectory::sort_members() {
+  sort_annotation_set(m_class);
+  if (m_field) {
+    std::sort(m_field->begin(), m_field->end(), field_annotation_compare);
+    for (auto& fanno : *m_field) {
+      sort_annotation_set(fanno.second);
+    }
+  }
+  if (m_method) {
+    std::sort(m_method->begin(), m_method->end(), method_annotation_compare);
+    for (auto& manno : *m_method) {
+      sort_annotation_set(manno.second);
+    }
+  }
+  if (m_method_param) {
+    std::sort(m_method_param->begin(),
+              m_method_param->end(),
+              method_param_annotation_compare);
+    for (auto& mpanno : *m_method_param) {
+      ParamAnnotations* params = mpanno.second;
+      for (auto& param : *params) {
+        sort_annotation_set(param.second.get());
+      }
+    }
+  }
+}
+
+// Precondition: sort_members() must have been called before any gather call.
 void DexAnnotationDirectory::gather_asets(
     std::vector<DexAnnotationSet*>& aset) {
   if (m_class != nullptr) {
@@ -767,12 +801,10 @@ void DexAnnotationDirectory::gather_asets(
   }
 }
 
+// Precondition: sort_members() must have been called before any gather call.
 void DexAnnotationDirectory::gather_xrefs(
     std::vector<ParamAnnotations*>& xrefs) {
   if (m_method_param) {
-    std::sort(m_method_param->begin(),
-              m_method_param->end(),
-              method_param_annotation_compare);
     for (auto param : *m_method_param) {
       ParamAnnotations* pa = param.second;
       xrefs.push_back(pa);
@@ -780,6 +812,7 @@ void DexAnnotationDirectory::gather_xrefs(
   }
 }
 
+// Precondition: sort_members() must have been called before any gather call.
 void DexAnnotationDirectory::gather_annotations(
     std::vector<DexAnnotation*>& alist) {
   if (m_class != nullptr) {
@@ -808,11 +841,12 @@ void DexAnnotationDirectory::gather_annotations(
   }
 }
 
+// Precondition: sort_members() must have been called before vencode.
 void DexAnnotationDirectory::vencode(
     DexOutputIdx* dodx,
     std::vector<uint32_t>& annodirout,
-    std::map<ParamAnnotations*, uint32_t>& xrefmap,
-    std::map<DexAnnotationSet*, uint32_t>& asetmap) {
+    UnorderedMap<ParamAnnotations*, uint32_t>& xrefmap,
+    UnorderedMap<DexAnnotationSet*, uint32_t>& asetmap) {
   uint32_t classoff = 0;
   uint32_t cntaf = 0;
   uint32_t cntam = 0;
@@ -840,7 +874,6 @@ void DexAnnotationDirectory::vencode(
      * A tape sort could be used instead as there are two different
      * ordered lists here.
      */
-    std::sort(m_field->begin(), m_field->end(), field_annotation_compare);
     for (auto const& p : *m_field) {
       DexAnnotationSet* das = p.second;
       annodirout.push_back(dodx->fieldidx(p.first));
@@ -850,7 +883,6 @@ void DexAnnotationDirectory::vencode(
     }
   }
   if (m_method) {
-    std::sort(m_method->begin(), m_method->end(), method_annotation_compare);
     for (auto const& p : *m_method) {
       DexMethod* m = p.first;
       DexAnnotationSet* das = p.second;
@@ -862,9 +894,6 @@ void DexAnnotationDirectory::vencode(
     }
   }
   if (m_method_param) {
-    std::sort(m_method_param->begin(),
-              m_method_param->end(),
-              method_param_annotation_compare);
     for (auto const& p : *m_method_param) {
       ParamAnnotations* pa = p.second;
       annodirout.push_back(dodx->methodidx(p.first));
@@ -881,14 +910,11 @@ void DexAnnotationSet::gather_annotations(std::vector<DexAnnotation*>& list) {
   }
 }
 
-void DexAnnotationSet::vencode(DexOutputIdx* /*dodx*/,
-                               std::vector<uint32_t>& asetout,
-                               std::map<DexAnnotation*, uint32_t>& annoout) {
+void DexAnnotationSet::vencode(
+    DexOutputIdx* /*dodx*/,
+    std::vector<uint32_t>& asetout,
+    UnorderedMap<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());
-  std::sort(m_annotations.begin(), m_annotations.end(),
-            [](const auto& a, const auto& b) {
-              return compare_dextypes(a->type(), b->type());
-            });
   for (auto& anno : m_annotations) {
     always_assert_log(annoout.count(anno.get()) != 0,
                       "Uninitialized annotation %p '%s', bailing\n",

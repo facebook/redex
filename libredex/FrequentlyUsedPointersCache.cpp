@@ -15,12 +15,14 @@ void FrequentlyUsedPointers::load() {
   m_well_known_types.insert(m_type_##func_name);
 #define FOR_EACH LOAD_FREQUENTLY_USED_TYPE
   WELL_KNOWN_TYPES
+  KOTLIN_JVM_INTERNAL_TYPES
 #undef FOR_EACH
 
 #define LOAD_FREQUENTLY_USED_FIELD(func_name, java_name) \
   m_field_##func_name = DexField::make_field(java_name);
 #define FOR_EACH LOAD_FREQUENTLY_USED_FIELD
   PRIMITIVE_PSEUDO_TYPE_FIELDS
+  KOTLIN_JVM_INTERNAL_FIELDS
 #undef FOR_EACH
 
 #define LOAD_FREQUENTLY_USED_METHOD(func_name, java_name) \

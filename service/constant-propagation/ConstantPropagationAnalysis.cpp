@@ -6,7 +6,6 @@
  */
 
 #include "ConstantPropagationAnalysis.h"
-#include <optional>
 
 #include <boost/container_hash/hash.hpp>
 #include <cinttypes>
@@ -21,7 +20,7 @@
 #include "IRInstruction.h"
 #include "RedexContext.h"
 
-#include "StlUtil.h"
+#include <bit>
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -39,11 +38,10 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "Resolver.h"
 #include "Trace.h"
 
-// While undefined behavior C++-wise, the two's complement implementation of
-// modern processors matches the required Java semantics. So silence ubsan.
+// Signed integer overflow is undefined behavior in C++20, but the two's
+// complement wrapping matches the required Java semantics. So silence ubsan.
 #if defined(__clang__)
-#define NO_UBSAN_ARITH \
-  __attribute__((no_sanitize("signed-integer-overflow", "shift")))
+#define NO_UBSAN_ARITH __attribute__((no_sanitize("signed-integer-overflow")))
 #else
 #define NO_UBSAN_ARITH
 #endif
@@ -468,7 +466,7 @@ bool ResourceIdAnalyzer::is_src_known(const IRInstruction* insn,
 bool ResourceIdAnalyzer::analyze_r_const(const IRInstruction* insn,
                                          ConstantEnvironment* env) {
   auto id = static_cast<uint32_t>(insn->get_literal());
-  TRACE(CONSTP, 5, "Discovered new resource id for reg: %d value: %d",
+  TRACE(CONSTP, 5, "Discovered new resource id for reg: %u value: %u",
         insn->dest(), id);
   env->set(insn->dest(), ConstantResourceIdDomain({.id = id}));
   return true;
@@ -538,7 +536,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
     break;
   }
   if (insn->has_dest()) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d] %s", insn->dest(),
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %u] %s", insn->dest(),
           SHOW(insn));
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result_any()) {
@@ -550,7 +548,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
                                       ConstantEnvironment* env) {
-  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %" PRIu64,
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %u value: %" PRId64,
         insn->dest(), insn->get_literal());
   env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;
@@ -633,9 +631,9 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     SignedConstantDomain result;
     if constexpr (sizeof(val) == 4) {
       result = SignedConstantDomain(
-          (int32_t)((std20::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
+          (int32_t)((std::bit_cast<int32_t>(val)) & 0xFFFFFFFF));
     } else if constexpr (sizeof(val) == 8) {
-      result = SignedConstantDomain(std20::bit_cast<int64_t>(val));
+      result = SignedConstantDomain(std::bit_cast<int64_t>(val));
     } else {
       // floating point number is either 32 bit or 64 bit
       // so we must have intergral value here
@@ -661,9 +659,9 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_NEG_LONG:
       return apply(-val);
     case OPCODE_NEG_FLOAT:
-      return apply(-std20::bit_cast<float>((int32_t)val));
+      return apply(-std::bit_cast<float>((int32_t)val));
     case OPCODE_NEG_DOUBLE:
-      return apply(-std20::bit_cast<double>(val));
+      return apply(-std::bit_cast<double>(val));
     case OPCODE_LONG_TO_INT:
       return apply((int32_t)val);
     case OPCODE_INT_TO_LONG:
@@ -677,7 +675,7 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_INT_TO_FLOAT:
       return apply((float)(val));
     case OPCODE_DOUBLE_TO_FLOAT:
-      return apply((float)(std20::bit_cast<double>(val)));
+      return apply((float)(std::bit_cast<double>(val)));
     case OPCODE_LONG_TO_FLOAT:
       return apply((float)val);
     case OPCODE_INT_TO_DOUBLE:
@@ -685,19 +683,19 @@ bool PrimitiveAnalyzer::analyze_unop(const IRInstruction* insn,
     case OPCODE_LONG_TO_DOUBLE:
       return apply((double)val);
     case OPCODE_FLOAT_TO_DOUBLE:
-      return apply((double)(std20::bit_cast<float>((int32_t)val)));
+      return apply((double)(std::bit_cast<float>((int32_t)val)));
     case OPCODE_FLOAT_TO_INT:
       return apply(art_float_to_integral<int32_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
+          std::bit_cast<float>((int32_t)val)));
     case OPCODE_DOUBLE_TO_INT:
       return apply(
-          art_float_to_integral<int32_t, double>(std20::bit_cast<double>(val)));
+          art_float_to_integral<int32_t, double>(std::bit_cast<double>(val)));
     case OPCODE_FLOAT_TO_LONG:
       return apply(art_float_to_integral<int64_t, float>(
-          std20::bit_cast<float>((int32_t)val)));
+          std::bit_cast<float>((int32_t)val)));
     case OPCODE_DOUBLE_TO_LONG:
       return apply(
-          art_float_to_integral<int64_t, double>(std20::bit_cast<double>(val)));
+          art_float_to_integral<int64_t, double>(std::bit_cast<double>(val)));
     default:
       break;
     }
@@ -1040,7 +1038,7 @@ bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
 bool InjectionIdAnalyzer::analyze_injection_id(const IRInstruction* insn,
                                                ConstantEnvironment* env) {
   auto id = static_cast<int32_t>(insn->get_literal());
-  TRACE(CONSTP, 5, "Discovered new injection id for reg: %d value: %d",
+  TRACE(CONSTP, 5, "Discovered new injection id for reg: %u value: %d",
         insn->dest(), id);
   env->set(insn->dest(), ConstantInjectionIdDomain(id));
   return true;

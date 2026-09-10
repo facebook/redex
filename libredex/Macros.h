@@ -25,10 +25,6 @@
 #define ATTRIBUTE_UNUSED
 #endif
 
-#ifndef FALLTHROUGH_INTENDED
-#define FALLTHROUGH_INTENDED [[fallthrough]]
-#endif
-
 #ifdef __clang__
 #define ATTR_FORMAT(STR_INDEX, PARAM_INDEX) \
   __attribute__((__format__(__printf__, STR_INDEX, PARAM_INDEX)))

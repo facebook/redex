@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <string_view>
 
 #include "Debug.h"
 #include "Show.h"
@@ -25,7 +26,7 @@ bool is_alpha(char c) {
 bool is_word(char c) { return is_digit(c) || is_alpha(c) || c == '_'; }
 
 // ".*\\$\\d+;"
-bool is_anonymous(std::string name) {
+bool is_anonymous(std::string_view name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
     if (name[i] != '$') {
       continue;
@@ -42,7 +43,7 @@ bool is_anonymous(std::string name) {
       continue;
     }
     if (name[j] == ';') {
-      fprintf(stderr, "'%s' is anonymous\n", name.c_str());
+      fprintf(stderr, "'%.*s' is anonymous\n", (int)name.size(), name.data());
       return true;
     }
   }
@@ -51,7 +52,7 @@ bool is_anonymous(std::string name) {
 }
 
 // ".*\\$\\w+;"
-bool is_nested(std::string name) {
+bool is_nested(std::string_view name) {
   for (uint32_t i = 0; i < name.length(); ++i) {
     if (name[i] != '$') {
       continue;
@@ -68,7 +69,7 @@ bool is_nested(std::string name) {
       continue;
     }
     if (name[j] == ';') {
-      fprintf(stderr, "'%s' is nested\n", name.c_str());
+      fprintf(stderr, "'%.*s' is nested\n", (int)name.size(), name.data());
       return true;
     }
   }
@@ -113,7 +114,7 @@ void breakup_by_package(SingleImpls& single_impls) {
       no_package_types++;
     }
   }
-  fprintf(stderr, "no package types %d\n", no_package_types);
+  fprintf(stderr, "no package types %u\n", no_package_types);
   fprintf(stderr, "break up by package, %zu packages:\n", by_package.size());
   std::sort(by_package.begin(),
             by_package.end(),
@@ -125,7 +126,7 @@ void breakup_by_package(SingleImpls& single_impls) {
             });
   for (const auto& package_info : by_package) {
     fprintf(stderr,
-            "%s (%d) => %d\n",
+            "%s (%d) => %u\n",
             package_info.package.c_str(),
             package_info.package_num,
             package_info.count);

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <iosfwd>
+#include <string>
 #include <string_view>
 
 #include "DexUtil.h"
@@ -19,6 +20,7 @@ void show_configuration(std::ostream& output,
                         const Scope& classes,
                         const ProguardConfiguration& config);
 
+std::string show_keep_style(const KeepSpec& keep_rule);
 std::string show_keep(const KeepSpec& keep_rule, bool show_source = true);
 std::string show_simple_keep_rule(const KeepSpec& keep_rule,
                                   std::string_view command,

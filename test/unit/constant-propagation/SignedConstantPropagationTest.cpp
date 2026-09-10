@@ -481,14 +481,14 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLit) {
     )
 )");
   do_const_prop(code.get());
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v2 v3 :.*\\)\\s*\\(const v1 2\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v0 v1 :.*\\)[[:space:]]*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v2 v3 :.*\\)[[:space:]]*\\(const v1 2\\)"));
 }
 
 TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
@@ -517,14 +517,14 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroInt) {
     )
 )");
   do_const_prop(code.get());
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v3 v2 :.*\\)\\s*\\(const v1 2\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-nez v0 :.*\\)[[:space:]]*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v3 v2 :.*\\)[[:space:]]*\\(const v1 2\\)"));
 }
 
 TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLong) {
@@ -550,10 +550,10 @@ TEST_F(ConstantBitwiseAndTest, UndeterminableZeroLong) {
   // and-int/lit.
   ASSERT_THAT(assembler::to_string(code.get()),
               ::testing::HasSubstr("and-long"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-nez v0 :.*\\)[[:space:]]*\\(const v1 1\\)"));
 }
 
 class ConstantBitwiseOrTest
@@ -829,14 +829,14 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneLit) {
     )
 )");
   do_const_prop(code.get());
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v1 1\\)"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v2 v3 :.*\\)\\s*\\(const v3 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v0 v1 :.*\\)[[:space:]]*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v2 v3 :.*\\)[[:space:]]*\\(const v3 1\\)"));
 }
 
 TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
@@ -866,14 +866,14 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneInt) {
     )
 )");
   do_const_prop(code.get());
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v0 v3 :.*\\)\\s*\\(const v1 1\\)"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v5 v6 :.*\\)\\s*\\(const v6 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v0 v3 :.*\\)[[:space:]]*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v5 v6 :.*\\)[[:space:]]*\\(const v6 1\\)"));
 }
 
 TEST_F(ConstantBitwiseOrTest, UndeterminableOneLong) {
@@ -899,10 +899,10 @@ TEST_F(ConstantBitwiseOrTest, UndeterminableOneLong) {
   // or-int/lit.
   ASSERT_THAT(assembler::to_string(code.get()),
               ::testing::HasSubstr("or-long"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-nez v0 :.*\\)\\s*\\(const v1 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-nez v0 :.*\\)[[:space:]]*\\(const v1 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, DeterminableBitsWithXorLit) {
@@ -1132,10 +1132,10 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLit) {
 )");
   do_const_prop(code.get());
 
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v2 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v0 v1 :.*\\)[[:space:]]*\\(const v2 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorInt) {
@@ -1161,10 +1161,10 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorInt) {
 )");
   do_const_prop(code.get());
 
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v0 v1 :.*\\)\\s*\\(const v2 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v0 v1 :.*\\)[[:space:]]*\\(const v2 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLong) {
@@ -1193,10 +1193,10 @@ TEST_F(ConstantBitwiseTest, UndeterminableBitsWithXorLong) {
   // xor-int/lit.
   ASSERT_THAT(assembler::to_string(code.get()),
               ::testing::HasSubstr("xor-long"));
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-nez v2 :.*\\)\\s*\\(const v2 1\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-nez v2 :.*\\)[[:space:]]*\\(const v2 1\\)"));
 }
 
 TEST_F(ConstantBitwiseTest, DeterminableBitJoinedFromConstants) {
@@ -2677,8 +2677,8 @@ TEST_F(ConstantPropagationTest, UndeterminableLow6BitsJoinedFromConstants) {
 )");
   do_const_prop(code.get());
 
-  EXPECT_THAT(
-      assembler::to_string(code.get()),
-      // if branch is not optimized out.
-      ::testing::ContainsRegex("\\(if-ne v1 v2 :.*\\)\\s*\\(const v0 10\\)"));
+  EXPECT_THAT(assembler::to_string(code.get()),
+              // if branch is not optimized out.
+              ::testing::ContainsRegex(
+                  "\\(if-ne v1 v2 :.*\\)[[:space:]]*\\(const v0 10\\)"));
 }

@@ -142,3 +142,13 @@ inline std::string_view trim_whitespaces(std::string_view str) {
   }
   return str;
 }
+
+template <size_t kAlignment, typename T>
+inline const T* align_ptr(const T* const ptr) {
+  static_assert(kAlignment != 0 && (kAlignment & (kAlignment - 1)) == 0,
+                "kAlignment is not 2 to the power of n");
+  const T* const next_aligned = reinterpret_cast<const T*>(
+      (reinterpret_cast<uintptr_t>(ptr) + (kAlignment - 1)) &
+      ~(kAlignment - 1));
+  return next_aligned;
+}

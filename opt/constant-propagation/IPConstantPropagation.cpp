@@ -7,6 +7,8 @@
 
 #include "IPConstantPropagation.h"
 
+#include <future>
+
 #include "AtomicStatCounter.h"
 #include "ConfigFiles.h"
 #include "ConstantEnvironment.h"
@@ -21,6 +23,7 @@
 #include "PassManager.h"
 #include "Purity.h"
 #include "ScopedMetrics.h"
+#include "Show.h"
 #include "StringBuilderAppendChain.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -59,6 +62,7 @@ using CombinedAnalyzer =
                                 ApiLevelAnalyzer,
                                 PackageNameAnalyzer,
                                 NewObjectAnalyzer,
+                                ResourceIdAnalyzer,
                                 PrimitiveAnalyzer>;
 
 namespace {
@@ -116,7 +120,7 @@ class AnalyzerGenerator {
             class_under_init, m_immut_analyzer_state, wps_accessor_ptr,
             m_enum_field_analyzer_state, m_boxed_boolean_analyzer_state,
             m_string_analyzer_state, nullptr, *m_api_level_analyzer_state,
-            m_package_name_state, m_immut_analyzer_state, nullptr),
+            m_package_name_state, m_immut_analyzer_state, nullptr, nullptr),
         std::move(env));
   }
 };
@@ -342,11 +346,22 @@ void PassImpl::run(const DexStoresVector& stores,
   auto string_analyzer_state = StringAnalyzerState::make_default();
   auto package_name_state = PackageNameState::make(package_name);
   NullCheckMethods null_check_methods;
+  // Ensure java.lang.Object's DexClass and methods exist before launching the
+  // async TypeSystem construction. TypeSystem → ClassScopes →
+  // build_signature_map → get_vmethods may lazily call create_object_class(),
+  // which mutates java.lang.Object by adding methods. If that runs
+  // concurrently with analyze()'s parallel class walkers (which read the same
+  // method vectors), it causes a heap-use-after-free.
+  create_object_class();
+  // Start TypeSystem construction in background — only reads scope now that
+  // java.lang.Object is fully initialized. Hides ~16s cost behind analyze().
+  auto type_system_future =
+      std::async(std::launch::async, [&scope]() { return TypeSystem(scope); });
   auto fp_iter =
       analyze(scope, &immut_analyzer_state, &api_level_analyzer_state,
               &string_analyzer_state, &package_name_state, null_check_methods);
   m_stats.fp_iter = fp_iter->get_stats();
-  TypeSystem type_system(scope);
+  auto type_system = type_system_future.get();
   optimize(scope, type_system, xstores, *fp_iter, &immut_analyzer_state,
            null_check_methods);
 }

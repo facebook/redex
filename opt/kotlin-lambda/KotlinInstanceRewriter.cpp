@@ -8,9 +8,14 @@
 #include "KotlinInstanceRewriter.h"
 #include "AtomicStatCounter.h"
 #include "CFGMutation.h"
+#include "ControlFlow.h"
 #include "Debug.h"
+#include "KotlinLambdaAnalyzer.h"
 #include "PassManager.h"
 #include "Show.h"
+#include "SourceBlocks.h"
+#include "SourceBlocksUtils.h"
+#include "Trace.h"
 #include "TypeUtil.h"
 #include "Walkers.h"
 
@@ -30,33 +35,25 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     const Scope& scope,
     ConcurrentMap<DexFieldRef*,
                   std::set<std::pair<IRInstruction*, DexMethod*>>>&
-        concurrent_instance_map,
-
-    std::function<bool(DexClass*)> is_excludable,
-    bool exclude_excludable) {
+        concurrent_instance_map) {
   // Collect all the types which are of Kotlin classes which sets INSTANCE
   // variable.
   // Get all the uses of the INSTANCE variables whose <init> does not have
   // side effects
   KotlinInstanceRewriter::Stats stats{};
-  AtomicStatCounter<size_t> excludable_count{0};
+  AtomicStatCounter<size_t> lambda_without_instance_count{0};
   walk::parallel::classes(scope, [&](DexClass* cls) {
     if (!can_rename(cls) || !can_delete(cls)) {
       return;
     }
+    if (auto analyzer = KotlinLambdaAnalyzer::for_class(cls);
+        !analyzer || !analyzer->is_non_capturing()) {
+      return;
+    }
     auto* instance = has_instance_field(cls, m_instance);
     if (instance == nullptr) {
+      lambda_without_instance_count++;
       return;
-    }
-    if (!type::is_kotlin_non_capturing_lambda(cls)) {
-      return;
-    }
-    // Count excludable classes (e.g., hot lambdas)
-    if (is_excludable(cls)) {
-      excludable_count++;
-      if (exclude_excludable) {
-        return;
-      }
     }
     if (concurrent_instance_map.count(instance) != 0u) {
       return;
@@ -65,7 +62,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::collect_instance_usage(
     concurrent_instance_map.emplace(instance, insns);
   });
   stats.kotlin_new_instance = concurrent_instance_map.size();
-  stats.excludable_kotlin_lambda = excludable_count;
+  stats.kotlin_lambda_without_instance = lambda_without_instance_count;
   return stats;
 }
 
@@ -195,6 +192,7 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
       always_assert(init);
       // Make this constructor publcic
       set_public(init->as_def());
+      std::vector<IRInstruction*> init_insns_to_fix;
       auto iterable = cfg::InstructionIterable(cfg);
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            insn_it++) {
@@ -211,11 +209,41 @@ KotlinInstanceRewriter::Stats KotlinInstanceRewriter::transform(
         IRInstruction* init_isn = new IRInstruction(OPCODE_INVOKE_DIRECT);
         init_isn->set_method(init)->set_srcs_size(1)->set_src(
             0, move_result_it->insn->dest());
-        m.replace(insn_it, {new_isn, mov_result, init_isn});
+        auto* sb = source_blocks::get_last_source_block_before(
+            insn_it.block(), insn_it.unwrap());
+        std::vector<MethodItemEntry> replacement;
+        replacement.emplace_back(new_isn);
+        replacement.emplace_back(mov_result);
+        if (sb != nullptr) {
+          replacement.emplace_back(source_blocks::clone_as_synthetic(sb));
+        }
+        replacement.emplace_back(init_isn);
+        if (sb != nullptr) {
+          replacement.emplace_back(source_blocks::clone_as_synthetic(sb));
+        }
+        init_insns_to_fix.push_back(init_isn);
+        m.replace_mie(insn_it, std::move(replacement));
         m.remove(move_result_it);
         stats.kotlin_new_inserted++;
       }
       m.flush();
+      for (auto* block : cfg.blocks()) {
+        auto last_insn_it = block->get_last_insn();
+        if (last_insn_it == block->end()) {
+          continue;
+        }
+        for (auto* tracked_init : init_insns_to_fix) {
+          if (last_insn_it->insn == tracked_init) {
+            auto* sb_ptr = source_blocks::get_first_source_block(block);
+            if (sb_ptr != nullptr) {
+              source_blocks::impl::BlockAccessor::insert_source_block_after(
+                  block, last_insn_it,
+                  source_blocks::clone_as_synthetic(sb_ptr));
+            }
+            break;
+          }
+        }
+      }
       TRACE(KOTLIN_INSTANCE, 5, "%s after\n%s", SHOW(meth), SHOW(cfg));
     }
     cls->remove_field(resolve_field(field));
@@ -232,7 +260,8 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
   mgr.incr_metric("kotlin_instance_fields_removed",
                   kotlin_instance_fields_removed);
   mgr.incr_metric("kotlin_new_inserted", kotlin_new_inserted);
-  mgr.incr_metric("excludable_kotlin_lambda", excludable_kotlin_lambda);
+  mgr.incr_metric("kotlin_lambda_without_instance",
+                  kotlin_lambda_without_instance);
 
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance = %zu", kotlin_new_instance);
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_instance_which_escapes = %zu",
@@ -242,6 +271,6 @@ void KotlinInstanceRewriter::Stats::report(PassManager& mgr) const {
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_instance_fields_removed = %zu",
         kotlin_instance_fields_removed);
   TRACE(KOTLIN_INSTANCE, 1, "kotlin_new_inserted = %zu", kotlin_new_inserted);
-  TRACE(KOTLIN_INSTANCE, 1, "excludable_kotlin_lambda = %zu",
-        excludable_kotlin_lambda);
+  TRACE(KOTLIN_INSTANCE, 1, "kotlin_lambda_without_instance = %zu",
+        kotlin_lambda_without_instance);
 }

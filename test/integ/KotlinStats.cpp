@@ -76,7 +76,8 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinLambdaInline$foo$1;
   // LKotlinLambdaInline$bar$1;
   // LKotlinLambdaInline$baz$1;
-  EXPECT_EQ(stats.kotlin_non_capturing_lambda, 3);
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda_with_singleton, 3);
+  EXPECT_EQ(stats.kotlin_non_capturing_lambda_without_singleton, 0);
 
   // All three lambdas in LKotlinLambdaInline are trivial
   EXPECT_EQ(stats.kotlin_trivial_non_capturing_lambdas, 3u);
@@ -100,7 +101,6 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LKotlinCompanionOptimizationKt;
   // Lfoo;
   // LAnotherCompanionClass;
-  // LKotlinCheckNotNull;
   // LCompanionWithMethodCollision;
   // LCompanionWithMethodCollision$Companion;
   // LCollisionTestCaller;
@@ -126,18 +126,15 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LCompanionEscapes;
   // LCompanionEscapes$Companion;
   // LEscapesCaller;
-  // LCompanionWithPureFunction;
-  // LCompanionWithPureFunction$Companion;
-  // LPureFunctionCaller;
-  // LCompanionWithSynchronized;
-  // LCompanionWithSynchronized$Companion;
-  // LSynchronizedCaller;
-  // LCompanionWithNativeMethod;
-  // LCompanionWithNativeMethod$Companion;
-  // LNativeMethodCaller;
-  // LCompanionWithKeptBridge;
-  // LCompanionWithKeptBridge$Companion;
-  // LKeptBridgeCaller;
+  // + LCompanionWithSynchronized;
+  // + LCompanionWithSynchronized$Companion;
+  // + LSynchronizedCaller;
+  // + LCompanionWithNativeMethod;
+  // + LCompanionWithNativeMethod$Companion;
+  // + LNativeMethodCaller;
+  // + LCompanionWithKeptBridge;
+  // + LCompanionWithKeptBridge$Companion;
+  // + LKeptBridgeCaller;
   EXPECT_EQ(stats.kotlin_class, 56);
 
   // LCompanionClass$Companion;
@@ -149,10 +146,9 @@ TEST_F(KotlinStatsTest, MethodHasNoEqDefined) {
   // LAbstractOuterClass$Companion;
   // LCompanionWithConstVal$Companion;
   // LCompanionEscapes$Companion;
-  // LCompanionWithPureFunction$Companion;
-  // LCompanionWithSynchronized$Companion;
-  // LCompanionWithNativeMethod$Companion;
-  // LCompanionWithKeptBridge$Companion;
+  // + LCompanionWithSynchronized$Companion;
+  // + LCompanionWithNativeMethod$Companion;
+  // + LCompanionWithKeptBridge$Companion;
   EXPECT_EQ(stats.kotlin_companion_class, 13);
 
   // LKotlinLambdaInline$foo$1;

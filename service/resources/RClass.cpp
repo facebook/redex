@@ -427,12 +427,12 @@ void RClassWriter::remap_resource_class_scalars(
       always_assert_log(old_to_remapped_ids.count(old),
                         "Encountered resource ID %llx which cannot be "
                         "remapped",
-                        (long long)old);
+                        static_cast<unsigned long long>(old));
       always_assert_log(old <= std::numeric_limits<uint32_t>::max(),
                         "Resource ID %llx needs to fit in 32 bits",
-                        (long long)old);
+                        static_cast<unsigned long long>(old));
       always_assert_log(old >= 0, "Resource ID %llx must be positive",
-                        (long long)old);
+                        static_cast<unsigned long long>(old));
       insn->set_literal(old_to_remapped_ids.at((uint32_t)old));
     }
   });

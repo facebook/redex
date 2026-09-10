@@ -25,12 +25,12 @@ constexpr bool debug =
 
 extern bool slow_invariants_debug;
 
+#define DEBUG_ONLY [[maybe_unused]]
+
 #ifdef _MSC_VER
-#define DEBUG_ONLY
 #define UNREACHABLE() __assume(false)
 #define PRETTY_FUNC() __func__
 #else
-#define DEBUG_ONLY __attribute__((unused))
 #define UNREACHABLE() __builtin_unreachable()
 #define PRETTY_FUNC() __PRETTY_FUNCTION__
 #endif // _MSC_VER

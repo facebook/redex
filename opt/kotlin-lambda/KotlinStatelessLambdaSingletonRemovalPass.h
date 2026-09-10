@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include "MethodProfiles.h"
 #include "Pass.h"
 
 class KotlinStatelessLambdaSingletonRemovalPass : public Pass {
@@ -37,31 +36,10 @@ The rationale is that the singleton pattern was inherited from the old javac beh
 On Android devices, peak performance throughput is less relevant than initial startup latency. Therefore, the singleton pattern is not no longer desirable.
 
 This godbolt [example](https://godbolt.org/z/Mznrzs8T4) shows the singleton pattern produced by our current kotlinc setup. This pass removes the singleton pattern shown in the example.
+
+This pass replaces references to the singleton `INSTANCE` field (via `sget-object`) with inline instantiation (`new-instance` + `move-result-pseudo-object` + `invoke-direct <init>`), and removes the static `INSTANCE` field and its initialization in `<clinit>`.
     )");
   }
 
-  void bind_config() override {
-    bind("exclude_hot",
-         false,
-         m_exclude_hot,
-         "Exclude hot lambdas from singleton removal");
-    bind("exclude_hot_call_count_threshold",
-         kDefaultExcludeHotCallCountThreshold,
-         m_exclude_hot_call_count_threshold,
-         "Call count threshold for determining hot lambdas (used when "
-         "exclude_hot is true)");
-  }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  static constexpr float kDefaultExcludeHotCallCountThreshold = 5.0f;
-
-  bool is_hot_lambda(
-      const DexClass* cls,
-      const method_profiles::MethodProfiles& method_profiles) const;
-
-  bool m_exclude_hot{false};
-  float m_exclude_hot_call_count_threshold{
-      kDefaultExcludeHotCallCountThreshold};
 };

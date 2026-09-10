@@ -9,7 +9,6 @@
 
 #include "Debug.h"
 #include "DexTypeEnvironment.h"
-#include "Macros.h"
 #include "Show.h"
 
 namespace outliner_impl {
@@ -900,7 +899,7 @@ const DexType* OutlinerTypeAnalysis::get_const_insns_type_demand(
           type_demands.insert(type::_int());
           break;
         }
-        FALLTHROUGH_INTENDED;
+        [[fallthrough]];
       default:
         type_demands.insert(get_type_demand(p.first, p.second));
         break;

@@ -64,6 +64,19 @@
 
 namespace {
 
+// Hash functor for std::vector<T> to enable use as keys in UnorderedMap.
+// Uses FNV-1a-inspired hash combining over the raw element values.
+template <typename T>
+struct VectorHash {
+  size_t operator()(const std::vector<T>& v) const {
+    size_t seed = v.size();
+    for (const auto& elem : v) {
+      seed ^= std::hash<T>{}(elem) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+    return seed;
+  }
+};
+
 template <class T, class U>
 class CustomSort {
  private:
@@ -234,6 +247,7 @@ void GatheredTypes::sort_dexmethod_emitlist_method_similarity_order(
 
   std::vector<DexMethod*> perf_sensitive_methods;
   std::vector<DexMethod*> remaining_methods;
+  remaining_methods.reserve(lmeth.size());
   for (auto* meth : lmeth) {
     if (perf_sensitive_classes.count(meth->get_class()) != 0u) {
       perf_sensitive_methods.push_back(meth);
@@ -651,84 +665,84 @@ void DexOutput::insert_map_item(uint16_t maptype,
 
   switch (maptype) {
   case TYPE_HEADER_ITEM:
-    m_stats.header_item_count += static_cast<int>(size);
-    m_stats.header_item_bytes += static_cast<int>(bytes);
+    m_stats.header_item_count += size;
+    m_stats.header_item_bytes += bytes;
     break;
   case TYPE_STRING_ID_ITEM:
-    m_stats.string_id_count += static_cast<int>(size);
-    m_stats.string_id_bytes += static_cast<int>(bytes);
+    m_stats.string_id_count += size;
+    m_stats.string_id_bytes += bytes;
     break;
   case TYPE_TYPE_ID_ITEM:
-    m_stats.type_id_count += static_cast<int>(size);
-    m_stats.type_id_bytes += static_cast<int>(bytes);
+    m_stats.type_id_count += size;
+    m_stats.type_id_bytes += bytes;
     break;
   case TYPE_PROTO_ID_ITEM:
-    m_stats.proto_id_count += static_cast<int>(size);
-    m_stats.proto_id_bytes += static_cast<int>(bytes);
+    m_stats.proto_id_count += size;
+    m_stats.proto_id_bytes += bytes;
     break;
   case TYPE_FIELD_ID_ITEM:
-    m_stats.field_id_count += static_cast<int>(size);
-    m_stats.field_id_bytes += static_cast<int>(bytes);
+    m_stats.field_id_count += size;
+    m_stats.field_id_bytes += bytes;
     break;
   case TYPE_METHOD_ID_ITEM:
-    m_stats.method_id_count += static_cast<int>(size);
-    m_stats.method_id_bytes += static_cast<int>(bytes);
+    m_stats.method_id_count += size;
+    m_stats.method_id_bytes += bytes;
     break;
   case TYPE_CLASS_DEF_ITEM:
-    m_stats.class_def_count += static_cast<int>(size);
-    m_stats.class_def_bytes += static_cast<int>(bytes);
+    m_stats.class_def_count += size;
+    m_stats.class_def_bytes += bytes;
     break;
   case TYPE_CALL_SITE_ID_ITEM:
-    m_stats.call_site_id_count += static_cast<int>(size);
-    m_stats.call_site_id_bytes += static_cast<int>(bytes);
+    m_stats.call_site_id_count += size;
+    m_stats.call_site_id_bytes += bytes;
     break;
   case TYPE_METHOD_HANDLE_ITEM:
-    m_stats.method_handle_count += static_cast<int>(size);
-    m_stats.method_handle_bytes += static_cast<int>(bytes);
+    m_stats.method_handle_count += size;
+    m_stats.method_handle_bytes += bytes;
     break;
   case TYPE_MAP_LIST:
-    m_stats.map_list_count += static_cast<int>(size);
-    m_stats.map_list_bytes += static_cast<int>(bytes);
+    m_stats.map_list_count += size;
+    m_stats.map_list_bytes += bytes;
     break;
   case TYPE_TYPE_LIST:
-    m_stats.type_list_count += static_cast<int>(size);
-    m_stats.type_list_bytes += static_cast<int>(bytes);
+    m_stats.type_list_count += size;
+    m_stats.type_list_bytes += bytes;
     break;
   case TYPE_ANNOTATION_SET_REF_LIST:
-    m_stats.annotation_set_ref_list_count += static_cast<int>(size);
-    m_stats.annotation_set_ref_list_bytes += static_cast<int>(bytes);
+    m_stats.annotation_set_ref_list_count += size;
+    m_stats.annotation_set_ref_list_bytes += bytes;
     break;
   case TYPE_ANNOTATION_SET_ITEM:
-    m_stats.annotation_set_count += static_cast<int>(size);
-    m_stats.annotation_set_bytes += static_cast<int>(bytes);
+    m_stats.annotation_set_count += size;
+    m_stats.annotation_set_bytes += bytes;
     break;
   case TYPE_CLASS_DATA_ITEM:
-    m_stats.class_data_count += static_cast<int>(size);
-    m_stats.class_data_bytes += static_cast<int>(bytes);
+    m_stats.class_data_count += size;
+    m_stats.class_data_bytes += bytes;
     break;
   case TYPE_CODE_ITEM:
-    m_stats.code_count += static_cast<int>(size);
-    m_stats.code_bytes += static_cast<int>(bytes);
+    m_stats.code_count += size;
+    m_stats.code_bytes += bytes;
     break;
   case TYPE_STRING_DATA_ITEM:
-    m_stats.string_data_count += static_cast<int>(size);
-    m_stats.string_data_bytes += static_cast<int>(bytes);
+    m_stats.string_data_count += size;
+    m_stats.string_data_bytes += bytes;
     break;
   case TYPE_DEBUG_INFO_ITEM:
-    m_stats.debug_info_count += static_cast<int>(size);
-    m_stats.debug_info_bytes += static_cast<int>(bytes);
+    m_stats.debug_info_count += size;
+    m_stats.debug_info_bytes += bytes;
     break;
   case TYPE_ANNOTATION_ITEM:
-    m_stats.annotation_count += static_cast<int>(size);
-    m_stats.annotation_bytes += static_cast<int>(bytes);
+    m_stats.annotation_count += size;
+    m_stats.annotation_bytes += bytes;
     break;
   case TYPE_ENCODED_ARRAY_ITEM:
-    m_stats.encoded_array_count += static_cast<int>(size);
-    m_stats.encoded_array_bytes += static_cast<int>(bytes);
+    m_stats.encoded_array_count += size;
+    m_stats.encoded_array_bytes += bytes;
     break;
   case TYPE_ANNOTATIONS_DIR_ITEM:
-    m_stats.annotations_directory_count += static_cast<int>(size);
-    m_stats.annotations_directory_bytes += static_cast<int>(bytes);
+    m_stats.annotations_directory_count += size;
+    m_stats.annotations_directory_bytes += bytes;
     break;
   default:
     break;
@@ -875,10 +889,10 @@ void DexOutput::generate_class_data() {
     } else {
       cdefs[i].static_values_off = 0;
     }
-    m_stats.num_fields +=
-        static_cast<int>(clz->get_ifields().size() + clz->get_sfields().size());
-    m_stats.num_methods += static_cast<int>(clz->get_vmethods().size() +
-                                            clz->get_dmethods().size());
+    m_stats.num_fields += static_cast<int64_t>(clz->get_ifields().size() +
+                                               clz->get_sfields().size());
+    m_stats.num_methods += static_cast<int64_t>(clz->get_vmethods().size() +
+                                                clz->get_dmethods().size());
   }
 }
 
@@ -999,9 +1013,9 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         ((const dex_code_item*)(m_output.get() + m_offset))->insns_size;
     inc_offset(size);
     m_stats.num_instructions +=
-        static_cast<int>(code->get_instructions().size());
-    m_stats.num_tries += static_cast<int>(code->get_tries().size());
-    m_stats.instruction_bytes += static_cast<int>(insns_size * 2);
+        static_cast<int64_t>(code->get_instructions().size());
+    m_stats.num_tries += static_cast<int64_t>(code->get_tries().size());
+    m_stats.instruction_bytes += static_cast<int64_t>(insns_size) * 2;
   }
   /// insert_map_item returns early if m_code_item_emits is empty
   insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
@@ -1135,7 +1149,8 @@ void DexOutput::unique_annotations(annomap_t& annomap,
                                    std::vector<DexAnnotation*>& annolist) {
   int annocnt = 0;
   uint32_t mentry_offset = m_offset;
-  std::map<std::vector<uint8_t>, uint32_t> annotation_byte_offsets;
+  UnorderedMap<std::vector<uint8_t>, uint32_t, VectorHash<uint8_t>>
+      annotation_byte_offsets;
   for (auto* anno : annolist) {
     if (annomap.count(anno) != 0u) {
       continue;
@@ -1167,7 +1182,8 @@ void DexOutput::unique_asets(annomap_t& annomap,
                              std::vector<DexAnnotationSet*>& asetlist) {
   int asetcnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> aset_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      aset_offsets;
   for (auto* aset : asetlist) {
     if (asetmap.count(aset) != 0u) {
       continue;
@@ -1199,7 +1215,8 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
                              std::vector<ParamAnnotations*>& xreflist) {
   int xrefcnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> xref_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      xref_offsets;
   for (auto* xref : xreflist) {
     if (xrefmap.count(xref) != 0u) {
       continue;
@@ -1238,7 +1255,8 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
                              std::vector<DexAnnotationDirectory*>& adirlist) {
   int adircnt = 0;
   uint32_t mentry_offset = align(m_offset);
-  std::map<std::vector<uint32_t>, uint32_t> adir_offsets;
+  UnorderedMap<std::vector<uint32_t>, uint32_t, VectorHash<uint32_t>>
+      adir_offsets;
   for (auto* adir : adirlist) {
     if (adirmap.count(adir) != 0u) {
       continue;
@@ -1275,7 +1293,8 @@ void DexOutput::generate_annotations() {
    * 5) Attach annotation_directories to the classdefs
    */
   std::vector<DexAnnotationDirectory*> lad;
-  std::map<DexAnnotationDirectory*, int> ad_to_classnum;
+  lad.reserve(hdr.class_defs_size);
+  UnorderedMap<DexAnnotationDirectory*, int> ad_to_classnum;
   annomap_t annomap;
   asetmap_t asetmap;
   xrefmap_t xrefmap;
@@ -1290,6 +1309,9 @@ void DexOutput::generate_annotations() {
     }
   }
   std::sort(lad.begin(), lad.end(), annotation_cmp);
+  for (auto* ad : lad) {
+    ad->sort_members();
+  }
   std::vector<DexAnnotation*> annolist;
   std::vector<DexAnnotationSet*> asetlist;
   std::vector<ParamAnnotations*> xreflist;
@@ -1298,6 +1320,16 @@ void DexOutput::generate_annotations() {
     ad->gather_annotations(annolist);
     ad->gather_xrefs(xreflist);
   }
+  // Sort annolist by encoded content to ensure deterministic emission order.
+  // Without this, annotation offsets depend on gather order which can vary
+  // due to parallel pass execution modifying annotation vectors.
+  std::sort(annolist.begin(), annolist.end(),
+            [this](DexAnnotation* a, DexAnnotation* b) {
+              std::vector<uint8_t> a_bytes, b_bytes;
+              a->vencode(&m_dodx, a_bytes);
+              b->vencode(&m_dodx, b_bytes);
+              return a_bytes < b_bytes;
+            });
   unique_annotations(annomap, annolist);
   unique_asets(annomap, asetmap, asetlist);
   unique_xrefs(asetmap, xrefmap, xreflist);
@@ -1520,7 +1552,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     }
     auto res = param_to_sizes[param_size].emplace(MethodKey{method, dex_size},
                                                   debug_size);
-    always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
+    always_assert_log(res.second, "Failed to insert %s, %u pair", SHOW(method),
                       dc->size());
     if (iodi_metadata.is_in_global_cluster(method)) {
       clustered_methods[iodi_metadata.get_canonical_method(method)].push_back(
@@ -1757,7 +1789,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       size_t total_ignored = std::distance(sizes.begin(), best_iter);
       if (!dry_run) {
         TRACE(IODI, 3,
-              "[IODI] (%u) Ignored %zu methods because they inflated too much",
+              "[IODI] (%d) Ignored %zu methods because they inflated too much",
               param_size, total_ignored);
       }
 
@@ -1877,7 +1909,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
           best_iter = end;
           if (!dry_run) {
             TRACE(IODI, 3,
-                  "[IODI] Opting out of IODI for %u arity methods entirely",
+                  "[IODI] Opting out of IODI for %d arity methods entirely",
                   param_size);
           }
         }
@@ -1911,7 +1943,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
       if (requires_iodi_programs) {
         TRACE(IODI, 2,
-              "[IODI] @%u(%u): Of %zu methods %zu were too big, %zu at biggest "
+              "[IODI] @%u(%d): Of %zu methods %zu were too big, %zu at biggest "
               "%zu",
               offset, param_size, sizes.size(), num_big, num_small_enough,
               insns_size);
@@ -1922,7 +1954,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         auto& buckets = bucket_res.first;
         total_inflated_size = bucket_res.second;
         TRACE(IODI, 3,
-              "[IODI][Buckets] Bucketed %u arity methods into %zu buckets with "
+              "[IODI][Buckets] Bucketed %d arity methods into %zu buckets with "
               "total"
               " inflated size %zu:\n",
               param_size, buckets.size(), total_inflated_size);
@@ -1933,6 +1965,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                 bucket_size, offset);
           size_to_offset.emplace(bucket_size, offset);
           std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+          dbgops.reserve(bucket_size);
           if (bucket_size > 0) {
             // First emit an entry for pc = 0 -> line = start
             dbgops.push_back(DexDebugInstruction::create_line_entry(0, 0));
@@ -2065,7 +2098,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
   }
 
   auto post_iodi_offset = offset;
-  TRACE(IODI, 2, "[IODI] IODI programs took up %d bytes\n",
+  TRACE(IODI, 2, "[IODI] IODI programs took up %u bytes\n",
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
@@ -2132,7 +2165,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                     return to_remove.count(cie->method) > 0;
                                   }),
                    code_items.end());
-  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
+  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %u bytes\n",
         offset - post_iodi_offset);
   // Return how much data we've encoded
   return offset - initial_offset;
@@ -2288,7 +2321,7 @@ void DexOutput::generate_debug_items() {
                     m_offset - dbg_start);
   }
   m_stats.num_dbg_items += dbgcount;
-  m_stats.dbg_total_size += static_cast<int>(m_offset - dbg_start);
+  m_stats.dbg_total_size += m_offset - dbg_start;
 }
 
 void DexOutput::generate_map() {
@@ -2963,7 +2996,7 @@ void DexOutput::write() {
   }
   ::write(fd, m_output.get(), m_offset);
   if (0 == fstat(fd, &st)) {
-    m_stats.num_bytes = static_cast<int>(st.st_size);
+    m_stats.num_bytes = st.st_size;
   }
   close(fd);
 
@@ -2979,11 +3012,11 @@ class UniqueReferences {
   UnorderedSet<const DexProto*> protos;
   UnorderedSet<const DexFieldRef*> fields;
   UnorderedSet<const DexMethodRef*> methods;
-  int total_strings_size{0};
-  int total_types_size{0};
-  int total_protos_size{0};
-  int total_fields_size{0};
-  int total_methods_size{0};
+  int64_t total_strings_size{0};
+  int64_t total_types_size{0};
+  int64_t total_protos_size{0};
+  int64_t total_fields_size{0};
+  int64_t total_methods_size{0};
   int dexes{0};
 };
 UniqueReferences s_unique_references;
@@ -3010,44 +3043,45 @@ void DexOutput::metrics() {
     s_unique_references.strings.insert(p.first);
   }
   m_stats.num_unique_strings =
-      static_cast<int>(s_unique_references.strings.size());
+      static_cast<int64_t>(s_unique_references.strings.size());
   s_unique_references.total_strings_size +=
-      static_cast<int>(m_dodx.string_to_idx().size());
+      static_cast<int64_t>(m_dodx.string_to_idx().size());
   m_stats.strings_total_size = s_unique_references.total_strings_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.type_to_idx())) {
     s_unique_references.types.insert(p.first);
   }
-  m_stats.num_unique_types = static_cast<int>(s_unique_references.types.size());
+  m_stats.num_unique_types =
+      static_cast<int64_t>(s_unique_references.types.size());
   s_unique_references.total_types_size +=
-      static_cast<int>(m_dodx.type_to_idx().size());
+      static_cast<int64_t>(m_dodx.type_to_idx().size());
   m_stats.types_total_size = s_unique_references.total_types_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.proto_to_idx())) {
     s_unique_references.protos.insert(p.first);
   }
   m_stats.num_unique_protos =
-      static_cast<int>(s_unique_references.protos.size());
+      static_cast<int64_t>(s_unique_references.protos.size());
   s_unique_references.total_protos_size +=
-      static_cast<int>(m_dodx.proto_to_idx().size());
+      static_cast<int64_t>(m_dodx.proto_to_idx().size());
   m_stats.protos_total_size = s_unique_references.total_protos_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.field_to_idx())) {
     s_unique_references.fields.insert(p.first);
   }
   m_stats.num_unique_field_refs =
-      static_cast<int>(s_unique_references.fields.size());
+      static_cast<int64_t>(s_unique_references.fields.size());
   s_unique_references.total_fields_size +=
-      static_cast<int>(m_dodx.field_to_idx().size());
+      static_cast<int64_t>(m_dodx.field_to_idx().size());
   m_stats.field_refs_total_size = s_unique_references.total_fields_size;
 
   for (const auto& p : UnorderedIterable(m_dodx.method_to_idx())) {
     s_unique_references.methods.insert(p.first);
   }
   m_stats.num_unique_method_refs =
-      static_cast<int>(s_unique_references.methods.size());
+      static_cast<int64_t>(s_unique_references.methods.size());
   s_unique_references.total_methods_size +=
-      static_cast<int>(m_dodx.method_to_idx().size());
+      static_cast<int64_t>(m_dodx.method_to_idx().size());
   m_stats.method_refs_total_size = s_unique_references.total_methods_size;
 }
 

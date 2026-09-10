@@ -254,6 +254,11 @@ class SynchronizedCaller {
   }
 }
 
+// Companion method with default arguments: Kotlin generates a static $default
+// method on the companion class. This method takes the companion instance as
+// its first parameter (it's already static), and the compiler reuses that
+// register for the AND_INT_LIT bitmask check.  The pass must handle this
+// without corrupting the $default method's CFG.
 class CompanionWithDefaults {
   companion object {
     fun greet(name: String, greeting: String = "Hello"): String {
@@ -264,7 +269,9 @@ class CompanionWithDefaults {
 
 class DefaultArgsCaller {
   fun main() {
+    // Uses default value for greeting — generates call to greet$default
     print(CompanionWithDefaults.greet("World"))
+    // Explicit value — direct call to greet
     print(CompanionWithDefaults.greet("World", "Hi"))
   }
 }

@@ -55,6 +55,7 @@ check_PROGRAMS = \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
+    chrome_trace_writer_test \
     class_checker_test \
     class_order_sample_test \
     check_breadcrumbs_test \
@@ -115,6 +116,8 @@ check_PROGRAMS = \
     ir_typechecker_test \
     jar_loader_test \
     java_parser_util_test \
+    kotlin_lambda_analyzer_test \
+    kotlin_lambda_dedup_pass_test \
     literals_test \
     live_range_test \
     local_dce_test \
@@ -247,6 +250,8 @@ cfg_mutation_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 cfg_positions_test_SOURCES = CFGPositionsTest.cpp
 cfg_positions_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+chrome_trace_writer_test_SOURCES = ChromeTraceWriterTest.cpp
 
 check_breadcrumbs_test_SOURCES = CheckBreadCrumbsTest.cpp
 
@@ -389,6 +394,12 @@ jar_loader_test_SOURCES = JarLoaderTest.cpp
 
 java_parser_util_test_SOURCES = JavaParserUtilTest.cpp
 java_parser_util_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+kotlin_lambda_analyzer_test_SOURCES = KotlinLambdaAnalyzerTest.cpp
+kotlin_lambda_analyzer_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+kotlin_lambda_dedup_pass_test_SOURCES = KotlinLambdaDeduplicationPassTest.cpp
+kotlin_lambda_dedup_pass_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 literals_test_SOURCES = LiteralsTest.cpp
 

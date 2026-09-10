@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <mutex>
-
 #include "ConcurrentContainers.h"
 #include "LiveRange.h"
 #include "MethodOverrideGraph.h"
@@ -35,34 +33,6 @@ struct Stats {
 
   bool not_zero() const {
     return num_patched_parameters != 0 || num_patched_fields_and_methods != 0;
-  }
-};
-
-struct PatcherStats {
-  Stats fix_kt_enum_ctor_param;
-  Stats patch_lambdas;
-  Stats patch_parameters_and_returns;
-  Stats patch_synth_methods_overriding_annotated_methods;
-  Stats patch_synth_cls_fields_from_ctor_param;
-  Stats patch_enclosing_lambda_fields;
-  Stats patch_ctor_params_from_synth_cls_fields;
-  Stats patch_chained_getters;
-
-  PatcherStats() = default;
-
-  PatcherStats& operator+=(const PatcherStats& other) {
-    fix_kt_enum_ctor_param += other.fix_kt_enum_ctor_param;
-    patch_lambdas += other.patch_lambdas;
-    patch_parameters_and_returns += other.patch_parameters_and_returns;
-    patch_synth_methods_overriding_annotated_methods +=
-        other.patch_synth_methods_overriding_annotated_methods;
-    patch_synth_cls_fields_from_ctor_param +=
-        other.patch_synth_cls_fields_from_ctor_param;
-    patch_enclosing_lambda_fields += other.patch_enclosing_lambda_fields;
-    patch_ctor_params_from_synth_cls_fields +=
-        other.patch_ctor_params_from_synth_cls_fields;
-    patch_chained_getters += other.patch_chained_getters;
-    return *this;
   }
 };
 
@@ -94,30 +64,29 @@ class PatchingCandidates {
 
  public:
   void add_field_candidate(DexField* field, const TypedefAnnoType* anno) {
-    m_field_candidates.get_or_emplace_and_assert_equal(
-        field, const_cast<TypedefAnnoType*>(anno));
+    m_field_candidates.get_or_emplace_and_assert_equal(field, anno);
   }
   void add_method_candidate(DexMethod* method, const TypedefAnnoType* anno) {
-    m_method_candidates.get_or_emplace_and_assert_equal(
-        method, const_cast<TypedefAnnoType*>(anno));
+    m_method_candidates.get_or_emplace_and_assert_equal(method, anno);
   }
   void add_param_candidate(DexMethod* method,
                            const TypedefAnnoType* anno,
                            src_index_t index) {
     m_param_candidates.get_or_emplace_and_assert_equal(
-        ParamCandidate(method, index), const_cast<TypedefAnnoType*>(anno));
+        ParamCandidate(method, index), anno);
   }
   size_t candidates_size() const {
     return m_field_candidates.size() + m_method_candidates.size() +
            m_param_candidates.size();
   }
-  void apply_patching(std::mutex& mutex, Stats& class_stats);
+  void apply_patching(Stats& class_stats);
 
  private:
-  InsertOnlyConcurrentMap<DexField*, TypedefAnnoType*> m_field_candidates;
-  InsertOnlyConcurrentMap<DexMethod*, TypedefAnnoType*> m_method_candidates;
+  InsertOnlyConcurrentMap<DexField*, const TypedefAnnoType*> m_field_candidates;
+  InsertOnlyConcurrentMap<DexMethod*, const TypedefAnnoType*>
+      m_method_candidates;
   InsertOnlyConcurrentMap<ParamCandidate,
-                          TypedefAnnoType*,
+                          const TypedefAnnoType*,
                           boost::hash<ParamCandidate>>
       m_param_candidates;
 };
@@ -138,41 +107,17 @@ class TypedefAnnoPatcher {
   void print_stats(PassManager& mgr);
 
  private:
-  bool patch_if_overriding_annotated_methods(DexMethod* m, Stats& class_stats);
-
-  void collect_param_candidates(DexMethod* method,
-                                PatchingCandidates& candidates);
-
-  void collect_return_candidates(DexMethod* method,
-                                 PatchingCandidates& candidates);
-
-  void patch_enclosing_lambda_fields(const DexClass* cls, Stats& class_stats);
+  void collect_overriding_method_candidates(DexMethod* m,
+                                            PatchingCandidates& candidates);
 
   void patch_synth_cls_fields_from_ctor_param(DexMethod* ctor,
-                                              Stats& class_stats,
-                                              PatchingCandidates& candidates);
-
-  void patch_lambdas(DexMethod* method,
-                     std::vector<const DexField*>* patched_fields,
-                     PatchingCandidates& candidates,
-                     Stats& class_stats);
-
-  void patch_ctor_params_from_synth_cls_fields(DexClass* cls,
-                                               Stats& class_stats);
+                                              Stats& class_stats);
 
   void fix_kt_enum_ctor_param(const DexClass* cls, Stats& class_stats);
-
-  void populate_chained_getters(DexClass* cls);
-  void patch_chained_getters(PatchingCandidates& candidates);
 
   UnorderedSet<const TypedefAnnoType*> m_typedef_annos;
   const method_override_graph::Graph& m_method_override_graph;
   const size_t m_max_iteration;
-  ConcurrentMap<std::string, std::vector<const DexField*>> m_lambda_anno_map;
-  InsertOnlyConcurrentSet<std::string_view> m_patched_returns;
-  InsertOnlyConcurrentSet<DexClass*> m_chained_getters;
 
-  PatcherStats m_patcher_stats;
-
-  std::mutex m_anno_patching_mutex;
+  Stats m_patcher_stats;
 };

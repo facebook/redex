@@ -19,6 +19,7 @@
 #include "Nopper.h"
 #include "PassManager.h"
 #include "RClass.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 namespace {

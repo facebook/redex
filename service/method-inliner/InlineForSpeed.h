@@ -18,8 +18,8 @@ class InlineForSpeed {
  public:
   virtual ~InlineForSpeed() {}
 
-  // Whether to inline the given callee method into the given caller in the
-  // context of the given callsite (independent of callsite).
+  // Whether to inline the given callee method into the given caller
+  // (independent of callsite).
   virtual bool should_inline_generic(const DexMethod* caller_method,
                                      const DexMethod* callee_method) = 0;
 

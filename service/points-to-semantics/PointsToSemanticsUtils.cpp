@@ -7,6 +7,7 @@
 
 #include "PointsToSemanticsUtils.h"
 
+#include "Debug.h"
 #include "DexClass.h"
 #include "IROpcode.h"
 #include "Resolver.h"
