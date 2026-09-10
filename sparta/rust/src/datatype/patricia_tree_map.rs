@@ -42,7 +42,10 @@ impl<K: Into<BitVec>, V> PatriciaTreeMap<K, V> {
         self.storage.len()
     }
 
-    pub fn upsert(&mut self, key: K, value: V) {
+    pub fn upsert(&mut self, key: K, value: V)
+    where
+        V: Eq,
+    {
         self.storage.insert(key.into(), value)
     }
 
@@ -114,7 +117,7 @@ impl<'a, K: 'a + Into<BitVec> + From<&'a BitVec>, V> Iterator
     }
 }
 
-impl<K: Into<BitVec>, V> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
+impl<K: Into<BitVec>, V: Eq> FromIterator<(K, V)> for PatriciaTreeMap<K, V> {
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
         let mut ret: PatriciaTreeMap<K, V> = PatriciaTreeMap::new();
         for (k, v) in iter {
