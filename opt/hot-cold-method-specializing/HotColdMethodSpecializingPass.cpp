@@ -459,14 +459,8 @@ HotColdMethodSpecializingPass::analyze_and_specialize(
   (*cold_copy)->rstate.set_generated();
   (*cold_copy)->rstate.set_dont_inline();
   (*cold_copy)->set_deobfuscated_name(show(*cold_copy));
-  for (auto* block : (*cold_copy)->get_code()->cfg().blocks()) {
-    for (auto& mie : *block) {
-      if (mie.type == MFLOW_SOURCE_BLOCK) {
-        mie.src_block->foreach_val(
-            [](auto& val) { val = SourceBlock::Val(0, 0); });
-      }
-    }
-  }
+  source_blocks::fill_source_block_entry_values((*cold_copy)->get_code()->cfg(),
+                                                SourceBlock::Val(0, 0));
 
   method->set_code(std::move(hot_code));
 
