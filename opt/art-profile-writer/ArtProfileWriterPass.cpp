@@ -29,6 +29,7 @@
 #include "InstructionLowering.h"
 #include "LoopInfo.h"
 #include "MethodProfiles.h"
+#include "NeverInlineEligibility.h"
 #include "PassManager.h"
 #include "Show.h"
 #include "SourceBlocks.h"
@@ -67,47 +68,6 @@ bool is_sparse(cfg::Block* switch_block) {
 }
 
 using baseline_profiles::is_compiled;
-
-bool is_simple(DexMethod* method, IRInstruction** invoke_insn = nullptr) {
-  auto* code = method->get_code();
-  always_assert(code->cfg_built());
-  auto& cfg = code->cfg();
-  if (cfg.blocks().size() != 1) {
-    return false;
-  }
-  auto* b = cfg.entry_block();
-  auto last_it = b->get_last_insn();
-  if (last_it == b->end() || !opcode::is_a_return(last_it->insn->opcode())) {
-    return false;
-  }
-  auto ii = InstructionIterable(b);
-  auto it = ii.begin();
-  always_assert(it != ii.end());
-  while (opcode::is_a_load_param(it->insn->opcode())) {
-    ++it;
-    always_assert(it != ii.end());
-  }
-  if (opcode::is_a_const(it->insn->opcode())) {
-    ++it;
-    always_assert(it != ii.end());
-  } else if ((opcode::is_an_iget(it->insn->opcode()) ||
-              opcode::is_an_sget(it->insn->opcode()))) {
-    ++it;
-    always_assert(it != ii.end());
-  } else if (opcode::is_an_invoke(it->insn->opcode())) {
-    if (invoke_insn != nullptr) {
-      *invoke_insn = it->insn;
-    }
-    ++it;
-    always_assert(it != ii.end());
-  }
-  if (opcode::is_move_result_any(it->insn->opcode())) {
-    ++it;
-    always_assert(it != ii.end());
-  }
-  always_assert(it != ii.end());
-  return it->insn == last_it->insn;
-}
 
 // Eligibility bounds for the never-inline analysis. Each shadows a threshold
 // inside ART's own inliner, and each default is a deliberate margin over ART's
@@ -178,7 +138,8 @@ void never_inline(bool attach_annotations,
       }
       caller = callee;
       invoke_insn = nullptr;
-    } while (is_simple(callee, &invoke_insn) && invoke_insn != nullptr);
+    } while (never_inline_analysis::is_simple(callee, &invoke_insn) &&
+             invoke_insn != nullptr);
     return callee;
   };
 
@@ -187,12 +148,9 @@ void never_inline(bool attach_annotations,
   std::atomic<size_t> callers_too_many_registers{0};
   InsertOnlyConcurrentSet<DexMethod*> hot_cold_callees;
   InsertOnlyConcurrentSet<DexMethod*> hot_hot_callees;
-  InsertOnlyConcurrentMap<DexMethod*, uint32_t> estimated_code_units;
   InsertOnlyConcurrentMap<DexMethod*, size_t> estimated_instructions;
   InsertOnlyConcurrentMap<DexMethod*, bool> has_catches;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    uint32_t ecu = code.estimate_code_units();
-    estimated_code_units.emplace(method, ecu);
     size_t instructions = code.count_opcodes();
     estimated_instructions.emplace(method, instructions);
 
@@ -320,7 +278,7 @@ void never_inline(bool attach_annotations,
   std::atomic<size_t> callees_too_large = 0;
   std::atomic<size_t> callees_always_throw = 0;
   std::atomic<size_t> callees_annotation_attached = 0;
-  walk::code(scope, [&](DexMethod* method, IRCode& code) {
+  walk::code(scope, [&](DexMethod* method, IRCode&) {
     if (has_anno(method, type::dalvik_annotation_optimization_NeverInline())) {
       callees_already_never_inline.fetch_add(1);
       return;
@@ -335,26 +293,23 @@ void never_inline(bool attach_annotations,
       return;
     }
 
-    if (code.cfg().return_blocks().empty()) {
+    switch (never_inline_analysis::never_inline_eligibility(
+        method, thresholds.max_callee_code_units,
+        thresholds.min_callee_instructions)) {
+    case never_inline_analysis::Ineligibility::kAlwaysThrows:
       callees_always_throw.fetch_add(1);
       return;
-    }
-
-    auto ecu = estimated_code_units.at(method);
-    if (ecu > thresholds.max_callee_code_units) {
+    case never_inline_analysis::Ineligibility::kTooLarge:
       callees_too_large.fetch_add(1);
       return;
-    }
-
-    auto instructions = estimated_instructions.at(method);
-    if (instructions < thresholds.min_callee_instructions) {
+    case never_inline_analysis::Ineligibility::kTooSmall:
       callees_too_small.fetch_add(1);
       return;
-    }
-
-    if (is_simple(method)) {
+    case never_inline_analysis::Ineligibility::kSimple:
       callees_simple.fetch_add(1);
       return;
+    case never_inline_analysis::Ineligibility::kEligible:
+      break;
     }
 
     callees_annotation_attached.fetch_add(1);

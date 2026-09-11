@@ -135,6 +135,7 @@ check_PROGRAMS = \
     leb_test \
     native_test \
     native_names_test \
+    never_inline_eligibility_test \
     null_propagation_test \
     object_inliner_test \
     object_propagation_test \
@@ -443,6 +444,8 @@ EXTRA_native_test_DEPENDENCIES = native_test.env
 $(eval $(call make_env,native_test,native_jni_output_path=$(srcdir)))
 
 native_names_test_SOURCES = NativeNamesTest.cpp
+
+never_inline_eligibility_test_SOURCES = NeverInlineEligibilityTest.cpp
 
 nopper_test_SOURCES = NopperTest.cpp
 
