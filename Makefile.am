@@ -422,6 +422,7 @@ libopt_la_SOURCES = \
 	opt/builder_pattern/BuilderTransform.cpp \
 	opt/builder_pattern/RemoveBuilderPattern.cpp \
 	opt/branch-prefix-hoisting/BranchPrefixHoistingPass.cpp \
+	opt/callsite-never-inline-cloning/CallsiteNeverInlineCloningPass.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-merging/AnonymousClassMergingPass.cpp \
