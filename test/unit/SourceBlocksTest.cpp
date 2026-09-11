@@ -222,6 +222,42 @@ TEST_F(SourceBlocksTest, max_val_over_interactions) {
   EXPECT_FLOAT_EQ(*m, 5.0f);
 }
 
+TEST_F(SourceBlocksTest, fill_source_block_entry_values_sets_primary_values) {
+  ClassCreator cc{DexType::make_type("LFillSourceBlocksTest;")};
+  cc.set_super(type::java_lang_Object());
+  auto* method = DexMethod::make_method("LFillSourceBlocksTest;.bar:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                                     assembler::ircode_from_string(
+                                         R"((
+                    (.src_block "LFillSourceBlocksTest;.bar:()V" 0 (0.7 60))
+                    (return-void)
+                  ))"),
+                                     false);
+  method->set_deobfuscated_name(show(method));
+  cc.add_method(method);
+  cc.create();
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+  auto* sb = get_first_source_block(cfg.entry_block());
+  ASSERT_NE(sb, nullptr);
+  sb->next = std::make_unique<SourceBlock>(
+      sb->src, 1, std::vector<SourceBlock::Val>{SourceBlock::Val(5, 50)});
+
+  fill_source_block_entry_values(cfg, SourceBlock::Val(0, 0));
+
+  sb->foreach_val([](auto& val) {
+    ASSERT_TRUE(static_cast<bool>(val));
+    EXPECT_FLOAT_EQ(val->val, 0.0f);
+    EXPECT_FLOAT_EQ(val->appear100, 0.0f);
+  });
+  ASSERT_NE(sb->next, nullptr);
+  sb->next->foreach_val([](auto& val) {
+    ASSERT_TRUE(static_cast<bool>(val));
+    EXPECT_FLOAT_EQ(val->val, 5.0f);
+    EXPECT_FLOAT_EQ(val->appear100, 50.0f);
+  });
+}
+
 TEST_F(SourceBlocksTest, minimal_serialize) {
   auto* method = create_method();
   method->get_code()->build_cfg();

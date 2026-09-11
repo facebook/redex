@@ -364,6 +364,20 @@ inline void foreach_source_block(const cfg::Block* b, const Fn& fn) {
   }
 }
 
+// Sets every primary SourceBlock entry's values across `cfg` to `val`.
+// Deliberately does not traverse SourceBlock::next chains: this helper
+// preserves the behavior of the hand-written clone-zeroing loops it replaces.
+inline void fill_source_block_entry_values(cfg::ControlFlowGraph& cfg,
+                                           const SourceBlock::Val& val) {
+  for (auto* block : cfg.blocks()) {
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_SOURCE_BLOCK) {
+        mie.src_block->fill(val);
+      }
+    }
+  }
+}
+
 inline SourceBlock* get_first_source_block(cfg::Block* b) {
   for (const auto& mie : *b) {
     if (mie.type != MFLOW_SOURCE_BLOCK) {
