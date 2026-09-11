@@ -116,8 +116,8 @@ enum class Literal {
   Length_String_A,
   // Directive: Write the hashCode of string A as a 32-bit integer.
   HashCode_String_A,
-  // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
-  Mul_Div_To_Shift_Log2,
+  // Directive: Convert mul to shl with log2 of the literal argument.
+  Mul_To_Shift_Log2,
   // Explicit 0.
   Zero,
 };
@@ -670,8 +670,8 @@ struct Matcher {
           replace->set_literal(a);
           break;
         }
-        case Literal::Mul_Div_To_Shift_Log2: {
-          auto a = matched_literals.at(Literal::Mul_Div_To_Shift_Log2);
+        case Literal::Mul_To_Shift_Log2: {
+          auto a = matched_literals.at(Literal::Mul_To_Shift_Log2);
           redex_assert(a > 0);
           replace->set_literal(
               static_cast<int64_t>(log2(static_cast<double>(a))));
@@ -1531,72 +1531,55 @@ std::vector<DexPattern> div_lit(Register src, Register dst) {
           {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
 }
 
-std::vector<DexPattern> div_literal_kind(Register src,
-                                         Register dst,
-                                         Literal lit) {
-  return {{{OPCODE_DIV_INT_LIT, OPCODE_DIV_INT_LIT}, {src}, {}, lit},
-          {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
-}
-
 DexPattern add_lit(Register src, Register dst) {
   return {{OPCODE_ADD_INT_LIT, OPCODE_ADD_INT_LIT}, {src}, {dst}};
 }
 
 std::vector<Pattern> get_arith_patterns() {
-  return {// Replace *1 with move
-          {"Arith_MulLit_Pos1",
-           {mul_lit(Register::A, Register::B)},
-           {// x = y * 1 -> x = y
-            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-           first_instruction_literal_is<1>},
+  return {
+      // Replace *1 with move
+      {"Arith_MulLit_Pos1",
+       {mul_lit(Register::A, Register::B)},
+       {// x = y * 1 -> x = y
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<1>},
 
-          // Replace /1 with move
-          {"Arith_DivLit_Pos1",
-           {div_lit(Register::A, Register::B)},
-           {// x = y * 1 -> x = y
-            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-           first_instruction_literal_is<1>},
+      // Replace /1 with move
+      {"Arith_DivLit_Pos1",
+       {div_lit(Register::A, Register::B)},
+       {// x = y / 1 -> x = y
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<1>},
 
-          // Replace multiplies by -1 with negation
-          {"Arith_MulLit_Neg1",
-           {mul_lit(Register::A, Register::B)},
-           {// Eliminates the literal-carrying halfword
-            {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
-           first_instruction_literal_is<-1>},
+      // Replace multiplies by -1 with negation
+      {"Arith_MulLit_Neg1",
+       {mul_lit(Register::A, Register::B)},
+       {// Eliminates the literal-carrying halfword
+        {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<-1>},
 
-          // Replace divides by -1 with negation
-          {"Arith_DivLit_Neg1",
-           {div_lit(Register::A, Register::B)},
-           {// Eliminates the literal-carrying halfword
-            {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
-           first_instruction_literal_is<-1>},
+      // Replace divides by -1 with negation
+      {"Arith_DivLit_Neg1",
+       {div_lit(Register::A, Register::B)},
+       {// Eliminates the literal-carrying halfword
+        {{OPCODE_NEG_INT}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<-1>},
 
-          // Replace +0 with moves
-          {"Arith_AddLit_0",
-           {add_lit(Register::A, Register::B)},
-           {// Eliminates the literal-carrying halfword
-            {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
-           first_instruction_literal_is<0>},
+      // Replace +0 with moves
+      {"Arith_AddLit_0",
+       {add_lit(Register::A, Register::B)},
+       {// Eliminates the literal-carrying halfword
+        {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
+       first_instruction_literal_is<0>},
 
-          // Replace mul 2^n with shl n
-          {"Arith_MulLit_Power2",
-           {mul_literal_kind(Register::A, Register::B,
-                             Literal::Mul_Div_To_Shift_Log2)},
-           {{{OPCODE_SHL_INT_LIT},
-             {Register::A},
-             {Register::B},
-             Literal::Mul_Div_To_Shift_Log2}},
-           first_instruction_literal_is_power_of_two},
-
-          // Replace div 2^n with shr n
-          {"Arith_DivLit_Power2",
-           {div_literal_kind(Register::A, Register::B,
-                             Literal::Mul_Div_To_Shift_Log2)},
-           {{{OPCODE_SHR_INT_LIT},
-             {Register::A},
-             {Register::B},
-             Literal::Mul_Div_To_Shift_Log2}},
-           first_instruction_literal_is_power_of_two}};
+      // Replace mul 2^n with shl n
+      {"Arith_MulLit_Power2",
+       {mul_literal_kind(Register::A, Register::B, Literal::Mul_To_Shift_Log2)},
+       {{{OPCODE_SHL_INT_LIT},
+         {Register::A},
+         {Register::B},
+         Literal::Mul_To_Shift_Log2}},
+       first_instruction_literal_is_power_of_two}};
 }
 
 // clang-format off
