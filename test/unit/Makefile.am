@@ -52,6 +52,8 @@ check_PROGRAMS = \
     branch_prefix_hoisting_test \
     bridge_synth_inline_pass_test \
     call_site_summary_reductions_test \
+    callsite_never_inline_cloning_end_to_end_test \
+    callsite_never_inline_cloning_test \
     cfg_inliner_test \
     cfg_mutation_test \
     cfg_positions_test \
@@ -242,6 +244,12 @@ branch_prefix_hoisting_test_SOURCES = BranchPrefixHoistingTest.cpp ScopeHelper.c
 bridge_synth_inline_pass_test_SOURCES = BridgeSynthInlinePassTest.cpp
 
 call_site_summary_reductions_test_SOURCES = CallSiteSummaryReductionsTest.cpp
+
+callsite_never_inline_cloning_end_to_end_test_SOURCES = \
+    CallsiteNeverInlineCloningEndToEndTest.cpp
+
+callsite_never_inline_cloning_test_SOURCES = \
+    CallsiteNeverInlineCloningTest.cpp
 
 cfg_inliner_test_SOURCES = CFGInlinerTest.cpp
 cfg_inliner_test_LDADD = $(COMMON_MOCK_TEST_LIBS)

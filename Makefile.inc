@@ -21,6 +21,7 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/opt/branch-prefix-hoisting \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/builder_pattern \
+	-I$(top_srcdir)/opt/callsite-never-inline-cloning \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/class-merging \
 	-I$(top_srcdir)/opt/class-reordering \

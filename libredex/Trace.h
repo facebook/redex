@@ -45,6 +45,7 @@ class DexType;
   TM(CLINIT_OUTLINE)           \
   TM(CLMG)                     \
   TM(CLP_LITHO)                \
+  TM(CNIC)                     \
   TM(CONSTP)                   \
   TM(CPG)                      \
   TM(CS)                       \
