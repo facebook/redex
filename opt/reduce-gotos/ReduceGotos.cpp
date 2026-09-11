@@ -71,17 +71,7 @@ constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
 constexpr const char* METRIC_NUM_GOTOS_REPLACED_WITH_THROWS =
     "num_gotos_replaced_with_throws";
 
-bool is_compiled(DexMethod* method,
-                 const baseline_profiles::MethodFlags& flags) {
-  return flags.hot && !method::is_clinit(method);
-}
-
-bool is_compiled(const baseline_profiles::BaselineProfile& baseline_profile,
-                 DexMethod* method) {
-  auto it = baseline_profile.methods.find(method);
-  return it != baseline_profile.methods.end() &&
-         is_compiled(method, it->second);
-}
+using baseline_profiles::is_compiled;
 
 } // namespace
 

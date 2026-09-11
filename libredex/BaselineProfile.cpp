@@ -10,9 +10,21 @@
 #include <fstream>
 
 #include "ConfigFiles.h"
+#include "MethodUtil.h"
 #include "Walkers.h"
 
 namespace baseline_profiles {
+
+bool is_compiled(const DexMethod* method, const MethodFlags& flags) {
+  return flags.hot && !method::is_clinit(method);
+}
+
+bool is_compiled(const BaselineProfile& baseline_profile,
+                 const DexMethod* method) {
+  auto it = baseline_profile.methods.find(method);
+  return it != baseline_profile.methods.end() &&
+         is_compiled(method, it->second);
+}
 
 BaselineProfile get_default_baseline_profile(
     const Scope& scope,
