@@ -7,6 +7,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -28,6 +31,10 @@ class ArtProfileWriterPass : public Pass {
   bool m_never_inline_attach_annotations;
   float m_never_inline_hot_block_appear_threshold;
   float m_never_inline_hot_method_appear_threshold;
+  size_t m_never_inline_max_caller_instructions;
+  size_t m_never_inline_max_caller_registers;
+  uint32_t m_never_inline_max_callee_code_units;
+  size_t m_never_inline_min_callee_instructions;
   bool m_include_strings_lookup_class;
   std::optional<ReserveRefsInfoHandle> m_reserved_refs_handle;
   std::optional<bool> m_override_strip_classes;
