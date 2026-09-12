@@ -249,3 +249,64 @@ TEST_F(IRListTest, keep_valid_regs) {
   EXPECT_EQ(assembler::to_string(expected_code.get()),
             assembler::to_string(code.get()));
 }
+
+TEST_F(IRListTest, structural_equals_ignores_fallthrough) {
+  // An unused label is lowered to a MFLOW_FALLTHROUGH entry. It carries no
+  // code or control flow, so it must not break structural equality.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return-void)
+    )
+  )");
+  auto code_with_fallthrough = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (:unused_label)
+      (return-void)
+    )
+  )");
+
+  EXPECT_TRUE(code->structural_equals(*code_with_fallthrough));
+  EXPECT_TRUE(code_with_fallthrough->structural_equals(*code));
+}
+
+TEST_F(IRListTest, structural_equals_ignores_trailing_noops) {
+  // No-op and metadata entries at the end of one method while the other has
+  // already been fully consumed must not break structural equality.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return-void)
+    )
+  )");
+  auto code_with_trailing_noop = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return-void)
+      (:unused_label)
+    )
+  )");
+
+  EXPECT_TRUE(code->structural_equals(*code_with_trailing_noop));
+  EXPECT_TRUE(code_with_trailing_noop->structural_equals(*code));
+}
+
+TEST_F(IRListTest, structural_equals_still_detects_differences) {
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 0)
+      (return-void)
+    )
+  )");
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 1)
+      (return-void)
+    )
+  )");
+
+  EXPECT_FALSE(code1->structural_equals(*code2));
+}
