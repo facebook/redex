@@ -30,6 +30,17 @@ enum Node<V> {
     },
 }
 
+/// Result of updating a subtree through a mutable reference.
+enum Updated<V> {
+    /// The subtree is still rooted at the same node, which may have been
+    /// mutated in place. The caller's `Arc` is still correct.
+    Kept,
+    /// The subtree is now rooted at a different node.
+    Replaced(Arc<Node<V>>),
+    /// The subtree is now empty.
+    Emptied,
+}
+
 impl<V: Eq> PartialEq for Node<V> {
     fn eq(&self, other: &Self) -> bool {
         use Node::*;
@@ -176,6 +187,75 @@ impl<V> Node<V> {
             }
         } else {
             op(None)
+        }
+    }
+
+    fn updated_from(node: &Arc<Node<V>>, rebuilt: Option<Arc<Node<V>>>) -> Updated<V> {
+        match rebuilt {
+            Some(new_node) if Arc::ptr_eq(&new_node, node) => Updated::Kept,
+            Some(new_node) => Updated::Replaced(new_node),
+            None => Updated::Emptied,
+        }
+    }
+
+    /// Like `update_node_by_key`, but takes the subtree by mutable reference so
+    /// that a branch nothing else points at can have its child slot written
+    /// directly, rather than the whole root-to-leaf path being rebuilt.
+    ///
+    /// A node may only be written to once every node between it and the root
+    /// has been found to be uniquely owned. As soon as a shared node is
+    /// reached, the rest of the descent is delegated to `update_node_by_key`,
+    /// which copies: writing below a shared node would be visible to every
+    /// other tree holding it.
+    fn update_node_by_key_mut<F>(node: &mut Arc<Node<V>>, key: &BitVec, op: F) -> Updated<V>
+    where
+        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
+    {
+        use Node::*;
+
+        // Only a branch that the key descends into has a child slot worth
+        // writing. Leaves, and branches whose prefix the key diverges from,
+        // produce a new node either way.
+        let descend_left = match node.as_ref() {
+            Branch { prefix, .. } if key.begins_with(prefix) => !key.get(prefix.len()),
+            _ => {
+                let rebuilt = Self::update_node_by_key(Some(&*node), key, op);
+                return Self::updated_from(node, rebuilt);
+            }
+        };
+
+        if !Arc::is_unique(node) {
+            let rebuilt = Self::update_node_by_key(Some(&*node), key, op);
+            return Self::updated_from(node, rebuilt);
+        }
+
+        let Some(Branch { left, right, .. }) = Arc::get_mut(node) else {
+            unreachable!("matched as a branch above")
+        };
+
+        // The branch keeps its prefix. Every key underneath it still begins
+        // with that prefix, and the two sides still differ at the branching
+        // bit, so the value `make_branch` would recompute is the one already
+        // stored here.
+        if descend_left {
+            match Self::update_node_by_key_mut(left, key, op) {
+                Updated::Kept => Updated::Kept,
+                Updated::Replaced(new_left) => {
+                    *left = new_left;
+                    Updated::Kept
+                }
+                // A branch never keeps a single child.
+                Updated::Emptied => Updated::Replaced(right.clone()),
+            }
+        } else {
+            match Self::update_node_by_key_mut(right, key, op) {
+                Updated::Kept => Updated::Kept,
+                Updated::Replaced(new_right) => {
+                    *right = new_right;
+                    Updated::Kept
+                }
+                Updated::Emptied => Updated::Replaced(left.clone()),
+            }
         }
     }
 
@@ -653,13 +733,25 @@ impl<V> PatriciaTree<V> {
         self.iter().count()
     }
 
-    fn apply_root_operation<F>(&mut self, op: F)
+    /// Apply `op` to the leaf bound to `key`, updating nodes in place where
+    /// nothing else points at them.
+    fn update_by_key<F>(&mut self, key: &BitVec, op: F)
     where
         F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
-        let mut temp_root = None;
-        std::mem::swap(&mut self.root, &mut temp_root);
-        self.root = op(temp_root);
+        let outcome = match self.root.as_mut() {
+            None => {
+                self.root = op(None);
+                return;
+            }
+            Some(root) => Node::update_node_by_key_mut(root, key, op),
+        };
+
+        match outcome {
+            Updated::Kept => {}
+            Updated::Replaced(new_root) => self.root = Some(new_root),
+            Updated::Emptied => self.root = None,
+        }
     }
 
     pub(crate) fn insert(&mut self, key: BitVec, value: V)
@@ -684,10 +776,7 @@ impl<V> PatriciaTree<V> {
                 }))
             }
         };
-        let root_op = move |root: Option<Arc<Node<V>>>| {
-            Node::update_node_by_key(root.as_ref(), &key, node_op)
-        };
-        self.apply_root_operation(root_op);
+        self.update_by_key(&key, node_op);
     }
 
     pub(crate) fn contains_key(&self, key: &BitVec) -> bool {
@@ -707,10 +796,7 @@ impl<V> PatriciaTree<V> {
     }
 
     pub(crate) fn remove(&mut self, key: &BitVec) {
-        let root_op = move |root: Option<Arc<Node<V>>>| {
-            Node::update_node_by_key(root.as_ref(), key, |_| None)
-        };
-        self.apply_root_operation(root_op);
+        self.update_by_key(key, |_| None);
     }
 
     pub(crate) fn iter(&self) -> PatriciaTreePostOrderIterator<V> {
