@@ -390,6 +390,30 @@ TEST_F(VirtualScopesTest, DetachedMethodIsNotAScopeMember) {
   EXPECT_EQ(s->methods().size(), 1u);
 }
 
+// A detached override is not a live scope member, but the subclass's interface
+// obligation still applies to the inherited implementation at the root.
+TEST_F(VirtualScopesTest,
+       DetachedSubclassInterfaceMarksInheritedImplementation) {
+  auto scope = create_empty_scope();
+  auto* i = make_intf(scope, "LI;");
+  create_abstract_method(i, "m", void_proto());
+  auto* c = make_class(scope, "LC;", type::java_lang_Object());
+  auto* cm = create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {i->get_type()});
+  auto* dm = create_empty_method(d, "m", void_proto());
+
+  d->remove_method(dm);
+  virtual_scope::VirtualScopes vs(scope);
+
+  const auto* s = scope_for(vs, c->get_type(), "m");
+  ASSERT_NE(s, nullptr);
+  EXPECT_TRUE(has_member(s, cm));
+  EXPECT_FALSE(has_member(s, dm));
+  EXPECT_EQ(s->methods().size(), 1u);
+  EXPECT_TRUE(s->implements_interface());
+  EXPECT_EQ(s->implemented_interfaces().count(i->get_type()), 1u);
+}
+
 // `find` climbs the method's own superclass chain to the scope root. Two
 // hierarchies declaring the same signature must resolve to their own scope,
 // never to each other's.
