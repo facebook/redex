@@ -809,9 +809,11 @@ void ConfigFiles::parse_global_config() {
   m_global_config->parse_config(m_json);
 }
 
-void ConfigFiles::load(const Scope& scope) {
-  get_global_config().get_config_by_name<InlinerConfig>("inliner")->populate(
-      scope);
+void ConfigFiles::load(const Scope& scope, Architecture architecture) {
+  auto* inliner_config =
+      get_global_config().get_config_by_name<InlinerConfig>("inliner");
+  inliner_config->set_architecture(architecture);
+  inliner_config->populate(scope);
 }
 
 void ConfigFiles::process_unresolved_method_profile_lines() {

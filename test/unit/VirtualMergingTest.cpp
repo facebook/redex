@@ -272,6 +272,42 @@ class VirtualMergingTest : public RedexTest {
   DexStoresVector stores;
 };
 
+TEST_F(VirtualMergingTest, Armv7HardLimitSkipsLateMerge) {
+  auto scope = build_class_scope(stores);
+  auto count_virtual_methods = [&]() {
+    size_t count{0};
+    for (const auto& [_, cls] : types) {
+      count += cls->get_vmethods().size();
+    }
+    return count;
+  };
+  auto methods_before = count_virtual_methods();
+
+  api::LevelChecker::init(19, scope);
+  inliner::InlinerConfig inliner_config;
+  inliner_config.armv7_hard_max_instruction_size = 100;
+  inliner_config.set_architecture(Architecture::ARMV7);
+  inliner_config.populate(scope);
+
+  VirtualMerging vm{stores, conf, inliner_config, 100};
+  vm.run(method_profiles::MethodProfiles{},
+         VirtualMerging::Strategy::kLexicographical,
+         VirtualMerging::InsertionStrategy::kJumpTo);
+
+  const auto& stats = vm.get_stats();
+  EXPECT_GT(stats.removed_virtual_methods, 0);
+  EXPECT_GT(stats.late_caller_too_large_methods, 0);
+  EXPECT_EQ(stats.uninlinable_methods, 0);
+  EXPECT_EQ(stats.caller_size_removed_methods, 0);
+  EXPECT_EQ(methods_before - count_virtual_methods(),
+            stats.removed_virtual_methods);
+  EXPECT_EQ(stats.mergeable_pairs,
+            stats.huge_methods + stats.uninlinable_methods +
+                stats.caller_size_removed_methods +
+                stats.late_caller_too_large_methods +
+                stats.removed_virtual_methods);
+}
+
 TEST_F(VirtualMergingTest, MergedFooNoProfiles) {
   auto scope = build_class_scope(stores);
 

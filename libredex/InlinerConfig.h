@@ -9,6 +9,7 @@
 
 #include "DeterministicContainers.h"
 #include "DexClass.h"
+#include "RedexOptions.h"
 #include "ShrinkerConfig.h"
 
 // When to consider running constant-propagation to better estimate inlined
@@ -46,6 +47,8 @@ struct InlinerConfig {
   bool throws_inline{false};
   bool throw_after_no_return{false};
   bool enforce_method_size_limit{true};
+  // A zero value disables the architecture-specific cap.
+  uint64_t armv7_hard_max_instruction_size{0};
   bool multiple_callers{false};
   bool use_call_site_summaries{true};
   bool intermediate_shrinking{false};
@@ -105,6 +108,29 @@ struct InlinerConfig {
    * 2. Set rstate of classes and methods if they are annotated by any
    *    no_inline_annos, force_inline_annos, or match no_inline_blocklist.
    */
+  void set_architecture(Architecture architecture) {
+    if (m_populated) {
+      always_assert_log(m_architecture == architecture,
+                        "Cannot change architecture after populating inliner "
+                        "config");
+      return;
+    }
+    m_architecture = architecture;
+  }
+
+  uint64_t get_armv7_hard_max_instruction_size() const {
+    return m_architecture == Architecture::ARMV7
+               ? armv7_hard_max_instruction_size
+               : 0;
+  }
+
+  bool is_over_armv7_hard_max_instruction_size(
+      uint64_t estimated_caller_size, uint64_t estimated_callee_size) const {
+    auto max = get_armv7_hard_max_instruction_size();
+    return max > 0 && (estimated_caller_size > max ||
+                       estimated_callee_size > max - estimated_caller_size);
+  }
+
   void populate(const Scope& scope);
 
   const UnorderedSet<const DexType*>& get_blocklist() const {
@@ -137,6 +163,7 @@ struct InlinerConfig {
 
  private:
   bool m_populated{false};
+  Architecture m_architecture{Architecture::UNKNOWN};
   // The populated black lists.
   UnorderedSet<const DexType*> m_blocklist;
   UnorderedSet<const DexType*> m_caller_blocklist;

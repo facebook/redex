@@ -50,6 +50,7 @@ struct VirtualMergingStats {
   size_t uninlinable_methods{0};
   size_t huge_methods{0};
   size_t caller_size_removed_methods{0};
+  size_t late_caller_too_large_methods{0};
   size_t removed_virtual_methods{0};
   size_t perf_skipped{0};
 
@@ -74,6 +75,7 @@ struct VirtualMergingStats {
     uninlinable_methods += rhs.uninlinable_methods;
     huge_methods += rhs.huge_methods;
     caller_size_removed_methods += rhs.caller_size_removed_methods;
+    late_caller_too_large_methods += rhs.late_caller_too_large_methods;
     removed_virtual_methods += rhs.removed_virtual_methods;
     return *this;
   }
@@ -99,6 +101,7 @@ struct VirtualMergingStats {
            uninlinable_methods == rhs.uninlinable_methods &&
            huge_methods == rhs.huge_methods &&
            caller_size_removed_methods == rhs.caller_size_removed_methods &&
+           late_caller_too_large_methods == rhs.late_caller_too_large_methods &&
            removed_virtual_methods == rhs.removed_virtual_methods &&
            perf_skipped == rhs.perf_skipped;
   }

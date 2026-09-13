@@ -1287,7 +1287,7 @@ class PassManager::RunPassesContext {
     maybe_enable_opt_data(conf);
 
     // Load configurations regarding the scope.
-    conf.load(scope);
+    conf.load(scope, mgr.m_redex_options.arch);
 
     sanitizers::lsan_do_recoverable_leak_check();
 

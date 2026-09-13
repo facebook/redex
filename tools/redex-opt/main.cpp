@@ -234,6 +234,7 @@ int main(int argc, char* argv[]) {
 
   Json::Value config_data = process_entry_data(entry_data, args);
   ConfigFiles conf(config_data, args.output_ir_dir);
+  conf.parse_global_config();
 
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, conf, args.redex_options);

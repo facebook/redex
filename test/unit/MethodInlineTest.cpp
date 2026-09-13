@@ -637,6 +637,51 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining_init_class) {
   }
 }
 
+TEST_F(MethodInlineTest, redex_options_architecture_round_trip) {
+  for (auto architecture :
+       {Architecture::UNKNOWN, Architecture::ARM, Architecture::ARMV7,
+        Architecture::ARM64, Architecture::X86, Architecture::X86_64}) {
+    RedexOptions input;
+    input.arch = architecture;
+    Json::Value entry_data;
+    input.serialize(entry_data);
+
+    RedexOptions output;
+    output.deserialize(entry_data);
+    EXPECT_EQ(output.arch, architecture);
+
+    entry_data["redex_options"].removeMember("arch");
+    output.arch = Architecture::ARMV7;
+    output.deserialize(entry_data);
+    EXPECT_EQ(output.arch, Architecture::UNKNOWN);
+  }
+}
+
+TEST_F(MethodInlineTest, armv7_hard_max_instruction_size_is_arch_specific) {
+  constexpr uint64_t kLimit = 15000;
+
+  inliner::InlinerConfig armv7_config;
+  armv7_config.armv7_hard_max_instruction_size = kLimit;
+  armv7_config.set_architecture(Architecture::ARMV7);
+  EXPECT_EQ(armv7_config.get_armv7_hard_max_instruction_size(), kLimit);
+  EXPECT_FALSE(armv7_config.is_over_armv7_hard_max_instruction_size(14999, 1));
+  EXPECT_FALSE(armv7_config.is_over_armv7_hard_max_instruction_size(0, kLimit));
+  EXPECT_TRUE(
+      armv7_config.is_over_armv7_hard_max_instruction_size(0, kLimit + 1));
+  EXPECT_TRUE(armv7_config.is_over_armv7_hard_max_instruction_size(15000, 1));
+  EXPECT_TRUE(
+      armv7_config.is_over_armv7_hard_max_instruction_size(10000, 5001));
+
+  for (auto architecture : {Architecture::ARM64, Architecture::ARM,
+                            Architecture::UNKNOWN, Architecture::X86}) {
+    inliner::InlinerConfig config;
+    config.armv7_hard_max_instruction_size = kLimit;
+    config.set_architecture(architecture);
+    EXPECT_EQ(config.get_armv7_hard_max_instruction_size(), 0);
+    EXPECT_FALSE(config.is_over_armv7_hard_max_instruction_size(15000, 1));
+  }
+}
+
 // Don't inline when it would exceed (configured) size
 TEST_F(MethodInlineTest, size_limit) {
   ConcurrentMethodResolverDeprecated concurrent_method_resolver;
@@ -682,6 +727,39 @@ TEST_F(MethodInlineTest, size_limit) {
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), 0);
+}
+
+TEST_F(MethodInlineTest, armv7_hard_size_limit_overrides_force_inline) {
+  ConcurrentMethodResolverDeprecated concurrent_method_resolver;
+
+  DexStoresVector stores;
+  UnorderedSet<DexMethod*> candidates;
+  auto* cls = create_a_class("LArmv7HardLimit;");
+  DexStore store("root");
+  store.add_classes({cls});
+  stores.push_back(std::move(store));
+
+  auto* callee = make_a_method(cls, "callee", 2001);
+  callee->rstate.set_force_inline();
+  candidates.insert(callee);
+  make_a_method_calls_others(cls, "caller", {callee});
+
+  auto scope = build_class_scope(stores);
+  walk::parallel::code(scope, [&](auto*, IRCode& code) { code.build_cfg(); });
+  api::LevelChecker::init(0, scope);
+
+  inliner::InlinerConfig inliner_config;
+  inliner_config.armv7_hard_max_instruction_size = 1;
+  inliner_config.set_architecture(Architecture::ARMV7);
+  inliner_config.populate(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, /* create_init_class_insns */ false);
+  MultiMethodInliner inliner(scope, init_classes_with_side_effects, stores,
+                             conf, candidates,
+                             std::ref(concurrent_method_resolver),
+                             inliner_config, /* min_sdk */ 0, IntraDex);
+  inliner.inline_methods();
+  EXPECT_TRUE(inliner.get_inlined().empty());
 }
 
 TEST_F(MethodInlineTest, minimal_self_loop_regression) {

@@ -25,6 +25,11 @@ void InlinerConfig::bind_config() {
        intermediate_shrinking);
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
+  bind("armv7_hard_max_instruction_size", uint64_t{0},
+       armv7_hard_max_instruction_size,
+       "Maximum estimated code units permitted after an inline on ARMv7. Zero "
+       "disables this architecture-specific hard cap. Generic ARM, UNKNOWN, "
+       "and all other architectures ignore it.");
   bind("throws", throws_inline, throws_inline);
   bind("throw_after_no_return", throw_after_no_return, throw_after_no_return);
   bind("max_cost_for_constant_propagation", max_cost_for_constant_propagation,
