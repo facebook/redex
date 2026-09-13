@@ -14,6 +14,7 @@
 
 #include "DeterministicContainers.h"
 #include "JsonWrapper.h"
+#include "RedexOptions.h"
 
 class DexClass;
 class DexMethodRef;
@@ -236,7 +237,8 @@ struct ConfigFiles {
   /**
    * Load configurations with the initial scope.
    */
-  void load(const Scope& scope);
+  void load(const Scope& scope,
+            Architecture architecture = Architecture::UNKNOWN);
 
   bool force_single_dex() const;
 

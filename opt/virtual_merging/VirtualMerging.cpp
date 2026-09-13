@@ -91,6 +91,8 @@ constexpr const char* METRIC_UNINLINABLE_METHODS = "num_uninlinable_methods";
 constexpr const char* METRIC_HUGE_METHODS = "num_huge_methods";
 constexpr const char* METRIC_CALLER_SIZE_REMOVED_METHODS =
     "num_caller_size_removed_methods";
+constexpr const char* METRIC_LATE_CALLER_TOO_LARGE_METHODS =
+    "num_late_caller_too_large_methods";
 constexpr const char* METRIC_REMOVED_VIRTUAL_METHODS =
     "num_removed_virtual_methods";
 
@@ -1121,6 +1123,7 @@ struct SBHelper {
 
 VirtualMergingStats apply_ordering(
     MultiMethodInliner& inliner,
+    const inliner::InlinerConfig& inliner_config,
     std::vector<MethodData>& ordering,
     UnorderedMap<DexClass*, std::vector<const DexMethod*>>&
         virtual_methods_to_remove,
@@ -1133,9 +1136,8 @@ VirtualMergingStats apply_ordering(
       if (q.second.empty()) {
         continue;
       }
-      SBHelper sb_helper(overridden_method, q.second);
-
       const auto* virtual_scope = q.first;
+      std::optional<SBHelper> sb_helper;
 
       for (const auto* overriding_method_const : q.second) {
         auto* overriding_method =
@@ -1150,9 +1152,28 @@ VirtualMergingStats apply_ordering(
             overridden_method, overriding_method, nullptr /* reduced_cfg */,
             nullptr /* invoke_virtual_insn */, estimated_insn_size,
             estimated_callee_size);
-        always_assert_log(is_inlineable, "[VM] Cannot inline %s into %s: %s",
-                          SHOW(overriding_method), SHOW(overridden_method),
-                          is_inlineable.to_str().c_str());
+        if (!is_inlineable) {
+          auto is_armv7_hard_limit_rejection =
+              is_inlineable.decision == MultiMethodInliner::InlinableDecision::
+                                            Decision::kCallerTooLarge &&
+              inliner_config.is_over_armv7_hard_max_instruction_size(
+                  estimated_insn_size, estimated_callee_size);
+          always_assert_log(is_armv7_hard_limit_rejection,
+                            "[VM] Cannot inline %s into %s: %s",
+                            SHOW(overriding_method), SHOW(overridden_method),
+                            is_inlineable.to_str().c_str());
+          TRACE(VM,
+                3,
+                "[VM] Skipping %s into %s at ARMv7 hard limit",
+                SHOW(overriding_method),
+                SHOW(overridden_method));
+          stats.late_caller_too_large_methods++;
+          continue;
+        }
+        if (!sb_helper) {
+          sb_helper.emplace(overridden_method, q.second);
+        }
+        auto& sb_helper_ref = *sb_helper;
 
         TRACE(VM,
               4,
@@ -1204,8 +1225,9 @@ VirtualMergingStats apply_ordering(
             param_regs.push_back(load_param_insn->dest());
           }
 
-          if (sb_helper.create_source_blocks) {
-            overridden_code->push_back(sb_helper.get_source_block_creator()());
+          if (sb_helper_ref.create_source_blocks) {
+            overridden_code->push_back(
+                sb_helper_ref.get_source_block_creator()());
           }
 
           // we'll define helper functions in a way that lets them mutate the
@@ -1264,7 +1286,7 @@ VirtualMergingStats apply_ordering(
           // --- that's where we'll insert the new if-statement.
           {
             auto sb_scoped =
-                sb_helper.handle_split(block, last_it, overriding_method);
+                sb_helper_ref.handle_split(block, last_it, overriding_method);
             overridden_cfg.split_block(block, last_it);
           }
 
@@ -1316,7 +1338,7 @@ VirtualMergingStats apply_ordering(
           cleanup = []() {};
         }
 
-        if (sb_helper.create_source_blocks) {
+        if (sb_helper_ref.create_source_blocks) {
           // The literal 1.0 was the coverage era's "hot": inlining's factor is
           // callsite/callee_entry, so 1.0 over a callee entry of 1.0 was a
           // no-op. Once vals carry counts, 1.0 means ONE execution and the
@@ -1325,8 +1347,9 @@ VirtualMergingStats apply_ordering(
           // positive floor. Take the arm's count from the profile instead.
           push_sb(
               g_redex->preserve_count_integrity
-                  ? sb_helper.get_source_block_creator_from(overriding_method)()
-                  : sb_helper.get_source_block_creator(/* val */ 1.0)());
+                  ? sb_helper_ref.get_source_block_creator_from(
+                        overriding_method)()
+                  : sb_helper_ref.get_source_block_creator(/* val */ 1.0)());
         }
 
         always_assert(1 + proto->get_args()->size() == param_regs.size());
@@ -1354,7 +1377,7 @@ VirtualMergingStats apply_ordering(
         push_insn(invoke_virtual_insn);
         if (proto->is_void()) {
           // return-void
-          sb_helper.add_return_sb(overriding_method, push_sb);
+          sb_helper_ref.add_return_sb(overriding_method, push_sb);
           auto* return_insn = new IRInstruction(OPCODE_RETURN_VOID);
           push_insn(return_insn);
         } else {
@@ -1367,7 +1390,7 @@ VirtualMergingStats apply_ordering(
                                  : allocate_temp();
           move_result_insn->set_dest(result_temp);
           push_insn(move_result_insn);
-          sb_helper.add_return_sb(overriding_method, push_sb);
+          sb_helper_ref.add_return_sb(overriding_method, push_sb);
           // return result_temp
           op = opcode::return_opcode(rtype);
           auto* return_insn = new IRInstruction(op);
@@ -1421,7 +1444,7 @@ void VirtualMerging::merge_methods(
       mergeable_pairs, m_max_overriding_method_instructions, *m_inliner);
   m_stats += ordering_pair.second;
 
-  auto stats = apply_ordering(*m_inliner, ordering_pair.first,
+  auto stats = apply_ordering(*m_inliner, m_inliner_config, ordering_pair.first,
                               m_virtual_methods_to_remove,
                               m_virtual_methods_to_remap, insertion_strategy);
   m_stats += stats;
@@ -1429,6 +1452,7 @@ void VirtualMerging::merge_methods(
   always_assert(m_stats.mergeable_pairs ==
                 m_stats.huge_methods + m_stats.uninlinable_methods +
                     m_stats.caller_size_removed_methods +
+                    m_stats.late_caller_too_large_methods +
                     m_stats.removed_virtual_methods);
 }
 
@@ -1602,6 +1626,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_HUGE_METHODS, stats.huge_methods);
   mgr.incr_metric(METRIC_CALLER_SIZE_REMOVED_METHODS,
                   stats.caller_size_removed_methods);
+  mgr.incr_metric(METRIC_LATE_CALLER_TOO_LARGE_METHODS,
+                  stats.late_caller_too_large_methods);
   mgr.incr_metric(METRIC_REMOVED_VIRTUAL_METHODS,
                   stats.removed_virtual_methods);
 

@@ -1212,6 +1212,21 @@ MultiMethodInliner::InlinableDecision MultiMethodInliner::is_inlinable(
   if (cannot_inline_opcodes(caller, callee, reduced_cfg, insn)) {
     return InlinableDecision(InlinableDecision::Decision::kUninlinableOpcodes);
   }
+  auto caller_too_large_decision = [&]() {
+    if (insn != nullptr) {
+      log_nopt(INL_TOO_BIG, caller, insn);
+    }
+    if (caller_too_large_ != nullptr) {
+      *caller_too_large_ = true;
+    }
+    return InlinableDecision(InlinableDecision::Decision::kCallerTooLarge);
+  };
+
+  if (m_config.is_over_armv7_hard_max_instruction_size(estimated_caller_size,
+                                                       estimated_callee_size)) {
+    return caller_too_large_decision();
+  }
+
   if (!callee->rstate.force_inline()) {
     // Don't inline code into a method that doesn't have the same (or higher)
     // required API. We don't want to bring API specific code into a class
@@ -1242,13 +1257,7 @@ MultiMethodInliner::InlinableDecision MultiMethodInliner::is_inlinable(
 
     if (caller_too_large(caller->get_class(), estimated_caller_size,
                          estimated_callee_size)) {
-      if (insn != nullptr) {
-        log_nopt(INL_TOO_BIG, caller, insn);
-      }
-      if (caller_too_large_ != nullptr) {
-        *caller_too_large_ = true;
-      }
-      return InlinableDecision(InlinableDecision::Decision::kCallerTooLarge);
+      return caller_too_large_decision();
     }
 
     if (caller->get_class() != callee->get_class() && m_ref_checkers &&

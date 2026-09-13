@@ -18,6 +18,7 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   options["disable_dex_hasher"] = disable_dex_hasher;
   options["instrument_pass_enabled"] = instrument_pass_enabled;
   options["min_sdk"] = min_sdk;
+  options["arch"] = architecture_to_string(arch);
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
   options["jni_summary_path"] = jni_summary_path;
   if (package_name != std::nullopt) {
@@ -32,6 +33,9 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   disable_dex_hasher = options_data["disable_dex_hasher"].asBool();
   instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
   min_sdk = options_data["min_sdk"].asInt();
+  arch = options_data.isMember("arch")
+             ? parse_architecture(options_data["arch"].asString())
+             : Architecture::UNKNOWN;
   debug_info_kind =
       parse_debug_info_kind(options_data["debug_info_kind"].asString());
   jni_summary_path = options_data["jni_summary_path"].asString();
