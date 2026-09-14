@@ -31,46 +31,46 @@ TEST_F(PostVerify, ResourcesInliningPassTest_DexPatching) {
         if (line_num == 2) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFF0000);
-        } else if (line_num == 18) {
+        } else if (line_num == 17) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 0xFF673AB7);
-        } else if (line_num == 48) {
+        } else if (line_num == 45) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 3);
-        } else if (line_num == 50) {
+        } else if (line_num == 47) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string = insn->get_string()->str();
           ASSERT_EQ(string.substr(0, 6), "Hello,");
-        } else if (line_num == 51) {
+        } else if (line_num == 48) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       } else if (block->id() == 4) {
-        if (line_num == 28) {
+        if (line_num == 26) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST);
           ASSERT_EQ(uint32_t(insn->get_literal()), 0xFFFFFFFF);
-        } else if (line_num == 42) {
+        } else if (line_num == 39) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string = insn->get_string()->str();
           ASSERT_EQ(string, "#ff673ab7");
-        } else if (line_num == 43) {
+        } else if (line_num == 40) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-        } else if (line_num == 55) {
+        } else if (line_num == 51) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string = insn->get_string()->str();
           ASSERT_EQ(string, "3");
-        } else if (line_num == 56) {
+        } else if (line_num == 52) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-        } else if (line_num == 68) {
+        } else if (line_num == 63) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string = insn->get_string()->str();
           ASSERT_EQ(string, "com.fb.resources:integer/loop_count");
-        } else if (line_num == 69) {
+        } else if (line_num == 64) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-        } else if (line_num == 81) {
+        } else if (line_num == 75) {
           ASSERT_EQ(insn->opcode(), OPCODE_CONST_STRING);
           auto string = insn->get_string()->str();
           ASSERT_EQ(string, "loop_count");
-        } else if (line_num == 82) {
+        } else if (line_num == 76) {
           ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         }
       }

@@ -349,5 +349,9 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   ASSERT_NE(nullptr, method);
   IRCode* code = new IRCode(method);
   code->build_cfg();
-  EXPECT_EQ(3, count_igets(code->cfg()));
+  // Newer d8 folds `new StringBuilder().append("Blah")` into
+  // `new StringBuilder("Blah")`, which lets the pass model and inline both
+  // NotAccessedString fields (s and x). Only the escaping AccessedString
+  // reads (s and x) remain.
+  EXPECT_EQ(2, count_igets(code->cfg()));
 }

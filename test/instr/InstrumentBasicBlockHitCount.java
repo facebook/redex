@@ -1213,7 +1213,7 @@ public class InstrumentBasicBlockHitCount {
 
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(63);
     assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(148);
-    assertThat(MetadataParser.getBlockHits("testFunc19", stats, hitStats)).isEqualTo("31[1:6,2:6,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:1,11:0,12:0,13:0,14:1,15:0,16:0,17:1,18:0,19:0,20:0,21:0,22:0,23:0,24:0,25:1,26:0,27:4,28:5,29:0,30:0,31:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc19", stats, hitStats)).isEqualTo("30[1:6,2:6,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:1,11:0,12:0,13:0,14:1,15:0,16:0,17:1,18:0,19:0,20:0,21:0,22:0,23:0,24:0,25:1,26:0,27:4,28:5,29:0,30:0]");
   }
 
   @Test
@@ -1232,7 +1232,7 @@ public class InstrumentBasicBlockHitCount {
 
     assertThat(MetadataParser.getOffset("testFunc19")).isEqualTo(63);
     assertThat(MetadataParser.getHitOffset("testFunc19")).isEqualTo(148);
-    assertThat(MetadataParser.getBlockHits("testFunc19", stats, hitStats)).isEqualTo("31[1:1,2:1,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0,13:0,14:0,15:0,16:0,17:0,18:0,19:0,20:0,21:0,22:0,23:0,24:0,25:0,26:0,27:0,28:0,29:1,30:0,31:0]");
+    assertThat(MetadataParser.getBlockHits("testFunc19", stats, hitStats)).isEqualTo("30[1:1,2:1,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0,13:0,14:0,15:0,16:0,17:0,18:0,19:0,20:0,21:0,22:0,23:0,24:0,25:0,26:0,27:0,28:0,29:1,30:0]");
   }
 
   @Test
@@ -1256,7 +1256,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(179);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(178);
     assertThat(MetadataParser.getBlockHits("testFunc20", stats, hitStats)).isEqualTo("35[2:4,3:4,4:3,5:12,6:12,7:12,8:9,9:9,10:9,11:9,12:6,13:6,14:6,15:6,16:6,17:3,18:3,19:3,20:3,21:3,24:0,25:0,26:0,28:9,29:3,31:0,32:9,33:9,35:0,36:0,37:0,38:3,39:0,40:1,42:0]");
   }
 
@@ -1276,7 +1276,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(179);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(178);
     assertThat(MetadataParser.getBlockHits("testFunc20", stats, hitStats)).isEqualTo("35[2:1,3:1,4:1,5:2,6:2,7:2,8:2,9:2,10:2,11:2,12:1,13:1,14:1,15:1,16:1,17:1,18:1,19:0,20:0,21:0,24:0,25:0,26:0,28:1,29:0,31:0,32:1,33:1,35:0,36:0,37:0,38:0,39:1,40:0,42:1]");
   }
 
@@ -1296,7 +1296,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc20")).isEqualTo(67);
-    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(179);
+    assertThat(MetadataParser.getHitOffset("testFunc20")).isEqualTo(178);
     assertThat(MetadataParser.getBlockHits("testFunc20", stats, hitStats)).isEqualTo("35[2:4,3:4,4:3,5:12,6:12,7:12,8:9,9:9,10:9,11:9,12:6,13:6,14:6,15:3,16:3,17:3,18:3,19:3,20:3,21:3,24:0,25:0,26:0,28:6,29:3,31:0,32:6,33:9,35:0,36:0,37:0,38:3,39:0,40:1,42:0]");
   }
 
@@ -1315,7 +1315,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(214);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(213);
     assertThat(MetadataParser.getBlockHits("testFunc21", stats, hitStats)).isEqualTo("22[1:0,2:0,3:1,4:4,5:3,6:0,7:0,8:0,10:0,11:0,12:0,13:1,14:4,15:3,16:0,17:1,19:3,20:3,21:3,22:3,23:2,24:1]");
   }
 
@@ -1334,7 +1334,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(214);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(213);
     assertThat(MetadataParser.getBlockHits("testFunc21", stats, hitStats)).isEqualTo("22[1:1,2:0,3:0,4:5,5:4,6:0,7:0,8:0,10:0,11:0,12:0,13:0,14:0,15:0,16:1,17:1,19:5,20:5,21:4,22:4,23:4,24:1]");
   }
 
@@ -1353,7 +1353,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc21")).isEqualTo(72);
-    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(214);
+    assertThat(MetadataParser.getHitOffset("testFunc21")).isEqualTo(213);
     assertThat(MetadataParser.getBlockHits("testFunc21", stats, hitStats)).isEqualTo("22[1:1,2:1,3:0,4:6,5:5,6:1,7:6,8:5,10:5,11:0,12:5,13:0,14:0,15:0,16:0,17:0,19:0,20:0,21:0,22:0,23:0,24:1]");
   }
 
@@ -1383,7 +1383,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
-    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(236);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(235);
     assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("15[1:1,2:1,3:1,4:1,5:1,6:11,7:11,8:10,9:10,10:10,11:10,13:1,14:0,15:0,17:0]");
   }
 
@@ -1413,7 +1413,7 @@ public class InstrumentBasicBlockHitCount {
     short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
 
     assertThat(MetadataParser.getOffset("testFunc22")).isEqualTo(76);
-    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(236);
+    assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(235);
     assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("15[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0,15:0,17:0]");
   }
 }

@@ -13,37 +13,34 @@ import org.junit.Test;
 
 public class StringBuilderAppendChainInstrTest {
 
-  // `a + b + x`: the two constant appends merge into a single append of "ab".
+  // `a + b + x`: d8 8.9 pre-merges the two constant appends into a single
+  // `new StringBuilder("ab")`, so Redex sees (and keeps) the merged chain.
   // CHECK-LABEL: method: virtual redex.StringBuilderAppendChainInstrTest.concatConstantsThenValue
   String concatConstantsThenValue(String x) {
     String a = "a";
     String b = "b";
-    // PRECHECK: const-string {{.*}} "a"
-    // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
-    // PRECHECK: const-string {{.*}} "b"
-    // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
+    // PRECHECK: new-instance {{.*}} java.lang.StringBuilder
+    // PRECHECK: const-string {{.*}} "ab"
     // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // PRECHECK-NOT: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.toString
     // POSTCHECK: new-instance {{.*}} java.lang.StringBuilder
     // POSTCHECK: const-string {{.*}} "ab"
     // POSTCHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
-    // POSTCHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // POSTCHECK-NOT: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // POSTCHECK: invoke-virtual {{.*}} java.lang.StringBuilder.toString
     return a + b + x;
   }
 
-  // `a + b`: the whole string is known, so the toString() becomes a const-string and the builder
-  // disappears.
+  // `a + b`: d8 8.9 folds the whole concatenation to a const-string, so no
+  // builder reaches Redex and the toString() disappears with it.
   // CHECK-LABEL: method: virtual redex.StringBuilderAppendChainInstrTest.concatConstantsOnly
   String concatConstantsOnly() {
     String a = "a";
     String b = "b";
-    // PRECHECK: new-instance {{.*}} java.lang.StringBuilder
-    // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
-    // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
-    // PRECHECK: invoke-virtual {{.*}} java.lang.StringBuilder.toString
+    // PRECHECK: const-string {{.*}} "ab"
+    // PRECHECK-NOT: java.lang.StringBuilder
+    // PRECHECK: return-object
     // POSTCHECK-NOT: java.lang.StringBuilder
     // POSTCHECK: const-string {{.*}} "ab"
     // POSTCHECK-NOT: java.lang.StringBuilder
@@ -51,13 +48,14 @@ public class StringBuilderAppendChainInstrTest {
     return a + b;
   }
 
-  // `a + x + b`: the two constants are not adjacent, so nothing merges.
+  // `a + x + b`: the two constants are not adjacent, so nothing merges
+  // (d8 8.9 still folds the leading `new StringBuilder().append("a")` into
+  // `new StringBuilder("a")`).
   // CHECK-LABEL: method: virtual redex.StringBuilderAppendChainInstrTest.concatValueBetweenConstants
   String concatValueBetweenConstants(String x) {
     String a = "a";
     String b = "b";
     // CHECK: const-string {{.*}} "a"
-    // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append
     // CHECK: const-string {{.*}} "b"
     // CHECK: invoke-virtual {{.*}} java.lang.StringBuilder.append

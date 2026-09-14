@@ -20,19 +20,27 @@ namespace {
 //
 // when computing the total number of code units, write it this order:
 // (how many times optimization runs) * (code units saved per run)
-#define TESTS                                           \
-  WORK(test_Coalesce_InitVoid_AppendString, 3)          \
-  WORK(test_Remove_AppendEmptyString, 1 * 3)            \
-  WORK(test_Coalesce_Init_AppendChar, 4)                \
-  WORK(test_Coalesce_AppendString_AppendInt, 6 * 1)     \
-  WORK(test_Coalesce_AppendString_AppendChar, 6 * 1)    \
-  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 1) \
-  WORK(test_Coalesce_AppendString_AppendLongInt, 4 * 1) \
-  WORK(test_Replace_ValueOfBoolean, 2 * 2)              \
-  WORK(test_Replace_ValueOfChar, 4 * 2)                 \
-  WORK(test_Replace_ValueOfInt, 8 * 2)                  \
-  WORK(test_Replace_ValueOfLongInt, 5 * 2)              \
-  WORK(test_Replace_ValueOfFloat, 3 * 2)                \
+//
+// NOTE: d8 8.9 runs its own StringBuilderOptimizer over explicit
+// StringBuilder chains (folding `new StringBuilder().append(x)` into
+// `new StringBuilder(x)`, dropping `append("")`, coalescing constant
+// appends), so the input dex no longer contains those patterns and the
+// Redex pass has nothing left to save. The entries below stay wired at 0
+// to keep loading the methods; only the ValueOf patterns still produce
+// Redex-side savings.
+#define TESTS                                       \
+  WORK(test_Coalesce_InitVoid_AppendString, 0)      \
+  WORK(test_Remove_AppendEmptyString, 0)            \
+  WORK(test_Coalesce_Init_AppendChar, 0)            \
+  WORK(test_Coalesce_AppendString_AppendInt, 0)     \
+  WORK(test_Coalesce_AppendString_AppendChar, 0)    \
+  WORK(test_Coalesce_AppendString_AppendBoolean, 0) \
+  WORK(test_Coalesce_AppendString_AppendLongInt, 0) \
+  WORK(test_Replace_ValueOfBoolean, 2 * 2)          \
+  WORK(test_Replace_ValueOfChar, 4 * 2)             \
+  WORK(test_Replace_ValueOfInt, 8 * 2)              \
+  WORK(test_Replace_ValueOfLongInt, 5 * 2)          \
+  WORK(test_Replace_ValueOfFloat, 3 * 2)            \
   WORK(test_Replace_ValueOfDouble, 3 * 2)
 
 void load_method_sizes(DexClasses& classes,
