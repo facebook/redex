@@ -292,7 +292,10 @@ public class MethodInlineTest {
 
   @Test
   public void testArrayDataInCaller() throws Exception {
-    int[] arr = {3, 1, 2};
+    // NOTE: keep this array large enough that d8 emits a fill-array-data
+    // payload (newer d8 lowers small constant arrays to filled-new-array,
+    // which has no payload pseudo-op for the inliner to preserve).
+    int[] arr = {3, 1, 2, 4, 5, 6, 7, 8};
     calleeWithIf();
     assertThat(likely(true)).isTrue();
     assertThat(arr[0]).isEqualTo(3);
