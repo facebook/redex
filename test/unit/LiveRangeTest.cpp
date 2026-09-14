@@ -8,6 +8,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "CheckCast.h"
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "LiveRange.h"
@@ -43,6 +44,138 @@ TEST_F(LiveRangeTest, LiveRangeSingleBlock) {
   )");
   EXPECT_CODE_EQ(expected_code.get(), code.get());
   EXPECT_EQ(code->get_registers_size(), 3);
+}
+
+TEST_F(LiveRangeTest, CheckCastResultReconvergesAfterCatch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v1 0)
+
+      (.try_start a)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v1)
+      (.try_end a)
+      (goto :join)
+
+      (.catch (a))
+      (goto :join)
+
+      (:join)
+      (return-object v1)
+    )
+  )");
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 1);
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 0);
+
+  code->clear_cfg();
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v1 0)
+
+      (.try_start a)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v2)
+      (move-object v1 v2)
+      (.try_end a)
+
+      (.catch (a))
+      (return-object v1)
+    )
+  )");
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
+}
+
+TEST_F(LiveRangeTest, CheckCastResultLiveInOneOfMultipleCatches) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (const v1 0)
+
+      (.try_start a)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v1)
+      (.try_end a)
+      (goto :join)
+
+      (.catch (a b) "LFoo;")
+      (return-object v0)
+
+      (.catch (b) "LBar;")
+      (goto :join)
+
+      (:join)
+      (return-object v1)
+    )
+  )");
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 1);
+}
+
+TEST_F(LiveRangeTest, CheckCastResultAlreadyUsesSourceRegister) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+
+      (.try_start a)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v0)
+      (.try_end a)
+      (goto :join)
+
+      (.catch (a))
+      (goto :join)
+
+      (:join)
+      (return-object v0)
+    )
+  )");
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 0);
+}
+
+TEST_F(LiveRangeTest, CheckCastResultNotLiveInCatch) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+
+      (.try_start a)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v1)
+      (return-object v1)
+      (.try_end a)
+
+      (.catch (a))
+      (return-object v0)
+    )
+  )");
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 0);
+}
+
+TEST_F(LiveRangeTest, CheckCastWithoutThrowEdge) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (check-cast v0 "LX;")
+      (move-result-pseudo-object v1)
+      (return-object v1)
+    )
+  )");
+  code->build_cfg();
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
+
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 0);
 }
 
 TEST_F(LiveRangeTest, LiveRange) {

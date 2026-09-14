@@ -91,6 +91,8 @@ class Allocator {
     size_t range_spill_moves{0};
     size_t global_spill_moves{0};
     size_t split_moves{0};
+    // Legalization copies, not spill moves; excluded from moves_inserted().
+    size_t split_check_cast_result_live_ranges_count{0};
     size_t moves_coalesced{0};
     size_t params_spill_early{0};
     size_t moves_inserted() const {

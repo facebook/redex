@@ -43,12 +43,18 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   TRACE(REG, 1, "  Total range spills: %zu", stats.range_spill_moves);
   TRACE(REG, 1, "  Total global spills: %zu", stats.global_spill_moves);
   TRACE(REG, 1, "  Total splits: %zu", stats.split_moves);
+  TRACE(REG,
+        1,
+        "Total check-cast result live ranges split: %zu",
+        stats.split_check_cast_result_live_ranges_count);
   TRACE(REG, 1, "Total coalesce count: %zu", stats.moves_coalesced);
   TRACE(REG, 1, "Total net moves: %zu", stats.net_moves());
 
   mgr.incr_metric("param spilled too early", stats.params_spill_early);
   mgr.incr_metric("reiteration_count", stats.reiteration_count);
   mgr.incr_metric("spill_count", stats.moves_inserted());
+  mgr.incr_metric("split_check_cast_result_live_ranges_count",
+                  stats.split_check_cast_result_live_ranges_count);
   mgr.incr_metric("coalesce_count", stats.moves_coalesced);
   mgr.incr_metric("net_moves", stats.net_moves());
 
