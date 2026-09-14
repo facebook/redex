@@ -309,6 +309,8 @@ Allocator::Stats& Allocator::Stats::operator+=(const Allocator::Stats& that) {
   range_spill_moves += that.range_spill_moves;
   global_spill_moves += that.global_spill_moves;
   split_moves += that.split_moves;
+  split_check_cast_result_live_ranges_count +=
+      that.split_check_cast_result_live_ranges_count;
   moves_coalesced += that.moves_coalesced;
   params_spill_early += that.params_spill_early;
   return *this;

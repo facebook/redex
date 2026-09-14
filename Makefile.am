@@ -320,6 +320,7 @@ libredex_la_SOURCES = \
 	service/reduce-boolean-branches/ReduceBooleanBranches.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
+	service/regalloc/CheckCast.cpp \
 	service/regalloc/GraphColoring.cpp \
 	service/regalloc/Interference.cpp \
 	service/regalloc/RegisterAllocation.cpp \

@@ -10,11 +10,13 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
+#include "DexInstruction.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "InstructionLowering.h"
 #include "Interference.h"
 #include "LiveRange.h"
 #include "Liveness.h"
@@ -29,6 +31,94 @@
 using namespace regalloc;
 
 struct RegAllocTest : public RedexTest {};
+
+static DexMethod* make_reconverging_check_cast_method() {
+  return assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(Ljava/lang/Object;)Ljava/lang/Object;"
+      (
+        (load-param-object v0)
+        (const v1 0)
+
+        (.try_start a)
+        (check-cast v0 "LX;")
+        (move-result-pseudo-object v1)
+        (.try_end a)
+        (goto :join)
+
+        (.catch (a))
+        (goto :join)
+
+        (:join)
+        (return-object v1)
+      )
+    )
+  )");
+}
+
+static void expect_check_cast_result_split(IRCode* code) {
+  code->clear_cfg();
+  IRInstruction* pseudo_result = nullptr;
+  IRInstruction* result_move = nullptr;
+  IRInstruction* result_use = nullptr;
+  bool saw_check_cast = false;
+  for (const auto& mie : InstructionIterable(*code)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_CHECK_CAST) {
+      saw_check_cast = true;
+      continue;
+    }
+    if (!saw_check_cast) {
+      continue;
+    }
+    if (pseudo_result == nullptr) {
+      ASSERT_EQ(insn->opcode(), IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+      pseudo_result = insn;
+      continue;
+    }
+    if (result_move == nullptr) {
+      ASSERT_EQ(insn->opcode(), OPCODE_MOVE_OBJECT);
+      result_move = insn;
+      continue;
+    }
+    if (insn->opcode() == OPCODE_RETURN_OBJECT) {
+      result_use = insn;
+      break;
+    }
+  }
+  ASSERT_NE(pseudo_result, nullptr);
+  ASSERT_NE(result_move, nullptr);
+  ASSERT_NE(result_use, nullptr);
+  EXPECT_EQ(result_move->src(0), pseudo_result->dest());
+  EXPECT_EQ(result_use->src(0), result_move->dest());
+  EXPECT_NE(pseudo_result->dest(), result_move->dest());
+}
+
+static void expect_check_cast_result_split_survives_lowering(
+    DexMethod* method) {
+  auto* code = method->get_code();
+  code->clear_cfg();
+  instruction_lowering::lower(method);
+
+  DexInstruction* check_cast = nullptr;
+  DexInstruction* result_move = nullptr;
+  for (const auto& mie : *code) {
+    if (mie.type != MFLOW_DEX_OPCODE) {
+      continue;
+    }
+    if (mie.dex_insn->opcode() == DOPCODE_CHECK_CAST) {
+      check_cast = mie.dex_insn;
+      continue;
+    }
+    if (check_cast != nullptr && dex_opcode::is_move(mie.dex_insn->opcode())) {
+      result_move = mie.dex_insn;
+      break;
+    }
+  }
+  ASSERT_NE(check_cast, nullptr);
+  ASSERT_NE(result_move, nullptr);
+  EXPECT_EQ(result_move->src(0), check_cast->src(0));
+  EXPECT_NE(result_move->dest(), check_cast->src(0));
+}
 
 /*
  * Check that we pick the most pessimistic move instruction (of the right type)
@@ -201,6 +291,25 @@ TEST_F(RegAllocTest, BuildInterferenceGraph) {
       EXPECT_TRUE(ig.is_adjacent(adj, reg));
     }
   }
+}
+
+TEST_F(RegAllocTest, CheckCastResultReconvergesAfterCatch) {
+  auto* method = make_reconverging_check_cast_method();
+  method->get_code()->build_cfg();
+  graph_coloring::Allocator::Config config;
+  auto stats = graph_coloring::allocate(config, method);
+
+  EXPECT_EQ(stats.split_check_cast_result_live_ranges_count, 1);
+  expect_check_cast_result_split(method->get_code());
+}
+
+TEST_F(RegAllocTest, CheckCastSuccessCopySurvivesCoalescingAndLowering) {
+  auto* method = make_reconverging_check_cast_method();
+  method->get_code()->build_cfg();
+  graph_coloring::Allocator::Config config;
+  graph_coloring::allocate(config, method);
+
+  expect_check_cast_result_split_survives_lowering(method);
 }
 
 /*

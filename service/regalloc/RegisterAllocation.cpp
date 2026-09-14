@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#include "CheckCast.h"
 #include "Debug.h"
 #include "DebugUtils.h"
 #include "DexClass.h"
@@ -47,12 +48,17 @@ Allocator::Stats allocate(
     // The transformations below all require a CFG.
     always_assert_log(code->cfg_built(), "Need cfg here\n");
     auto& cfg = code->cfg();
+    auto split_check_cast_result_live_ranges_count =
+        regalloc::split_check_cast_result_live_ranges(cfg);
     Allocator allocator(allocator_config);
     allocator.allocate(cfg, is_static);
     cfg.recompute_registers_size();
     TRACE(REG, 5, "After alloc: regs:%u code:\n%s", cfg.get_registers_size(),
           ::SHOW(cfg));
-    return allocator.get_stats();
+    auto stats = allocator.get_stats();
+    stats.split_check_cast_result_live_ranges_count =
+        split_check_cast_result_live_ranges_count;
+    return stats;
   } catch (const std::exception& e) {
     std::cerr << "Failed to allocate " << method_describer() << ": " << e.what()
               << '\n';
