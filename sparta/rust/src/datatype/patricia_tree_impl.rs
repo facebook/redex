@@ -209,7 +209,7 @@ impl<V> Node<V> {
     /// other tree holding it.
     fn update_node_by_key_mut<F>(node: &mut Arc<Node<V>>, key: &BitVec, op: F) -> Updated<V>
     where
-        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
+        F: FnOnce(Option<&Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
         use Node::*;
 
@@ -737,7 +737,7 @@ impl<V> PatriciaTree<V> {
     /// nothing else points at them.
     fn update_by_key<F>(&mut self, key: &BitVec, op: F)
     where
-        F: FnOnce(Option<Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
+        F: FnOnce(Option<&Arc<Node<V>>>) -> Option<Arc<Node<V>>>,
     {
         let outcome = match self.root.as_mut() {
             None => {
