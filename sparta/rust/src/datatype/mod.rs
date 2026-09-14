@@ -19,6 +19,7 @@ mod powerset;
 pub use abstract_domain::*;
 pub use abstract_environment::*;
 pub use abstract_partition::*;
+pub use bitvec::*;
 pub use hash_set_impl::*;
 pub use lifted_domain::*;
 pub use patricia_tree_map::*;

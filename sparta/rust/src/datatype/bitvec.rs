@@ -74,6 +74,12 @@ impl BitVec {
         self.len
     }
 
+    /// Whether this holds no bits at all, which is what the prefix of a tree
+    /// whose keys share no leading bit is.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     pub fn begins_with(&self, prefix: &BitVec) -> bool {
         if self.len() < prefix.len() {
             return false;
