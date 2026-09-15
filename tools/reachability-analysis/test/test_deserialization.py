@@ -6,7 +6,7 @@
 import os
 import unittest
 
-from lib import core
+from lib import analysis, core
 
 
 class TestGraphDeserialization(unittest.TestCase):
@@ -24,6 +24,8 @@ class TestGraphDeserialization(unittest.TestCase):
         anno = graph.get_anno("LAnno;")
         field = graph.get_node("LFoo;.field1:I")
         method = graph.get_node("LFoo;.method1:()I")
+        removed_root = graph.get_node("LRemovedRoot;")
+        removed_cls = graph.get_node("LRemovedChild;")
 
         def assertEdge(pred, succ):
             self.assertIn(succ, pred.succs)
@@ -33,6 +35,12 @@ class TestGraphDeserialization(unittest.TestCase):
         assertEdge(cls, anno)
         assertEdge(cls, method)
         assertEdge(method, field)
+        assertEdge(removed_root, removed_cls)
+
+        self.assertDictEqual(removed_root.preds, {})
+        roots = {node for node in graph.nodes.values() if len(node.preds) == 0}
+        self.assertSetEqual(roots, {seed, removed_root})
+        self.assertSetEqual(analysis.get_dominated(graph, set()), set())
 
     def test_method_override_graph(self):
         """

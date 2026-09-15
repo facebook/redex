@@ -174,6 +174,7 @@ check_PROGRAMS = \
     remove_redundant_check_casts_test \
     remove_uninstantiables_test \
     remove_unused_args_test \
+    removed_reachability_graph_test \
     renamer_test \
     resolver_test \
     resolve_proguard_value_test \
@@ -551,6 +552,9 @@ remove_uninstantiables_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 remove_unused_args_test_SOURCES = RemoveUnusedArgsTest.cpp ScopeHelper.cpp
 remove_unused_args_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
+
+removed_reachability_graph_test_SOURCES = RemovedReachabilityGraphTest.cpp
+removed_reachability_graph_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 renamer_test_SOURCES = RenamerTest.cpp VirtScopeHelper.cpp ScopeHelper.cpp
 

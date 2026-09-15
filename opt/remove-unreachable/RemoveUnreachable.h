@@ -65,9 +65,16 @@ class RemoveUnreachablePassBase : public Pass {
   static reachability::ObjectCounts before_metrics(DexStoresVector& stores,
                                                    PassManager& pm);
 
+  // Shared by the reachability-graph and removed-graph selectors: a 1-based
+  // repeat index of this pass, or the globally last reachability run.
+  static bool should_emit_this_run(const PassManager& pm,
+                                   const std::optional<uint32_t>& on_run,
+                                   bool on_last_run);
+
   reachability::IgnoreSets m_ignore_sets;
   bool m_remove_no_argument_constructors = false;
   std::optional<uint32_t> m_emit_graph_on_run;
+  std::optional<uint32_t> m_emit_removed_graph_on_run;
   bool m_always_emit_unreachable_symbols = false;
   bool m_emit_removed_symbols_references = false;
   bool m_output_full_removed_symbols = false;
@@ -80,6 +87,11 @@ class RemoveUnreachablePassBase : public Pass {
   bool m_sweep_annotation_elements = false;
 
   static bool s_emit_graph_on_last_run;
+  // Which way the configuration asks for the removed graph, shared across the
+  // passes derived from this one. The two are mutually exclusive, which is
+  // checked once every pass has been configured.
+  static bool s_emit_removed_graph_on_run;
+  static bool s_emit_removed_graph_on_last_run;
   static size_t s_all_reachability_runs;
   static size_t s_all_reachability_run;
 };

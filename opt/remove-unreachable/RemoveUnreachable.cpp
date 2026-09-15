@@ -25,6 +25,8 @@
 #include "Walkers.h"
 
 bool RemoveUnreachablePassBase::s_emit_graph_on_last_run{false};
+bool RemoveUnreachablePassBase::s_emit_removed_graph_on_run{false};
+bool RemoveUnreachablePassBase::s_emit_removed_graph_on_last_run{false};
 size_t RemoveUnreachablePassBase::s_all_reachability_runs{0};
 size_t RemoveUnreachablePassBase::s_all_reachability_run{0};
 
@@ -33,7 +35,37 @@ const std::string UNREACHABLE_SYMBOLS_FILENAME =
     "redex-unreachable-removed-symbols.txt";
 const std::string REMOVED_SYMBOLS_REFERENCES_FILENAME =
     "redex-unreachable-removed-symbols-references.txt";
+const std::string REMOVED_REACHABILITY_GRAPH_FILENAME =
+    "removed-reachability-graph";
 const std::string RMU_PASS_NAME = "RemoveUnreachablePass";
+
+/*
+ * Counts members the marker kept inside classes it did not. `sweep` deletes
+ * them along with their class, so they belong in the removed graph; this
+ * quantifies how often that rule actually does any work.
+ */
+size_t count_marked_members_of_removed_classes(
+    const Scope& scope, const reachability::ReachableObjects& reachables) {
+  std::atomic<size_t> count{0};
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (reachables.marked_unsafe(cls)) {
+      return;
+    }
+    size_t local = 0;
+    for (auto* field : cls->get_all_fields()) {
+      if (reachables.marked_unsafe(field)) {
+        local++;
+      }
+    }
+    for (auto* method : cls->get_all_methods()) {
+      if (reachables.marked_unsafe(method)) {
+        local++;
+      }
+    }
+    count += local;
+  });
+  return count.load();
+}
 
 void root_metrics(DexStoresVector& stores, PassManager& pm) {
   auto scope = build_class_scope(stores);
@@ -192,6 +224,22 @@ void RemoveUnreachablePassBase::bind_config() {
   bind("emit_graph_on_run", std::optional<uint32_t>{}, m_emit_graph_on_run);
   bool emit_on_last{false};
   bind("emit_graph_on_last_run", emit_on_last, emit_on_last);
+  bind("emit_removed_graph_on_run",
+       std::optional<uint32_t>{},
+       m_emit_removed_graph_on_run,
+       "Write a reachability-style graph of the symbols removed by the given "
+       "1-based repeat of this pass to the removed-reachability-graph "
+       "metafile. Roots of that graph are the removed symbols with no "
+       "incoming edges. Mutually exclusive with "
+       "emit_removed_graph_on_last_run: the graph has a single metafile that "
+       "cannot be appended to.");
+  bool emit_removed_on_last{false};
+  bind("emit_removed_graph_on_last_run",
+       emit_removed_on_last,
+       emit_removed_on_last,
+       "Like emit_removed_graph_on_run, but selects the last run of any "
+       "reachability pass instead of a fixed repeat. Mutually exclusive "
+       "with emit_removed_graph_on_run.");
   bind("always_emit_unreachable_symbols",
        false,
        m_always_emit_unreachable_symbols);
@@ -214,11 +262,35 @@ void RemoveUnreachablePassBase::bind_config() {
   bind("sweep_annotation_elements", false, m_sweep_annotation_elements,
        "Removes any annotation elements that do not match up with marked "
        "methods on annotation classes.");
-  after_configuration([emit_on_last]() {
-    if (emit_on_last) {
-      s_emit_graph_on_last_run = true;
-    }
-  });
+  // Captured by value: `bind` has already filled these in by the time the
+  // callback is created, and the callback outlives this frame.
+  after_configuration(
+      [emit_on_last, emit_removed_on_last,
+       emit_removed_on_run = m_emit_removed_graph_on_run.has_value()]() {
+        if (emit_on_last) {
+          s_emit_graph_on_last_run = true;
+        }
+        s_emit_removed_graph_on_run |= emit_removed_on_run;
+        s_emit_removed_graph_on_last_run |= emit_removed_on_last;
+        // The fields are shared across the derived passes, so the callback that
+        // runs last sees every pass's choice, and a conflict spread over two
+        // passes is caught as well.
+        always_assert_log(
+            !(s_emit_removed_graph_on_run && s_emit_removed_graph_on_last_run),
+            "emit_removed_graph_on_run and emit_removed_graph_on_last_run are "
+            "mutually exclusive: each selects a run that writes the removed "
+            "reachability graph, and it has a single metafile that cannot be "
+            "appended to. Set one or the other.");
+      });
+}
+
+bool RemoveUnreachablePassBase::should_emit_this_run(
+    const PassManager& pm,
+    const std::optional<uint32_t>& on_run,
+    bool on_last_run) {
+  return (on_run && static_cast<int64_t>(pm.get_current_pass_info()->repeat +
+                                         1) == *on_run) ||
+         (on_last_run && s_all_reachability_runs == s_all_reachability_run);
 }
 
 void RemoveUnreachablePassBase::eval_pass(DexStoresVector& /*stores*/,
@@ -250,11 +322,9 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
   root_metrics(stores, pm);
   auto before = before_metrics(stores, pm);
   bool emit_graph_this_run =
-      (m_emit_graph_on_run &&
-       static_cast<int64_t>(pm.get_current_pass_info()->repeat + 1) ==
-           *m_emit_graph_on_run) ||
-      (s_emit_graph_on_last_run &&
-       s_all_reachability_runs == s_all_reachability_run);
+      should_emit_this_run(pm, m_emit_graph_on_run, s_emit_graph_on_last_run);
+  bool emit_removed_graph_this_run = should_emit_this_run(
+      pm, m_emit_removed_graph_on_run, s_emit_removed_graph_on_last_run);
   bool output_unreachable_symbols =
       m_always_emit_unreachable_symbols ||
       (pm.get_current_pass_info()->repeat == 0 &&
@@ -272,6 +342,34 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_prune_uncallable_instance_method_bodies, m_throw_propagation,
       m_remove_no_argument_constructors);
   reachability::report(pm, *reachables, reachable_aspects);
+
+  // Keep this ahead of every mutation below. `reanimate_zombie_methods`
+  // rewrites zombie method bodies and clears their annotations, and `sweep`
+  // frees fields outright, so a graph built later would silently lose edges or
+  // read freed memory. Do NOT move it next to the reachability-graph dump at
+  // the end of this function.
+  if (emit_removed_graph_this_run) {
+    auto removed_graph =
+        reachability::compute_removed_reachability_graph(scope, *reachables);
+    size_t num_edges = 0;
+    size_t num_roots = 0;
+    for (const auto& entry : UnorderedIterable(removed_graph)) {
+      num_edges += entry.second.size();
+      if (entry.second.empty()) {
+        num_roots++;
+      }
+    }
+    pm.set_metric("removed_graph_nodes", removed_graph.size());
+    pm.set_metric("removed_graph_edges", num_edges);
+    pm.set_metric("removed_graph_roots", num_roots);
+    pm.set_metric("removed_graph_marked_members_of_removed_classes",
+                  count_marked_members_of_removed_classes(scope, *reachables));
+    Timer::scope("Writing removed reachability graph", [&] {
+      std::ofstream os;
+      open_or_die(conf.metafile(REMOVED_REACHABILITY_GRAPH_FILENAME), &os);
+      reachability::dump_graph(os, removed_graph);
+    });
+  }
 
   ConcurrentReferencesMap references;
   if (output_unreachable_symbols && m_emit_removed_symbols_references) {
