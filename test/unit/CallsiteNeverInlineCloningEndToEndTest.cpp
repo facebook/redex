@@ -15,6 +15,10 @@
 // shape-eligibility checks (already covered by
 // `never_inline_analysis::never_inline_eligibility`'s own tests) disagree.
 
+#include <array>
+#include <fstream>
+#include <string>
+
 #include <gtest/gtest.h>
 #include <json/value.h>
 
@@ -25,6 +29,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
+#include "IRMetaIO.h"
 #include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexTest.h"
@@ -44,6 +49,21 @@ DexMethod* find_invoked_method(DexMethod* caller) {
     }
   }
   return nullptr;
+}
+
+bool profile_has_hot_cnic_method(const std::string& path) {
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    ADD_FAILURE() << "Unable to open baseline profile: " << path;
+    return false;
+  }
+  std::string line;
+  while (std::getline(input, line)) {
+    if (line.starts_with("H") && line.find("$cnic$") != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // A callee reached from one hot and two cold call sites -- "mixed-hotness"
@@ -211,6 +231,103 @@ make_non_final_virtual_mixed_hotness_fixture() {
 
 class CallsiteNeverInlineCloningEndToEndTest : public RedexTest {};
 
+TEST_F(CallsiteNeverInlineCloningEndToEndTest, RejectsLegacyIRMetadataLayout) {
+  auto tmp_dir = redex::make_tmp_dir("cnic_old_irmeta_%%%%%%%%");
+  std::ofstream output(tmp_dir.path + "/irmeta.bin", std::ios::binary);
+  ASSERT_TRUE(output.is_open());
+  // Include the trailing NUL in the legacy IRMeta header.
+  constexpr std::array<char, 8> old_header = {'r',  'd',    'x',    '.',
+                                              '\n', '\x14', '\x12', '\0'};
+  output.write(old_header.data(), old_header.size());
+  const uint32_t zero = 0;
+  const uint32_t old_rstate_size = 4;
+  output.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
+  output.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
+  output.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
+  output.write(reinterpret_cast<const char*>(&old_rstate_size),
+               sizeof(old_rstate_size));
+  ASSERT_TRUE(output.good());
+  output.close();
+
+  EXPECT_FALSE(ir_meta_io::load(tmp_dir.path));
+}
+
+TEST_F(CallsiteNeverInlineCloningEndToEndTest,
+       ForceHotAndStartupBitsSurviveIRMetadataRoundTrip) {
+  auto fx = make_mixed_hotness_fixture();
+  auto scope = build_class_scope(fx.stores);
+  auto tmp_dir = redex::make_tmp_dir("cnic_irmeta_%%%%%%%%");
+  fx.callee->rstate.set_force_hot_in_baseline_profile();
+  fx.callee->rstate.set_force_startup_in_baseline_profile();
+
+  ir_meta_io::dump(scope, tmp_dir.path);
+  fx.callee->rstate.reset_force_hot_in_baseline_profile();
+  fx.callee->rstate.reset_force_startup_in_baseline_profile();
+  ASSERT_FALSE(fx.callee->rstate.force_hot_in_baseline_profile());
+  ASSERT_FALSE(fx.callee->rstate.force_startup_in_baseline_profile());
+  ASSERT_TRUE(ir_meta_io::load(tmp_dir.path));
+  EXPECT_TRUE(fx.callee->rstate.force_hot_in_baseline_profile());
+  EXPECT_TRUE(fx.callee->rstate.force_startup_in_baseline_profile());
+}
+
+TEST_F(CallsiteNeverInlineCloningEndToEndTest,
+       ForcedHotAndStartupFlagsAreAppliedIndependently) {
+  auto fx = make_mixed_hotness_fixture();
+  auto scope = build_class_scope(fx.stores);
+  fx.callee->rstate.set_force_hot_in_baseline_profile();
+  fx.hot_caller->rstate.set_force_startup_in_baseline_profile();
+
+  baseline_profiles::BaselineProfile profile;
+  profile.methods[fx.callee].post_startup = true;
+  EXPECT_EQ(baseline_profiles::apply_forced_method_flags(scope, &profile), 2u);
+  const auto& hot_flags = profile.methods.at(fx.callee);
+  EXPECT_TRUE(hot_flags.hot);
+  EXPECT_FALSE(hot_flags.startup);
+  EXPECT_TRUE(hot_flags.post_startup);
+  const auto& startup_flags = profile.methods.at(fx.hot_caller);
+  EXPECT_FALSE(startup_flags.hot);
+  EXPECT_TRUE(startup_flags.startup);
+  EXPECT_FALSE(startup_flags.post_startup);
+  EXPECT_EQ(baseline_profiles::apply_forced_method_flags(scope, &profile), 0u);
+}
+
+TEST_F(CallsiteNeverInlineCloningEndToEndTest,
+       ForcedMethodEntersEveryMaterializedProfile) {
+  auto fx = make_mixed_hotness_fixture();
+  auto scope = build_class_scope(fx.stores);
+  fx.callee->rstate.set_force_hot_in_baseline_profile();
+
+  // CNIC, like existing profile-guided inlining and outlining, makes one
+  // whole-program structural decision from aggregated profile information. It
+  // does not materialize a different transformed program for each ART profile,
+  // so the forced flag follows that global decision into every profile.
+  baseline_profiles::BaselineProfile first_profile;
+  baseline_profiles::BaselineProfile second_profile;
+  EXPECT_EQ(baseline_profiles::apply_forced_method_flags(scope, &first_profile),
+            1u);
+  EXPECT_EQ(
+      baseline_profiles::apply_forced_method_flags(scope, &second_profile), 1u);
+  EXPECT_TRUE(first_profile.methods.at(fx.callee).hot);
+  EXPECT_TRUE(second_profile.methods.at(fx.callee).hot);
+}
+
+TEST_F(CallsiteNeverInlineCloningEndToEndTest,
+       ForcedMethodIsAppliedEvenAfterItsCodeIsReleased) {
+  auto fx = make_mixed_hotness_fixture();
+  auto scope = build_class_scope(fx.stores);
+  fx.callee->rstate.set_force_hot_in_baseline_profile();
+  // Forced profile bits live on `ReferencedState`, so they remain valid after
+  // `IRCode` is released; a code walker would miss this method.
+  auto released = fx.callee->release_code();
+  ASSERT_EQ(fx.callee->get_code(), nullptr);
+
+  baseline_profiles::BaselineProfile profile;
+  EXPECT_EQ(baseline_profiles::apply_forced_method_flags(scope, &profile), 1u);
+  EXPECT_TRUE(profile.methods.at(fx.callee).hot);
+
+  fx.callee->set_code(std::move(released));
+}
+
 TEST_F(CallsiteNeverInlineCloningEndToEndTest,
        ArtProfileWriterAnnotatesOnlyTheClone) {
   auto fx = make_mixed_hotness_fixture();
@@ -263,6 +380,10 @@ TEST_F(CallsiteNeverInlineCloningEndToEndTest,
   EXPECT_NE(clone, fx.callee);
   EXPECT_EQ(find_invoked_method(fx.cold_caller2), clone);
   EXPECT_TRUE(has_anno(clone, never_inline_anno));
+  EXPECT_TRUE(clone->rstate.force_hot_in_baseline_profile());
+  EXPECT_FALSE(clone->rstate.force_startup_in_baseline_profile());
+  EXPECT_TRUE(profile_has_hot_cnic_method(
+      tmp_dir.path + "/meta/additional-baseline-profiles.list"));
 }
 
 TEST_F(CallsiteNeverInlineCloningEndToEndTest,

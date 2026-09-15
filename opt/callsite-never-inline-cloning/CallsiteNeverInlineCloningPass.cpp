@@ -618,6 +618,11 @@ std::vector<std::pair<DexMethod*, DexMethod*>> create_clones(
 
     clone->rstate.set_generated();
     clone->rstate.set_dont_inline();
+    clone->rstate.set_force_hot_in_baseline_profile();
+    // Creating the clone is a single whole-program structural decision,
+    // analogous to profile-guided inlining or outlining. Force-H therefore
+    // applies to every materialized profile rather than re-deciding the
+    // transformation per profile.
     // Match the cold-only call sites this clone will serve.
     source_blocks::fill_source_block_entry_values(clone->get_code()->cfg(),
                                                   SourceBlock::Val(0, 0));

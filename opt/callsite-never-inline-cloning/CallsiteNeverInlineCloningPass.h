@@ -239,11 +239,17 @@ profiled-cold block to invoke the clone; call sites in a not-proven-cold block
 keep calling the original, unchanged -- and so does the call instruction's own
 opcode, since the clone keeps the original's exact access flags (virtual or
 not, visibility, `final`-ness). The clone is marked `dont_inline` (Redex's own
-inliner will not touch it) and its own `SourceBlock` values are zeroed, so it
-presents as a method with no observed hot execution of its own -- letting a
-subsequent `ArtProfileWriterPass` see a purely-cold callee and attach
-`@NeverInline` to it, while the original, now free of any observed-cold
-caller, is left for normal treatment.
+inliner will not touch it), force-H in every materialized baseline profile so
+whichever profile is used asks dex2oat to compile the one shared body, and has
+its own primary `SourceBlock` values zeroed. This is a single whole-program
+structural decision, analogous to profile-guided inlining or outlining: once the
+pass creates the clone, every materialized profile describes that transformed
+program instead of independently deciding whether the clone exists.
+`ArtProfileWriterPass` evaluates `@NeverInline` against the pre-overlay profile,
+so forced H does not masquerade as observed hot execution. The original, now
+free of any observed-cold caller, is left for normal treatment. The profile
+policy uses the explicit `ReferencedState` hot bit, not the generated `$cnic$`
+name.
 
 Only an exact call site is ever redirected: `invoke-static`, `invoke-direct`,
 or an `invoke-virtual` resolving to a non-true-virtual method (per Redex's

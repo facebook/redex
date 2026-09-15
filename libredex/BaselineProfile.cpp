@@ -26,13 +26,39 @@ bool is_compiled(const BaselineProfile& baseline_profile,
          is_compiled(method, it->second);
 }
 
+size_t apply_forced_method_flags(const Scope& scope, BaselineProfile* profile) {
+  size_t changed = 0;
+  // `walk::methods`, not `walk::code`: the forced H/S bits live on
+  // `ReferencedState` and remain meaningful after a method's `IRCode` has been
+  // lowered or released. A code-only walk would skip such methods and omit
+  // their forced flags from the profile.
+  walk::methods(scope, [&](DexMethod* method) {
+    const bool force_hot = method->rstate.force_hot_in_baseline_profile();
+    const bool force_startup =
+        method->rstate.force_startup_in_baseline_profile();
+    if (!force_hot && !force_startup) {
+      return;
+    }
+    auto& flags = profile->methods[method];
+    // Count bit transitions, not method visits: a method can flip both H and
+    // S at once, and the metric is reported per config as a flag count.
+    changed += (force_hot && !flags.hot) ? 1 : 0;
+    changed += (force_startup && !flags.startup) ? 1 : 0;
+    flags.hot |= force_hot;
+    flags.startup |= force_startup;
+  });
+  return changed;
+}
+
 BaselineProfile get_default_baseline_profile(
     const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
-  auto [baseline_profile, _] = get_baseline_profiles(
-      scope, configs, method_profiles, method_refs_without_def);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def,
+    bool apply_forced_flags) {
+  auto [baseline_profile, _] =
+      get_baseline_profiles(scope, configs, method_profiles,
+                            method_refs_without_def, apply_forced_flags);
   return baseline_profile;
 }
 
@@ -41,7 +67,8 @@ get_baseline_profiles(
     const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    UnorderedSet<const DexMethodRef*>* method_refs_without_def) {
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def,
+    bool apply_forced_flags) {
   UnorderedSet<const DexMethodRef*> method_candidates;
   UnorderedSet<DexClass*> class_candidates;
   walk::classes(scope, [&](DexClass* cls) { class_candidates.insert(cls); });
@@ -157,6 +184,12 @@ get_baseline_profiles(
     }
     if (config_name == DEFAULT_BASELINE_PROFILE_CONFIG_NAME) {
       manual_baseline_profile = std::move(res);
+    }
+  }
+  if (apply_forced_flags) {
+    apply_forced_method_flags(scope, &manual_baseline_profile);
+    for (auto& [_, profile] : UnorderedIterable(baseline_profiles)) {
+      apply_forced_method_flags(scope, &profile);
     }
   }
   return {std::move(manual_baseline_profile), std::move(baseline_profiles)};
