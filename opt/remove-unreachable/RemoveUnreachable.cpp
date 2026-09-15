@@ -343,11 +343,29 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       m_remove_no_argument_constructors);
   reachability::report(pm, *reachables, reachable_aspects);
 
-  // Keep this ahead of every mutation below. `reanimate_zombie_methods`
-  // rewrites zombie method bodies and clears their annotations, and `sweep`
-  // frees fields outright, so a graph built later would silently lose edges or
-  // read freed memory. Do NOT move it next to the reachability-graph dump at
-  // the end of this function.
+  // Both graph dumps have to happen here, ahead of every mutation below.
+  // `reanimate_zombie_methods` rewrites zombie method bodies and clears their
+  // annotations; `sweep` frees fields outright and clears the annotation set of
+  // every swept class; `sweep_annotation_elements` destroys and replaces the
+  // annotations of any class whose elements changed. Both graphs hold raw
+  // pointers into those objects and render their labels lazily at write time,
+  // so dumping later reads freed memory.
+  if (emit_graph_this_run) {
+    Timer::scope("Writing reachability graph", [&] {
+      std::ofstream os;
+      open_or_die(conf.metafile("reachability-graph"), &os);
+      reachability::dump_graph(os, reachables->retainers_of());
+    });
+    // The override graph that goes with the reachability graph is the one the
+    // marking ran against, which is already built; rebuilding it from the
+    // post-sweep scope would describe a different program than its companion.
+    Timer::scope("Writing method-override graph", [&] {
+      std::ofstream os;
+      open_or_die(conf.metafile("method-override-graph"), &os);
+      method_override_graph->dump(os);
+    });
+  }
+
   if (emit_removed_graph_this_run) {
     auto removed_graph =
         reachability::compute_removed_reachability_graph(scope, *reachables);
@@ -446,19 +464,6 @@ void RemoveUnreachablePassBase::run_pass(DexStoresVector& stores,
       write_out_removed_symbols_references(references_filepath, removed_symbols,
                                            references);
     }
-  }
-  if (emit_graph_this_run) {
-    Timer::scope("Writing reachability graph", [&] {
-      std::ofstream os;
-      open_or_die(conf.metafile("reachability-graph"), &os);
-      reachability::dump_graph(os, reachables->retainers_of());
-    });
-    Timer::scope("Writing method-override graph", [&] {
-      std::ofstream os;
-      open_or_die(conf.metafile("method-override-graph"), &os);
-      method_override_graph = mog::build_graph(build_class_scope(stores));
-      method_override_graph->dump(os);
-    });
   }
 }
 
