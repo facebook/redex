@@ -986,7 +986,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       scope,
       conf.get_baseline_profile_configs(),
       method_profiles,
-      &method_refs_without_def);
+      &method_refs_without_def,
+      false /* apply_forced_flags */);
   auto& baseline_profiles = std::get<1>(baseline_profiles_tuple);
   auto& manual_profile = std::get<0>(baseline_profiles_tuple);
 
@@ -1062,6 +1063,22 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
 
   never_compile(scope, conf.get_baseline_profile_configs(), method_profiles,
                 mgr, baseline_profiles);
+
+  std::optional<baseline_profiles::BaselineProfile> never_inline_profile;
+  if (m_never_inline_estimate || m_never_inline_attach_annotations) {
+    never_inline_profile = manual_profile;
+  }
+
+  mgr.incr_metric(
+      "profile_manual_forced_method_flags",
+      baseline_profiles::apply_forced_method_flags(scope, &manual_profile));
+  for (auto& [config_name, baseline_profile] :
+       UnorderedIterable(baseline_profiles)) {
+    mgr.incr_metric(
+        std::string("profile_") + config_name + "_forced_method_flags",
+        baseline_profiles::apply_forced_method_flags(scope, &baseline_profile));
+  }
+
   auto* store_fence_helper_type = DexType::get_type(STORE_FENCE_HELPER_NAME);
   if (store_fence_helper_type != nullptr) {
     // helper class existing means we materialized IOPCODE_WRITE_BARRIER
@@ -1398,7 +1415,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     mgr.incr_metric("huge_methods_" + show_deobfuscated(method), code_units);
   }
 
-  if (!m_never_inline_estimate && !m_never_inline_attach_annotations) {
+  if (!never_inline_profile) {
     return;
   }
 
@@ -1412,7 +1429,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
           .max_callee_code_units = m_never_inline_max_callee_code_units,
           .min_callee_instructions = m_never_inline_min_callee_instructions,
       },
-      scope, manual_profile, mgr, method_profiles);
+      scope, *never_inline_profile, mgr, method_profiles);
 }
 
 static ArtProfileWriterPass s_pass;

@@ -217,6 +217,8 @@ TEST_F(CallsiteNeverInlineCloningTest, MixedHotnessClonesAndRedirects) {
   // CFG (the pass CFG-built invariant), and is a real member of its class.
   EXPECT_TRUE(clone->rstate.dont_inline());
   EXPECT_TRUE(clone->rstate.is_generated());
+  EXPECT_TRUE(clone->rstate.force_hot_in_baseline_profile());
+  EXPECT_FALSE(clone->rstate.force_startup_in_baseline_profile());
   EXPECT_TRUE(clone->get_code()->cfg_built());
   EXPECT_TRUE(class_has_method(cls, clone));
 

@@ -71,6 +71,14 @@ class ReferencedState {
 
     bool m_name_used : 1;
 
+    // Class/method policy bits live outside the type-specific union because the
+    // method union has no spare bits. Only methods can set these bits; class
+    // values are reserved for a possible future use. Applying method flags is a
+    // global structural policy, not a per-profile provenance decision. One
+    // common bit remains unused.
+    bool m_force_hot_in_baseline_profile : 1;
+    bool m_force_startup_in_baseline_profile : 1;
+
     union {
       // This is for class only. Currently, the number of flags is 7. Once new
       // flag is added, please update the corresponding number in comment.
@@ -154,6 +162,8 @@ class ReferencedState {
       m_generated = false;
       m_outlined = false;
       m_name_used = false;
+      m_force_hot_in_baseline_profile = false;
+      m_force_startup_in_baseline_profile = false;
 
       // Only need to initialize the largest field in union.
       m_is_serde = false;
@@ -186,6 +196,9 @@ class ReferencedState {
     bool is_field() const { return m_stype == 3; }
 
   } inner_struct;
+
+  static_assert(sizeof(InnerStruct) == 4,
+                "ReferencedState::InnerStruct layout grew");
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
@@ -259,6 +272,13 @@ class ReferencedState {
         ((this->inner_struct.m_outlined & other.inner_struct.m_outlined) != 0);
 
     // m_name_used skipped.
+
+    this->inner_struct.m_force_hot_in_baseline_profile =
+        ((this->inner_struct.m_force_hot_in_baseline_profile |
+          other.inner_struct.m_force_hot_in_baseline_profile) != 0);
+    this->inner_struct.m_force_startup_in_baseline_profile =
+        ((this->inner_struct.m_force_startup_in_baseline_profile |
+          other.inner_struct.m_force_startup_in_baseline_profile) != 0);
 
     if (this->inner_struct.is_class()) {
       this->inner_struct.m_is_serde = ((this->inner_struct.m_is_serde |
@@ -509,6 +529,31 @@ class ReferencedState {
   void set_dont_inline() {
     always_assert(inner_struct.is_method());
     inner_struct.m_dont_inline = true;
+  }
+
+  bool force_hot_in_baseline_profile() const {
+    always_assert(!inner_struct.is_field());
+    return inner_struct.m_force_hot_in_baseline_profile;
+  }
+  void set_force_hot_in_baseline_profile() {
+    always_assert(!inner_struct.is_field());
+    inner_struct.m_force_hot_in_baseline_profile = true;
+  }
+  void reset_force_hot_in_baseline_profile() {
+    always_assert(!inner_struct.is_field());
+    inner_struct.m_force_hot_in_baseline_profile = false;
+  }
+  bool force_startup_in_baseline_profile() const {
+    always_assert(!inner_struct.is_field());
+    return inner_struct.m_force_startup_in_baseline_profile;
+  }
+  void set_force_startup_in_baseline_profile() {
+    always_assert(!inner_struct.is_field());
+    inner_struct.m_force_startup_in_baseline_profile = true;
+  }
+  void reset_force_startup_in_baseline_profile() {
+    always_assert(!inner_struct.is_field());
+    inner_struct.m_force_startup_in_baseline_profile = false;
   }
 
   bool immutable_getter() const {

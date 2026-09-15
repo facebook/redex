@@ -45,22 +45,32 @@ bool is_compiled(const DexMethod* method, const MethodFlags& flags);
 bool is_compiled(const BaselineProfile& baseline_profile,
                  const DexMethod* method);
 
+// Applies every method's forced H/S bits to this materialized profile,
+// inserting entries as needed and preserving other flags. These bits encode a
+// single whole-program structural decision and therefore are not conditional
+// on the profile's existing membership. Class bits are serialized and merged
+// but do not affect profiles. Returns the number of individual H/S bits that
+// changed.
+size_t apply_forced_method_flags(const Scope& scope, BaselineProfile* profile);
+
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,
 // BaselineProfile> The first is the default profile that will be fed into the
 // baseline profile driver as a manual input. The second is a mapping of config
 // name to final baseline profile for every baseline profile that redex is
-// generating.
+// generating. Forced method flags are applied unless explicitly deferred.
 std::tuple<BaselineProfile, UnorderedMap<std::string, BaselineProfile>>
 get_baseline_profiles(
     const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr,
+    bool apply_forced_flags = true);
 
 BaselineProfile get_default_baseline_profile(
     const Scope& scope,
     const UnorderedMap<std::string, BaselineProfileConfig>& configs,
     const method_profiles::MethodProfiles& method_profiles,
-    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr);
+    UnorderedSet<const DexMethodRef*>* method_refs_without_def = nullptr,
+    bool apply_forced_flags = true);
 
 } // namespace baseline_profiles

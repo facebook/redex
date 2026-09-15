@@ -19,7 +19,9 @@
 namespace {
 constexpr const char* IRMETA_FILE_NAME = "/irmeta.bin";
 
-constexpr const char* IRMETA_MAGIC_NUMBER = "rdx.\n\x14\x12\x00";
+// ReferencedState::InnerStruct is serialized as raw bytes, so changes to its
+// bit layout require a new magic number.
+constexpr const char* IRMETA_MAGIC_NUMBER = "rdx.\n\x14\x13\x00";
 
 PACKED(struct ir_meta_header_t {
   char magic[8];
@@ -91,7 +93,9 @@ void serialize_name_and_rstate(const T* obj, std::ofstream& ostrm) {
 
 template <typename T>
 void deserialize_name_and_rstate(const char** _ptr, T* obj) {
-  auto size = read_uleb128((const uint8_t**)_ptr);
+  const auto* uptr = reinterpret_cast<const uint8_t*>(*_ptr);
+  auto size = read_uleb128(&uptr);
+  *_ptr = reinterpret_cast<const char*>(uptr);
   if (size) {
     // In a corrupted input *_ptr may not be null terminated.
     obj->set_deobfuscated_name(std::string(*_ptr, size));
@@ -181,7 +185,9 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
   while (ptr - data.get() < data_size) {
     BlockType btype = (BlockType)*ptr++;
     always_assert(btype >= 0 && btype < BlockType::EndOfBlock);
-    int strsize = read_uleb128((const uint8_t**)&ptr);
+    auto* uptr = reinterpret_cast<uint8_t*>(ptr);
+    const auto strsize = read_uleb128(const_cast<const uint8_t**>(&uptr));
+    ptr = reinterpret_cast<char*>(uptr);
     switch (btype) {
     case BlockType::ClassBlock: {
       // Create a std::string for null termination
@@ -240,7 +246,7 @@ bool load(const std::string& input_dir) {
   std::string input_file = input_dir + IRMETA_FILE_NAME;
   std::ifstream istrm(input_file, std::ios::binary | std::ios::in);
   if (!istrm.is_open()) {
-    std::cerr << "Cannot open " << input_file << std::endl;
+    std::cerr << "Cannot open " << input_file << '\n';
     return false;
   }
 

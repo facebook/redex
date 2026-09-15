@@ -204,6 +204,33 @@ TEST_F(DexVtTest, capturesRecordsWithDisasm) {
   EXPECT_EQ(ids.size(), 2u);
 }
 
+TEST_F(DexVtTest, capturesForcedBaselineHot) {
+  auto* cls = create_foo_class();
+  auto stores = make_stores(cls);
+  std::istringstream ss(R"({
+    "redex": {"passes": []},
+    "baseline_profile": {
+      "default": {"use_final_redex_generated_profile": true}
+    }
+  })");
+  Json::Value cfg;
+  ss >> cfg;
+  ConfigFiles conf(cfg);
+  conf.parse_global_config();
+  auto* method = cls->get_dmethods().front();
+  method->rstate.set_force_hot_in_baseline_profile();
+  method->rstate.set_force_startup_in_baseline_profile();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec = exporter.get_record(method);
+  ASSERT_NE(rec, nullptr);
+  EXPECT_TRUE(rec->baseline_hot);
+  EXPECT_TRUE(rec->baseline_startup);
+  EXPECT_FALSE(rec->baseline_post_startup);
+}
+
 // The disassembly must be reproducible: byte-identical across independent
 // captures and free of the live MethodItemEntry heap pointer that redex's
 // show(cfg) embeds on every line ("[0x..]"), which would make the artifact

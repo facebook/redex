@@ -38,6 +38,8 @@ class IRMetaIO {
              !obj->rstate.inner_struct.m_is_serde)) &&
            !obj->rstate.inner_struct.m_by_resources &&
            !obj->rstate.inner_struct.m_keep &&
+           !obj->rstate.inner_struct.m_force_hot_in_baseline_profile &&
+           !obj->rstate.inner_struct.m_force_startup_in_baseline_profile &&
            (!obj->rstate.inner_struct.is_method() ||
             !obj->rstate.inner_struct.m_assumenosideeffects) &&
            !obj->rstate.inner_struct.m_whyareyoukeeping &&
