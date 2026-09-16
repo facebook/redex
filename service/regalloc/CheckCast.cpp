@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 
 #include "CFGMutation.h"
 #include "ControlFlow.h"
@@ -49,7 +50,25 @@ namespace regalloc {
  */
 size_t split_check_cast_result_live_ranges(cfg::ControlFlowGraph& cfg) {
   auto timer_scope = s_timer.scope();
+  std::vector<cfg::Block*> check_cast_blocks;
+  for (auto* block : cfg.blocks()) {
+    if (cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW).empty()) {
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      if (mie.insn->opcode() == OPCODE_CHECK_CAST) {
+        check_cast_blocks.push_back(block);
+        break;
+      }
+    }
+  }
+  if (check_cast_blocks.empty()) {
+    return 0;
+  }
+
   Lazy<LivenessFixpointIterator> fixpoint_iter([&cfg] {
+    // This may delete a synthetic exit block. The filtered block snapshot above
+    // cannot contain that instruction-less block.
     cfg.calculate_exit_block();
     auto res = std::make_unique<LivenessFixpointIterator>(cfg);
     res->run({});
@@ -58,12 +77,9 @@ size_t split_check_cast_result_live_ranges(cfg::ControlFlowGraph& cfg) {
 
   cfg::CFGMutation mutation(cfg);
   size_t split_count{0};
-  for (auto* block : cfg.blocks()) {
+  for (auto* block : check_cast_blocks) {
     const auto& throw_edges =
         cfg.get_succ_edges_of_type(block, cfg::EDGE_THROW);
-    if (throw_edges.empty()) {
-      continue;
-    }
     for (auto& mie : InstructionIterable(block)) {
       auto* check_cast = mie.insn;
       if (check_cast->opcode() != OPCODE_CHECK_CAST) {
