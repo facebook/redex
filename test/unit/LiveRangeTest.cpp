@@ -90,7 +90,8 @@ TEST_F(LiveRangeTest, CheckCastResultReconvergesAfterCatch) {
   EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
-TEST_F(LiveRangeTest, CheckCastResultLiveInOneOfMultipleCatches) {
+TEST_F(LiveRangeTest,
+       CheckCastResultLiveInOneOfMultipleCatchesWithPrecomputedExit) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -114,8 +115,16 @@ TEST_F(LiveRangeTest, CheckCastResultLiveInOneOfMultipleCatches) {
   )");
   code->build_cfg();
   live_range::renumber_registers(code.get(), /* width_aware */ true);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  ASSERT_NE(cfg.exit_block(), nullptr);
+  ASSERT_GE(cfg.exit_block()->preds().size(), 2);
+  for (auto* edge : cfg.exit_block()->preds()) {
+    EXPECT_EQ(edge->type(), cfg::EDGE_GHOST);
+  }
 
-  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(code->cfg()), 1);
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(cfg), 1);
+  EXPECT_EQ(regalloc::split_check_cast_result_live_ranges(cfg), 0);
 }
 
 TEST_F(LiveRangeTest, CheckCastResultAlreadyUsesSourceRegister) {
