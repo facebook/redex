@@ -26,7 +26,7 @@
 
 namespace {
 
-constexpr const char* kArtifact = "removed-reachability-graph";
+constexpr const char* kArtifact = "redex-removed-reachability-graph";
 
 /*
  * The emission selectors are process-wide statics. The test runner currently
