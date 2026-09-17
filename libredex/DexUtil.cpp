@@ -463,6 +463,10 @@ bool is_valid_identifier(std::string_view s) {
 
 namespace java_names {
 
+DexType* get_type_from_external_name(std::string_view external_name) {
+  return DexType::get_type(external_to_internal(external_name));
+}
+
 namespace {
 bool is_not_idenfitier_character(char ch) {
   return ch == '=' || ch == '+' || ch == '|' || ch == '@' || ch == '#' ||

@@ -119,9 +119,8 @@ TypeSet MergeabilityChecker::exclude_unsupported_bytecode_refs_for(
     // reflection, and then it's not safe to merge those types.
     if (m_spec.exclude_type_like_strings() &&
         opcode::is_const_string(insn->opcode())) {
-      const DexString* str = insn->get_string();
-      std::string class_name = java_names::external_to_internal(str->str());
-      DexType* maybe_type = DexType::get_type(class_name);
+      DexType* maybe_type =
+          java_names::get_type_from_external_name(insn->get_string()->str());
       if ((maybe_type != nullptr) &&
           m_spec.merging_targets.count(maybe_type) > 0) {
         non_mergeables.insert(maybe_type);
