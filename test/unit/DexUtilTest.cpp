@@ -46,6 +46,15 @@ TEST_F(DexUtilTest, test_java_name_external_to_internal) {
   EXPECT_EQ("[[;", external_to_internal("[["));
 }
 
+TEST_F(DexUtilTest, test_java_name_get_type_from_external_name) {
+  using namespace java_names;
+  auto* type = DexType::make_type("LMyClass;");
+  auto* array_type = DexType::make_type("[LMyClass;");
+  EXPECT_EQ(type, get_type_from_external_name("MyClass"));
+  EXPECT_EQ(array_type, get_type_from_external_name("[LMyClass;"));
+  EXPECT_EQ(nullptr, get_type_from_external_name("MissingClass"));
+}
+
 TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
   using namespace java_names;
   EXPECT_EQ("String", internal_to_simple("Ljava/lang/String;"));
