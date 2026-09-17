@@ -246,9 +246,9 @@ class WorkQueue {
   const bool m_can_push_task{false};
   AsyncRunner* m_async_runner;
 
-  // Run the worker on m_num_threads many threads, and wait for them to finish.
+  // Run the worker on num_runners threads, and wait for them to finish.
   template <typename Worker>
-  void run_in_parallel(const Worker& worker);
+  void run_in_parallel(const Worker& worker, size_t num_runners);
 
  public:
   explicit WorkQueue(Executor,
@@ -392,14 +392,20 @@ void WorkQueue<Input, Executor>::run_all() {
     }
   };
 
+  size_t initial_task_count{0};
   for (size_t i = 0; i < m_num_threads; ++i) {
-    if (!m_states[i]->m_initial_tasks.empty()) {
+    const auto size = m_states[i]->m_initial_tasks.size();
+    initial_task_count += size;
+    if (size != 0) {
       m_state_counters.num_non_empty_initial.fetch_add(
           1, std::memory_order_relaxed);
     }
   }
 
-  run_in_parallel(worker);
+  const auto num_runners = m_can_push_task
+                               ? m_num_threads
+                               : std::min(m_num_threads, initial_task_count);
+  run_in_parallel(worker, num_runners);
 
   for (size_t i = 0; i < m_num_threads; ++i) {
     SPARTA_RUNTIME_CHECK(!m_states[i]->m_running, internal_error());
@@ -422,7 +428,11 @@ void WorkQueue<Input, Executor>::run_all() {
 
 template <class Input, typename Executor>
 template <typename Worker>
-void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker) {
+void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker,
+                                                 size_t num_runners) {
+  if (num_runners == 0) {
+    return;
+  }
   if (m_async_runner) {
     // We have been given a custom way to run work asynchronously, so we use
     // that (instead of spawning and joining threads explicitly).
@@ -431,7 +441,7 @@ void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker) {
     // in progress.
     std::condition_variable condition_variable;
     std::mutex mutex;
-    size_t remaining = m_num_threads;
+    size_t remaining = num_runners;
     auto func = [&](size_t i) {
       worker(m_states[i].get(), i);
       bool notify;
@@ -444,7 +454,7 @@ void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker) {
       }
     };
 
-    for (size_t i = 0; i < m_num_threads; ++i) {
+    for (size_t i = 0; i < num_runners; ++i) {
       m_async_runner->run_async(func, i);
     }
 
@@ -455,8 +465,8 @@ void WorkQueue<Input, Executor>::run_in_parallel(const Worker& worker) {
   }
 
   std::vector<std::thread> all_threads;
-  all_threads.reserve(m_num_threads);
-  for (size_t i = 0; i < m_num_threads; ++i) {
+  all_threads.reserve(num_runners);
+  for (size_t i = 0; i < num_runners; ++i) {
     all_threads.emplace_back(worker, m_states[i].get(), i);
   }
 
