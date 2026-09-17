@@ -36,7 +36,11 @@ class VerticalMergingPass : public Pass {
     };
   }
 
-  void bind_config() override { bind("blocklist", {}, m_blocklist); }
+  void bind_config() override {
+    bind("blocklist", {}, m_blocklist);
+    bind("unsafe_ignore_type_like_strings", false,
+         m_unsafe_ignore_type_like_strings);
+  }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
@@ -51,4 +55,5 @@ class VerticalMergingPass : public Pass {
   void change_init_calls(const Scope&,
                          const UnorderedMap<DexClass*, DexClass*>&);
   std::vector<std::string> m_blocklist;
+  bool m_unsafe_ignore_type_like_strings{false};
 };
