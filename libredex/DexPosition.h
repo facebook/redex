@@ -220,7 +220,7 @@ class NoopPositionMapper : public PositionMapper {
  public:
   const DexString* get_source_file(const DexClass*) override;
   uint32_t position_to_line(DexPosition* pos) override { return pos->line; }
-  void register_position(DexPosition* pos) override {}
+  void register_position(DexPosition*) override {}
   void write_map() override {}
   uint32_t size() const override { return 0; }
 };
