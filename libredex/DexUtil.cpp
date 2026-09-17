@@ -467,6 +467,15 @@ DexType* get_type_from_external_name(std::string_view external_name) {
   return DexType::get_type(external_to_internal(external_name));
 }
 
+DexType* get_element_type_from_external_name(std::string_view external_name) {
+  auto internal_name = external_to_internal(external_name);
+  auto element_pos = internal_name.find_first_not_of('[');
+  if (element_pos == std::string::npos || internal_name[element_pos] != 'L') {
+    return nullptr;
+  }
+  return DexType::get_type(std::string_view(internal_name).substr(element_pos));
+}
+
 namespace {
 bool is_not_idenfitier_character(char ch) {
   return ch == '=' || ch == '+' || ch == '|' || ch == '@' || ch == '#' ||

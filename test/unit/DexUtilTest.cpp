@@ -55,6 +55,16 @@ TEST_F(DexUtilTest, test_java_name_get_type_from_external_name) {
   EXPECT_EQ(nullptr, get_type_from_external_name("MissingClass"));
 }
 
+TEST_F(DexUtilTest, test_java_name_get_element_type_from_external_name) {
+  using namespace java_names;
+  auto* type = DexType::make_type("LElementOnly;");
+  EXPECT_EQ(type, get_element_type_from_external_name("ElementOnly"));
+  EXPECT_EQ(type, get_element_type_from_external_name("[LElementOnly;"));
+  EXPECT_EQ(type, get_element_type_from_external_name("[[LElementOnly;"));
+  EXPECT_EQ(nullptr, get_element_type_from_external_name("[I"));
+  EXPECT_EQ(nullptr, get_element_type_from_external_name("MissingClass"));
+}
+
 TEST_F(DexUtilTest, test_java_name_internal_to_simple) {
   using namespace java_names;
   EXPECT_EQ("String", internal_to_simple("Ljava/lang/String;"));
