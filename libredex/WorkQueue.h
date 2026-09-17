@@ -7,7 +7,8 @@
 
 #pragma once
 
-#include <boost/thread/thread.hpp> // NOLINT
+#include <algorithm>
+#include <cstddef>
 #include <exception>
 
 #include <sparta/WorkQueue.h>
@@ -48,13 +49,17 @@ struct WithStateWorkQueueHelper {
 
 } // namespace redex_workqueue_impl
 
-namespace redex_parallel {
-inline size_t default_num_threads() {
-  // We prefer boost over std. Use hardware over physical concurrency
-  // to take advantage of SMT.
-  return static_cast<size_t>(
-      std::max(1u, boost::thread::hardware_concurrency()));
+namespace redex_parallel::impl {
+constexpr size_t default_num_threads(size_t affinity_concurrency,
+                                     size_t hardware_concurrency) {
+  const auto available_concurrency =
+      affinity_concurrency != 0 ? affinity_concurrency : hardware_concurrency;
+  return std::max<size_t>(1, available_concurrency);
 }
+} // namespace redex_parallel::impl
+
+namespace redex_parallel {
+size_t default_num_threads();
 } // namespace redex_parallel
 
 // These functions are the most convenient way to create a sparta::WorkQueue

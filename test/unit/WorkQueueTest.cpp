@@ -15,6 +15,12 @@
 
 constexpr unsigned int NUM_INTS = 1000;
 
+TEST(WorkQueueTest, DefaultNumThreadsPrefersAffinity) {
+  EXPECT_EQ(16, redex_parallel::impl::default_num_threads(16, 32));
+  EXPECT_EQ(32, redex_parallel::impl::default_num_threads(0, 32));
+  EXPECT_EQ(1, redex_parallel::impl::default_num_threads(0, 0));
+}
+
 //==========
 // Test for correctness. Duplicate of `sparta::WorkQueue` to check that the
 // Redex layer is functional.
