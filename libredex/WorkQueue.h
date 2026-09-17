@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <exception>
+#include <optional>
+#include <string_view>
 
 #include <sparta/WorkQueue.h>
 
@@ -56,6 +58,7 @@ constexpr size_t default_num_threads(size_t affinity_concurrency,
       affinity_concurrency != 0 ? affinity_concurrency : hardware_concurrency;
   return std::max<size_t>(1, available_concurrency);
 }
+std::optional<size_t> parse_max_threads(std::string_view value);
 } // namespace redex_parallel::impl
 
 namespace redex_parallel {

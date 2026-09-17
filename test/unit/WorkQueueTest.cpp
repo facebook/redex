@@ -9,9 +9,17 @@
 
 #include <array>
 #include <atomic>
+#include <cstdlib>
 #include <gtest/gtest.h>
+#include <optional>
+#include <string_view>
+
+#if defined(__linux__) && !defined(__ANDROID__)
+#include <sched.h>
+#endif
 
 #include "Macros.h"
+#include "RedexException.h"
 
 constexpr unsigned int NUM_INTS = 1000;
 
@@ -19,6 +27,58 @@ TEST(WorkQueueTest, DefaultNumThreadsPrefersAffinity) {
   EXPECT_EQ(16, redex_parallel::impl::default_num_threads(16, 32));
   EXPECT_EQ(32, redex_parallel::impl::default_num_threads(0, 32));
   EXPECT_EQ(1, redex_parallel::impl::default_num_threads(0, 0));
+}
+
+TEST(WorkQueueTest, ParseMaxThreads) {
+  EXPECT_EQ(36, redex_parallel::impl::parse_max_threads("36"));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads(""));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads("+36"));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads(" 36 "));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads("0"));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads("-1"));
+  EXPECT_EQ(std::nullopt, redex_parallel::impl::parse_max_threads("invalid"));
+  EXPECT_EQ(std::nullopt,
+            redex_parallel::impl::parse_max_threads("36 trailing"));
+}
+
+TEST(WorkQueueDeathTest, DefaultNumThreadsReadsEnvironmentCap) {
+#if defined(__linux__) && !defined(__ANDROID__)
+  cpu_set_t cpus;
+  CPU_ZERO(&cpus);
+  ASSERT_EQ(0, sched_getaffinity(0, sizeof(cpus), &cpus));
+  if (CPU_COUNT(&cpus) <= 1) {
+    GTEST_SKIP() << "The cap cannot narrow a one-CPU affinity mask";
+  }
+
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  EXPECT_EXIT(
+      {
+        if (setenv("REDEX_MAX_THREADS", "1", /* overwrite */ 1) != 0) {
+          std::_Exit(2);
+        }
+        std::_Exit(redex_parallel::default_num_threads() == 1 ? 0 : 1);
+      },
+      ::testing::ExitedWithCode(0), "");
+#endif
+}
+
+TEST(WorkQueueDeathTest, DefaultNumThreadsRejectsInvalidEnvironmentCap) {
+#if defined(__linux__) && !defined(__ANDROID__)
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  EXPECT_EXIT(
+      {
+        if (setenv("REDEX_MAX_THREADS", "invalid", /* overwrite */ 1) != 0) {
+          std::_Exit(2);
+        }
+        try {
+          (void)redex_parallel::default_num_threads();
+        } catch (const RedexException&) {
+          std::_Exit(0);
+        }
+        std::_Exit(1);
+      },
+      ::testing::ExitedWithCode(0), "");
+#endif
 }
 
 //==========
