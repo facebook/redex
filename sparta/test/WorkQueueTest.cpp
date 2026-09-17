@@ -10,10 +10,25 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <gtest/gtest.h>
 #include <random>
 
 constexpr unsigned int NUM_INTS = 1000;
+
+class CountingInlineRunner final : public sparta::AsyncRunner {
+ public:
+  size_t runs() const { return m_runs; }
+
+ protected:
+  void run_async_bound(std::function<void()> function) override {
+    ++m_runs;
+    function();
+  }
+
+ private:
+  size_t m_runs{0};
+};
 
 //==========
 // Test for correctness
@@ -23,6 +38,62 @@ TEST(WorkQueueTest, EmptyQueue) {
   auto wq = sparta::work_queue<std::string>(
       [](std::string /* unused */) { return 0; });
   wq.run_all();
+}
+
+TEST(WorkQueueTest, EmptyStaticQueueRunsNoWorkers) {
+  CountingInlineRunner runner;
+  auto wq = sparta::work_queue<int>(
+      [](int) {}, 8, /* push_tasks_while_running */ false, &runner);
+
+  wq.run_all();
+
+  EXPECT_EQ(0, runner.runs());
+}
+
+TEST(WorkQueueTest, StaticQueueRunsAtMostOneWorkerPerInitialTask) {
+  CountingInlineRunner runner;
+  size_t processed{0};
+  auto wq =
+      sparta::work_queue<int>([&](int) { ++processed; }, 8,
+                              /* push_tasks_while_running */ false, &runner);
+  wq.add_item(1);
+  wq.add_item(2);
+  wq.add_item(3);
+
+  wq.run_all();
+
+  EXPECT_EQ(3, runner.runs());
+  EXPECT_EQ(3, processed);
+}
+
+TEST(WorkQueueTest, StaticQueueCanStealExplicitlyAssignedTasks) {
+  CountingInlineRunner runner;
+  size_t processed{0};
+  auto wq =
+      sparta::work_queue<int>([&](int) { ++processed; }, 8,
+                              /* push_tasks_while_running */ false, &runner);
+  wq.add_item(1, 7);
+  wq.add_item(2, 7);
+  wq.add_item(3, 7);
+
+  wq.run_all();
+
+  EXPECT_EQ(3, runner.runs());
+  EXPECT_EQ(3, processed);
+}
+
+TEST(WorkQueueTest, DynamicQueueRunsAllConfiguredWorkers) {
+  CountingInlineRunner runner;
+  size_t processed{0};
+  auto wq =
+      sparta::work_queue<int>([&](int) { ++processed; }, 8,
+                              /* push_tasks_while_running */ true, &runner);
+  wq.add_item(1);
+
+  wq.run_all();
+
+  EXPECT_EQ(8, runner.runs());
+  EXPECT_EQ(1, processed);
 }
 
 static void foreachTest(sparta::AsyncRunner* async_runner = nullptr) {
