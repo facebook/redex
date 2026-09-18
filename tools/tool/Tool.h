@@ -38,7 +38,7 @@ class Tool {
 
   virtual void run(const po::variables_map& options) = 0;
 
-  virtual void add_options(po::options_description& options) const {}
+  virtual void add_options(po::options_description& /* options */) const {}
 
   const std::string& name() const { return m_name; }
   const std::string& desc() const { return m_desc; }
