@@ -1432,10 +1432,31 @@ DebugMetadata calculate_debug_metadata(
   return metadata;
 }
 
-// `capacity` is the number of bytes writable at `output`. Checked BEFORE the
-// write: DexDebugItem::encode advances a raw pointer with no notion of an end,
-// so an oversized debug program would otherwise be detected, if at all, only
-// after it had already run off the buffer.
+// Every path that reaches DexDebugItem::encode goes through this first.
+// `capacity` is the number of bytes writable at `output`; `checked_through` is
+// the output buffer's checked-cursor high-water mark, or null when the target
+// is a scratch buffer with no cursor invariant of its own.
+//
+// The check has to happen here rather than after the call, because
+// DexDebugItem::encode advances a raw pointer with no notion of an end: by the
+// time it returns a size, an oversized program has already been written.
+void check_debug_item_fits(
+    uint32_t num_params,
+    const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops,
+    uint32_t offset,
+    uint64_t capacity,
+    uint64_t* checked_through) {
+  uint64_t bound = DexDebugItem::max_encoded_size(num_params, dbgops);
+  always_assert_log(offset + bound <= capacity,
+                    "A debug program of up to %" PRIu64
+                    " bytes does not fit at offset %u of a %" PRIu64
+                    "-byte buffer.",
+                    bound, offset, capacity);
+  if (checked_through != nullptr) {
+    *checked_through = std::max(*checked_through, offset + bound);
+  }
+}
+
 int emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                  const DebugMetadata& metadata,
                                  uint8_t* output,
@@ -1443,18 +1464,8 @@ int emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                  uint64_t capacity,
                                  uint64_t* checked_through,
                                  bool set_dci_offset = true) {
-  uint64_t bound =
-      DexDebugItem::max_encoded_size(metadata.num_params, metadata.dbgops);
-  always_assert_log(offset + bound <= capacity,
-                    "A debug program of up to %" PRIu64
-                    " bytes does not fit at offset %u of a %" PRIu64
-                    "-byte buffer.",
-                    bound, offset, capacity);
-  // Null for the sizing scratch buffer, which is not the output buffer and has
-  // no cursor invariant of its own.
-  if (checked_through != nullptr) {
-    *checked_through = std::max(*checked_through, offset + bound);
-  }
+  check_debug_item_fits(metadata.num_params, metadata.dbgops, offset, capacity,
+                        checked_through);
   int size = DexDebugItem::encode(dodx, output + offset, metadata.line_start,
                                   metadata.num_params, metadata.dbgops);
   if (set_dci_offset) {
@@ -2055,15 +2066,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
               dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
             }
           }
-          uint64_t bound = DexDebugItem::max_encoded_size(param_size, dbgops);
-          always_assert_log(offset + bound <= capacity,
-                            "A debug program of up to %" PRIu64
-                            " bytes does not fit at offset %u of a %" PRIu64
-                            "-byte buffer.",
-                            bound, offset, capacity);
-          if (checked_through != nullptr) {
-            *checked_through = std::max(*checked_through, offset + bound);
-          }
+          check_debug_item_fits(param_size, dbgops, offset, capacity,
+                                checked_through);
           offset += DexDebugItem::encode(nullptr, output + offset, line_addin,
                                          param_size, dbgops);
           *dbgcount += 1;
