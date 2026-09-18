@@ -334,6 +334,14 @@ class DexOutput {
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   UnorderedMap<DexClass*, uint32_t> m_static_values;
   UnorderedMap<DexCallSite*, uint32_t> m_call_site_items;
+  // Where the call site and method handle id tables start. The dex header has
+  // no field for either -- the format records them only in the map list -- so
+  // the emitters used to reconstruct the offsets from hdr.class_defs_*, which
+  // silently collapses to 0 when there are no class defs. Capturing them where
+  // they are reserved makes the emitters read the same number that was
+  // reserved, rather than one derived by a different route.
+  uint32_t m_callsite_start{0};
+  uint32_t m_methodhandle_start{0};
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   bool m_normal_primary_dex;

@@ -1091,11 +1091,17 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
 }
 
 void DexOutput::generate_callsite_data() {
-  uint32_t offset =
-      hdr.class_defs_off + hdr.class_defs_size * sizeof(dex_class_def);
-
   auto callsites = m_gtypes->get_dexcallsite_emitlist();
-  dex_callsite_id* dexcallsites = (dex_callsite_id*)(m_output.get() + offset);
+  // Redundant on today's code -- gather_components sort_uniques the list, so
+  // the emit list and the reserved id count are equal by construction -- but
+  // they are two different quantities arriving by two different routes, and
+  // this is the assertion that says so.
+  always_assert_log(callsites.size() == m_dodx.callsitesize(),
+                    "call site emit list has %zu entries but %zu ids were "
+                    "reserved",
+                    callsites.size(), m_dodx.callsitesize());
+  auto* dexcallsites =
+      reinterpret_cast<dex_callsite_id*>(m_output.get() + m_callsite_start);
   for (uint32_t i = 0; i < callsites.size(); i++) {
     m_stats.num_callsites++;
     DexCallSite* callsite = callsites.at(i);
@@ -1104,13 +1110,12 @@ void DexOutput::generate_callsite_data() {
 }
 
 void DexOutput::generate_methodhandle_data() {
-  uint32_t total_callsite_size =
-      m_dodx.callsitesize() * sizeof(dex_callsite_id);
-  uint32_t offset = hdr.class_defs_off +
-                    hdr.class_defs_size * sizeof(dex_class_def) +
-                    total_callsite_size;
-  dex_methodhandle_id* dexmethodhandles =
-      (dex_methodhandle_id*)(m_output.get() + offset);
+  auto* dexmethodhandles = reinterpret_cast<dex_methodhandle_id*>(
+      m_output.get() + m_methodhandle_start);
+  // No count assertion to match the call site one: the indices written here
+  // come from the same map that sized the reservation, so the two cannot
+  // disagree. Drive this loop from an independent list and it would need the
+  // same trip-wire.
   for (auto it : UnorderedIterable(m_dodx.methodhandle_to_idx())) {
     m_stats.num_methodhandles++;
     DexMethodHandle* methodhandle = it.first;
@@ -2555,64 +2560,71 @@ void DexOutput::init_header_offsets(const std::string& dex_magic) {
   hdr.link_size = hdr.link_off = 0;
   hdr.string_ids_size = (uint32_t)m_dodx.stringsize();
   hdr.string_ids_off = hdr.string_ids_size != 0u ? m_offset : 0;
-  uint32_t total_string_size = m_dodx.stringsize() * sizeof(dex_string_id);
+  uint64_t total_string_size =
+      (uint64_t)m_dodx.stringsize() * sizeof(dex_string_id);
   insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t)m_dodx.stringsize(), m_offset,
-                  total_string_size);
+                  (uint32_t)total_string_size);
 
   ensure_fits(total_string_size, "string ids table", "header");
   inc_offset(total_string_size);
   hdr.type_ids_size = (uint32_t)m_dodx.typesize();
   hdr.type_ids_off = hdr.type_ids_size != 0u ? m_offset : 0;
-  uint32_t total_type_size = m_dodx.typesize() * sizeof(dex_type_id);
+  uint64_t total_type_size = (uint64_t)m_dodx.typesize() * sizeof(dex_type_id);
   insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t)m_dodx.typesize(), m_offset,
-                  total_type_size);
+                  (uint32_t)total_type_size);
 
   ensure_fits(total_type_size, "type ids table", "header");
   inc_offset(total_type_size);
   hdr.proto_ids_size = (uint32_t)m_dodx.protosize();
   hdr.proto_ids_off = hdr.proto_ids_size != 0u ? m_offset : 0;
-  uint32_t total_proto_size = m_dodx.protosize() * sizeof(dex_proto_id);
+  uint64_t total_proto_size =
+      (uint64_t)m_dodx.protosize() * sizeof(dex_proto_id);
   insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t)m_dodx.protosize(), m_offset,
-                  total_proto_size);
+                  (uint32_t)total_proto_size);
 
   ensure_fits(total_proto_size, "proto ids table", "header");
   inc_offset(total_proto_size);
   hdr.field_ids_size = (uint32_t)m_dodx.fieldsize();
   hdr.field_ids_off = hdr.field_ids_size != 0u ? m_offset : 0;
-  uint32_t total_field_size = m_dodx.fieldsize() * sizeof(dex_field_id);
+  uint64_t total_field_size =
+      (uint64_t)m_dodx.fieldsize() * sizeof(dex_field_id);
   insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t)m_dodx.fieldsize(), m_offset,
-                  total_field_size);
+                  (uint32_t)total_field_size);
 
   ensure_fits(total_field_size, "field ids table", "header");
   inc_offset(total_field_size);
   hdr.method_ids_size = (uint32_t)m_dodx.methodsize();
   hdr.method_ids_off = hdr.method_ids_size != 0u ? m_offset : 0;
-  uint32_t total_method_size = m_dodx.methodsize() * sizeof(dex_method_id);
+  uint64_t total_method_size =
+      (uint64_t)m_dodx.methodsize() * sizeof(dex_method_id);
   insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t)m_dodx.methodsize(), m_offset,
-                  total_method_size);
+                  (uint32_t)total_method_size);
 
   ensure_fits(total_method_size, "method ids table", "header");
   inc_offset(total_method_size);
   hdr.class_defs_size = (uint32_t)m_classes->size();
   hdr.class_defs_off = hdr.class_defs_size != 0u ? m_offset : 0;
-  uint32_t total_class_size = m_classes->size() * sizeof(dex_class_def);
+  uint64_t total_class_size =
+      (uint64_t)m_classes->size() * sizeof(dex_class_def);
   insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t)m_classes->size(), m_offset,
-                  total_class_size);
+                  (uint32_t)total_class_size);
 
   ensure_fits(total_class_size, "class defs table", "header");
   inc_offset(total_class_size);
 
-  uint32_t total_callsite_size =
-      m_dodx.callsitesize() * sizeof(dex_callsite_id);
+  uint64_t total_callsite_size =
+      (uint64_t)m_dodx.callsitesize() * sizeof(dex_callsite_id);
+  m_callsite_start = m_offset;
   insert_map_item(TYPE_CALL_SITE_ID_ITEM, (uint32_t)m_dodx.callsitesize(),
-                  m_offset, total_callsite_size);
+                  m_offset, (uint32_t)total_callsite_size);
   ensure_fits(total_callsite_size, "call site ids table", "header");
   inc_offset(total_callsite_size);
 
-  uint32_t total_methodhandle_size =
-      m_dodx.methodhandlesize() * sizeof(dex_methodhandle_id);
+  uint64_t total_methodhandle_size =
+      (uint64_t)m_dodx.methodhandlesize() * sizeof(dex_methodhandle_id);
+  m_methodhandle_start = m_offset;
   insert_map_item(TYPE_METHOD_HANDLE_ITEM, (uint32_t)m_dodx.methodhandlesize(),
-                  m_offset, total_methodhandle_size);
+                  m_offset, (uint32_t)total_methodhandle_size);
   ensure_fits(total_methodhandle_size, "method handles table", "header");
   inc_offset(total_methodhandle_size);
 
