@@ -7,7 +7,6 @@
 
 #include "VerticalMerging.h"
 
-#include "AtomicStatCounter.h"
 #include "ClassHierarchy.h"
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
@@ -22,7 +21,6 @@
 #include "Show.h"
 #include "Trace.h"
 #include "TypeReference.h"
-#include "TypeStringRewriter.h"
 #include "Walkers.h"
 
 namespace {
@@ -78,30 +76,6 @@ void record_dont_merge_state(
     UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
   record_dont_merge_element_state(type::get_element_type_if_array(type), state,
                                   dont_merge_status);
-}
-
-struct TypeLikeStringStats {
-  size_t annotation_refs{0};
-  size_t code_refs{0};
-  size_t static_field_refs{0};
-};
-
-size_t record_type_like_strings(
-    const std::vector<const DexString*>& strings,
-    bool record_type_like_string_refs,
-    UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
-  size_t refs{0};
-  for (const auto* string : strings) {
-    auto* type = java_names::get_element_type_from_external_name(string->str());
-    if (type == nullptr) {
-      continue;
-    }
-    refs++;
-    if (record_type_like_string_refs) {
-      record_dont_merge_state(type, kStrict, dont_merge_status);
-    }
-  }
-  return refs;
 }
 
 /**
@@ -343,11 +317,9 @@ ClassMap collect_can_merge(
   return mergeable_to_merger;
 }
 
-size_t record_annotation(
+void record_annotation(
     const Scope& scope,
-    bool record_type_like_string_refs,
     UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
-  size_t type_like_string_refs{0};
   // Remove class if it is the type of an annotation.
   // TODO(suree404): Merge the classes even though it appears in annotation?
   walk::annotations(scope, [&](DexAnnotation* anno) {
@@ -356,16 +328,7 @@ size_t record_annotation(
     for (const auto& type : types_in_anno) {
       record_dont_merge_state(type, kStrict, dont_merge_status);
     }
-    if (anno->type() == type::dalvik_annotation_Signature() ||
-        anno->type()->str() == "Lkotlin/Metadata;") {
-      return;
-    }
-    std::vector<const DexString*> strings_in_anno;
-    anno->gather_strings(strings_in_anno);
-    type_like_string_refs += record_type_like_strings(
-        strings_in_anno, record_type_like_string_refs, dont_merge_status);
   });
-  return type_like_string_refs;
 }
 
 /**
@@ -374,11 +337,9 @@ size_t record_annotation(
  * When ResolveRefsPass runs before the pass, the step should not drop many
  * mergeables.
  */
-size_t record_code_reference(
+void record_code_reference(
     const Scope& scope,
-    bool record_type_like_string_refs,
     UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
-  AtomicStatCounter<size_t> type_like_string_refs{0};
   ConcurrentMap<const DexType*, DontMergeState> deferred_records;
   auto deferred_record_dont_merge_state =
       [&deferred_records](const DexType* type, DontMergeState state) {
@@ -391,9 +352,8 @@ size_t record_code_reference(
       };
   walk::parallel::opcodes(
       scope,
-      [&deferred_record_dont_merge_state, &type_like_string_refs,
-       record_type_like_string_refs](DexMethod* /*method*/,
-                                     IRInstruction* insn) {
+      [&deferred_record_dont_merge_state](DexMethod* /*method*/,
+                                          IRInstruction* insn) {
         if (insn->has_type()) {
           const auto* type = type::get_element_type_if_array(insn->get_type());
           if (opcode::is_instance_of(insn->opcode())) {
@@ -409,18 +369,6 @@ size_t record_code_reference(
               // add it to don't use this type as mergeable.
               deferred_record_dont_merge_state(type, kConditional);
               TRACE(VMERGE, 9, "dont_merge %s as mergeable for type usage: %s",
-                    SHOW(type), SHOW(insn));
-            }
-          }
-        } else if (opcode::is_const_string(insn->opcode())) {
-          auto* type = java_names::get_element_type_from_external_name(
-              insn->get_string()->str());
-          if (type != nullptr) {
-            type_like_string_refs++;
-            if (record_type_like_string_refs) {
-              deferred_record_dont_merge_state(type, kStrict);
-              TRACE(VMERGE, 9,
-                    "dont_merge %s for type-like string reference: %s",
                     SHOW(type), SHOW(insn));
             }
           }
@@ -468,7 +416,6 @@ size_t record_code_reference(
   for (auto [type, state] : UnorderedIterable(deferred_records)) {
     record_dont_merge_element_state(type, state, dont_merge_status);
   }
-  return type_like_string_refs.load();
 }
 
 /**
@@ -562,18 +509,10 @@ void remove_unrenamable_collisions(ClassMap* mergeable_to_merger) {
  * Don't merge a class if it is a field's type and this field can't be
  * renamed, of if it appeared in a field value.
  */
-size_t record_field_reference(
+void record_field_reference(
     const Scope& scope,
-    bool record_type_like_string_refs,
     UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
-  size_t type_like_string_refs{0};
   walk::fields(scope, [&](DexField* field) {
-    if (auto* value = field->get_static_value()) {
-      std::vector<const DexString*> strings;
-      value->gather_strings(strings);
-      type_like_string_refs += record_type_like_strings(
-          strings, record_type_like_string_refs, dont_merge_status);
-    }
     if (is_static(field) && field->get_type() == type::java_lang_Class()) {
       // Checking type which might be stored as class in field.
       auto* value = field->get_static_value();
@@ -590,24 +529,17 @@ size_t record_field_reference(
                               dont_merge_status);
     }
   });
-  return type_like_string_refs;
 }
 
-TypeLikeStringStats record_referenced(
+void record_referenced(
     const Scope& scope,
     const std::vector<std::string>& blocklist,
-    bool record_type_like_string_refs,
     UnorderedMap<const DexType*, DontMergeState>* dont_merge_status) {
-  TypeLikeStringStats stats;
-  stats.annotation_refs =
-      record_annotation(scope, record_type_like_string_refs, dont_merge_status);
-  stats.code_refs = record_code_reference(scope, record_type_like_string_refs,
-                                          dont_merge_status);
-  stats.static_field_refs = record_field_reference(
-      scope, record_type_like_string_refs, dont_merge_status);
+  record_annotation(scope, dont_merge_status);
+  record_code_reference(scope, dont_merge_status);
+  record_field_reference(scope, dont_merge_status);
   record_method_signature(scope, dont_merge_status);
   record_blocklist(scope, dont_merge_status, blocklist);
-  return stats;
 }
 
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
@@ -1007,11 +939,6 @@ void VerticalMergingPass::merge_classes(const Scope& scope,
     merger->combine_annotations_with(mergeable);
     merger->rstate.join_with(mergeable->rstate);
   }
-  rewriter::TypeStringMap type_string_map;
-  for (const auto& [old_type, new_type] : UnorderedIterable(update_map)) {
-    type_string_map.add_type_name(old_type->get_name(), new_type->get_name());
-  }
-  rewriter::rewrite_dalvik_annotation_signature(scope, type_string_map);
   update_references(scope, update_map, methodref_update_map);
 }
 
@@ -1021,9 +948,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   UnorderedMap<const DexType*, DontMergeState> dont_merge_status;
-  auto type_like_string_stats =
-      record_referenced(scope, m_blocklist, !m_unsafe_ignore_type_like_strings,
-                        &dont_merge_status);
+  record_referenced(scope, m_blocklist, &dont_merge_status);
   XStoreRefs xstores(stores, conf.normal_primary_dex());
   size_t num_single_extend;
   auto mergeable_to_merger =
@@ -1038,12 +963,6 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   post_dexen_changes(scope, stores);
   mgr.set_metric("num_single_extend", num_single_extend);
   mgr.set_metric("num_merged", mergeable_to_merger.size());
-  mgr.set_metric("num_type_like_string_annotation_refs",
-                 type_like_string_stats.annotation_refs);
-  mgr.set_metric("num_type_like_string_code_refs",
-                 type_like_string_stats.code_refs);
-  mgr.set_metric("num_type_like_string_static_field_refs",
-                 type_like_string_stats.static_field_refs);
 }
 
 static VerticalMergingPass s_pass;
