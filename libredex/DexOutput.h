@@ -387,10 +387,13 @@ class DexOutput {
   // Derived rather than stored so the two cannot drift apart.
   uint64_t policy_cap() const;
 
-  // Aborts unless `bytes` can be written at the current cursor. Every producer
-  // that advances a raw pointer with no notion of an end goes through this
-  // first; adding one means calling it.
-  void ensure_fits(uint64_t bytes, const char* what, const char* subject) const;
+  // Aborts unless `bytes` can be written at the current cursor, and records
+  // that the cursor is checked that far. Every producer that advances a raw
+  // pointer with no notion of an end goes through this first.
+  void ensure_fits(uint64_t bytes, const char* what, const char* subject);
+
+  // Furthest cursor position covered by ensure_fits.
+  uint64_t m_checked_through{0};
 
   friend struct DexOutputTestHelper;
 
