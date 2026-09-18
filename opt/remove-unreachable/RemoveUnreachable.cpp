@@ -36,7 +36,7 @@ const std::string UNREACHABLE_SYMBOLS_FILENAME =
 const std::string REMOVED_SYMBOLS_REFERENCES_FILENAME =
     "redex-unreachable-removed-symbols-references.txt";
 const std::string REMOVED_REACHABILITY_GRAPH_FILENAME =
-    "removed-reachability-graph";
+    "redex-removed-reachability-graph";
 const std::string RMU_PASS_NAME = "RemoveUnreachablePass";
 
 /*
@@ -228,7 +228,7 @@ void RemoveUnreachablePassBase::bind_config() {
        std::optional<uint32_t>{},
        m_emit_removed_graph_on_run,
        "Write a reachability-style graph of the symbols removed by the given "
-       "1-based repeat of this pass to the removed-reachability-graph "
+       "1-based repeat of this pass to the redex-removed-reachability-graph "
        "metafile. Roots of that graph are the removed symbols with no "
        "incoming edges. Mutually exclusive with "
        "emit_removed_graph_on_last_run: the graph has a single metafile that "
