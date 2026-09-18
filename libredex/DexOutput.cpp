@@ -597,17 +597,21 @@ uint64_t get_dex_output_size(const ConfigFiles& conf) {
   return output_size;
 }
 
-// Several encoders report how many bytes they wrote as a signed `int`. A
-// negative value converted to an unsigned byte count is a cursor that rewinds
-// over already-emitted sections, which `finalize_header` then signs -- so it
-// has to be rejected where the conversion happens, not downstream. Named
-// rather than repeated so that adding a producer means calling this.
-uint64_t checked_encoded_size(int size,
-                              const char* producer,
-                              const char* subject) {
+// Keep signed-result validation and bound validation inseparable so a new
+// bounded encoder cannot adopt one without the other.
+uint64_t checked_encoded_size_within(
+    int size,
+    uint64_t bound,
+    const char* producer,
+    const std::function<std::string()>& describe_subject) {
   always_assert_log(size >= 0, "%s returned %d for %s", producer, size,
-                    subject);
-  return (uint64_t)size;
+                    describe_subject().c_str());
+  auto encoded = static_cast<uint64_t>(size);
+  always_assert_log(encoded <= bound,
+                    "%s wrote %" PRIu64
+                    " bytes but its bound promised at most %" PRIu64 " for %s",
+                    producer, encoded, bound, describe_subject().c_str());
+  return encoded;
 }
 
 } // namespace
@@ -865,10 +869,14 @@ void DexOutput::generate_typelist_data() {
     ++num_tls;
     align_output();
     m_tl_emit_offsets[tl] = m_offset;
-    ensure_fits(sizeof(uint32_t) + tl->size() * sizeof(uint16_t), "type list",
-                SHOW(tl));
+    const std::function<std::string()> describe_subject = [tl]() {
+      return show(tl);
+    };
+    uint64_t tl_bound = sizeof(uint32_t) + tl->size() * sizeof(uint16_t);
+    ensure_fits(tl_bound, "type list", describe_subject);
     int size = tl->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
-    inc_offset(checked_encoded_size(size, "DexTypeList::encode", SHOW(tl)));
+    inc_offset(checked_encoded_size_within(
+        size, tl_bound, "DexTypeList::encode", describe_subject));
     m_stats.num_type_lists++;
   }
   /// insert_map_item returns early if num_tls is zero
@@ -960,14 +968,19 @@ void DexOutput::generate_class_data_items() {
       continue;
     }
     /* No alignment constraints for this data */
-    ensure_fits(clz->max_encoded_size(), "class data item", SHOW(clz));
+    const std::function<std::string()> describe_subject = [clz]() {
+      return show(clz);
+    };
+    uint64_t class_bound = clz->max_encoded_size();
+    ensure_fits(class_bound, "class data item", describe_subject);
     int size = clz->encode(&m_dodx, dco, m_output.get() + m_offset);
-    checked_encoded_size(size, "DexClass::encode", SHOW(clz));
+    uint64_t encoded = checked_encoded_size_within(
+        size, class_bound, "DexClass::encode", describe_subject);
     if (m_dex_output_config.write_class_sizes) {
-      m_stats.class_size[clz] = size;
+      m_stats.class_size[clz] = encoded;
     }
     cdefs[i].class_data_offset = m_offset;
-    inc_offset(size);
+    inc_offset(encoded);
     count += 1;
   }
   insert_map_item(TYPE_CLASS_DATA_ITEM, count, cdi_start, m_offset - cdi_start);
@@ -1048,18 +1061,25 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n",
         SHOW(meth));
     align_output();
-    ensure_fits(code->max_encoded_size(), "code item", SHOW(meth));
-    int size = code->encode(&m_dodx, (uint32_t*)(m_output.get() + m_offset));
-    check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
+    const std::function<std::string()> describe_method = [meth]() {
+      return show(meth);
+    };
+    uint64_t code_bound = code->max_encoded_size();
+    ensure_fits(code_bound, "code item", describe_method);
+    int size = code->encode(
+        &m_dodx, reinterpret_cast<uint32_t*>(m_output.get() + m_offset));
+    uint64_t encoded = checked_encoded_size_within(
+        size, code_bound, "DexCode::encode", describe_method);
+    check_method_instruction_size_limit(m_config_files, size, describe_method);
     if (m_dex_output_config.write_method_sizes) {
-      m_stats.method_size[meth] = (size_t)size;
+      m_stats.method_size[meth] = encoded;
     }
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output.get() + m_offset));
     auto insns_size =
         ((const dex_code_item*)(m_output.get() + m_offset))->insns_size;
-    inc_offset(size);
+    inc_offset(encoded);
     m_stats.num_instructions +=
         static_cast<int64_t>(code->get_instructions().size());
     m_stats.num_tries += static_cast<int64_t>(code->get_tries().size());
@@ -1108,21 +1128,24 @@ void DexOutput::generate_methodhandle_data() {
   }
 }
 
-void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
-                                                    int size,
-                                                    const char* method_name) {
-  checked_encoded_size(size, "DexCode::encode", method_name);
-
+void DexOutput::check_method_instruction_size_limit(
+    const ConfigFiles& conf,
+    int size,
+    const std::function<std::string()>& describe_method) {
+  always_assert_log(size >= 0, "DexCode::encode returned %d for %s", size,
+                    describe_method().c_str());
+  const auto encoded = static_cast<uint64_t>(size);
   uint32_t instruction_size_bitwidth_limit =
       conf.get_instruction_size_bitwidth_limit();
 
   if (instruction_size_bitwidth_limit != 0u) {
     uint64_t hard_instruction_size_limit = 1L
                                            << instruction_size_bitwidth_limit;
-    always_assert_log(((uint64_t)size) <= hard_instruction_size_limit,
-                      "Size of method exceeded limit. size: %d, limit: %" PRIu64
-                      ", method: %s\n",
-                      size, hard_instruction_size_limit, method_name);
+    always_assert_log(encoded <= hard_instruction_size_limit,
+                      "Size of method exceeded limit. size: %" PRIu64
+                      ", limit: %" PRIu64 ", method: %s\n",
+                      encoded, hard_instruction_size_limit,
+                      describe_method().c_str());
   }
 }
 
@@ -1153,7 +1176,8 @@ void DexOutput::generate_static_values() {
       always_assert_log((((uint64_t)encdatasize) >> 32) == 0,
                         "buffer size (%zu) is too big", encdatasize);
       /* No alignment requirements */
-      ensure_fits(encdatasize, "static value array", SHOW(clz));
+      ensure_fits(encdatasize, "static value array",
+                  [clz]() { return show(clz); });
       memcpy(m_output.get() + m_offset, encdata.data(), encdatasize);
       enc_arrays.emplace(std::move(*deva), m_offset);
       m_static_values[clz] = m_offset;
@@ -1406,7 +1430,7 @@ struct DebugMetadata {
   dex_code_item* dci{nullptr};
   uint32_t line_start{0};
   uint32_t num_params{0};
-  uint32_t size{0};
+  uint64_t size{0};
   uint32_t dex_size{0};
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
 };
@@ -1432,15 +1456,9 @@ DebugMetadata calculate_debug_metadata(
   return metadata;
 }
 
-// Every path that reaches DexDebugItem::encode goes through this first.
-// `capacity` is the number of bytes writable at `output`; `checked_through` is
-// the output buffer's checked-cursor high-water mark, or null when the target
-// is a scratch buffer with no cursor invariant of its own.
-//
-// The check has to happen here rather than after the call, because
-// DexDebugItem::encode advances a raw pointer with no notion of an end: by the
-// time it returns a size, an oversized program has already been written.
-void check_debug_item_fits(
+// Check before calling `DexDebugItem::encode`, whose raw output pointer has no
+// end. Return the bound so callers can verify the reported size afterwards.
+uint64_t check_debug_item_fits(
     uint32_t num_params,
     const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops,
     uint32_t offset,
@@ -1455,29 +1473,34 @@ void check_debug_item_fits(
   if (checked_through != nullptr) {
     *checked_through = std::max(*checked_through, offset + bound);
   }
+  return bound;
 }
 
-int emit_debug_info_for_metadata(DexOutputIdx* dodx,
-                                 const DebugMetadata& metadata,
-                                 uint8_t* output,
-                                 uint32_t offset,
-                                 uint64_t capacity,
-                                 uint64_t* checked_through,
-                                 bool set_dci_offset = true) {
-  check_debug_item_fits(metadata.num_params, metadata.dbgops, offset, capacity,
-                        checked_through);
+uint64_t emit_debug_info_for_metadata(DexOutputIdx* dodx,
+                                      const DebugMetadata& metadata,
+                                      const DexMethod* method,
+                                      uint8_t* output,
+                                      uint32_t offset,
+                                      uint64_t capacity,
+                                      uint64_t* checked_through,
+                                      bool set_dci_offset = true) {
+  uint64_t bound = check_debug_item_fits(metadata.num_params, metadata.dbgops,
+                                         offset, capacity, checked_through);
   int size = DexDebugItem::encode(dodx, output + offset, metadata.line_start,
                                   metadata.num_params, metadata.dbgops);
+  uint64_t encoded = checked_encoded_size_within(
+      size, bound, "DexDebugItem::encode", [method]() { return show(method); });
   if (set_dci_offset) {
     metadata.dci->debug_info_off = offset;
   }
-  return size;
+  return encoded;
 }
 
-int emit_debug_info(
+uint64_t emit_debug_info(
     DexOutputIdx* dodx,
     bool emit_positions,
     DexDebugItem* dbg,
+    const DexMethod* method,
     DexCode* dc,
     dex_code_item* dci,
     PositionMapper* pos_mapper,
@@ -1491,8 +1514,8 @@ int emit_debug_info(
   DebugMetadata metadata = calculate_debug_metadata(
       dbg, dc, dci, pos_mapper, num_params, dbg_lines, /*line_addin=*/0);
   return emit_positions
-             ? emit_debug_info_for_metadata(dodx, metadata, output, offset,
-                                            capacity, checked_through)
+             ? emit_debug_info_for_metadata(dodx, metadata, method, output,
+                                            offset, capacity, checked_through)
              : 0;
 }
 
@@ -1512,7 +1535,7 @@ struct MethodKeyCompare {
     }
   }
 };
-using DebugSize = uint32_t;
+using DebugSize = uint64_t;
 using DebugMethodMap = std::map<MethodKey, DebugSize, MethodKeyCompare>;
 
 // Iterator-like struct that gives an order of param-sizes to visit induced
@@ -1631,8 +1654,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
         calculate_debug_metadata(dbg_item, dc, it->code_item, pos_mapper,
                                  param_size, code_debug_map, line_addin);
 
-    int debug_size =
-        emit_debug_info_for_metadata(dodx, metadata, tmp, 0, TMP_SIZE,
+    uint64_t debug_size =
+        emit_debug_info_for_metadata(dodx, metadata, method, tmp, 0, TMP_SIZE,
                                      /*checked_through=*/nullptr, false);
     metadata.size = debug_size;
     const auto dex_size = dc->size();
@@ -1864,7 +1887,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
       return std::make_pair(result, total_inflated_footprint);
     };
 
-    auto compute = [&](const auto& sizes, bool dry_run) -> size_t {
+    auto compute = [&](const auto& sizes, bool dry_run) -> uint64_t {
       // The best size for us to start at is initialized as the largest method
       // This iterator will keep track of the smallest method that can use IODI.
       // If it points to end, then no method should use IODI.
@@ -2014,7 +2037,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         if (!dry_run) {
           iodi_metadata.mark_method_huge(big->first.method);
           TRACE(IODI, 3,
-                "[IODI] %s is too large to benefit from IODI: %u vs %u",
+                "[IODI] %s is too large to benefit from IODI: %u vs %" PRIu64,
                 SHOW(big->first.method), big->first.size, big->second);
         }
         num_big += 1;
@@ -2022,12 +2045,12 @@ uint32_t emit_instruction_offset_debug_info_helper(
 
       size_t num_small_enough = sizes.size() - num_big;
       if (dry_run) {
-        size_t sum = 0;
+        uint64_t sum = 0;
         for (auto it = sizes.begin(); it != best_iter; ++it) {
           sum += it->second;
         }
         // Does not include bucketing, but good enough.
-        sum += num_small_enough * iodi_size;
+        sum += static_cast<uint64_t>(num_small_enough) * iodi_size;
         return sum;
       }
 
@@ -2066,10 +2089,21 @@ uint32_t emit_instruction_offset_debug_info_helper(
               dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
             }
           }
-          check_debug_item_fits(param_size, dbgops, offset, capacity,
-                                checked_through);
-          offset += DexDebugItem::encode(nullptr, output + offset, line_addin,
-                                         param_size, dbgops);
+          uint64_t bound = check_debug_item_fits(param_size, dbgops, offset,
+                                                 capacity, checked_through);
+          const std::function<std::string()> describe_bucket =
+              [param_size, bucket_size, method_count = bucket.second,
+               offset]() {
+                return "IODI bucket: arity=" + std::to_string(param_size) +
+                       ", method_size=" + std::to_string(bucket_size) +
+                       ", methods=" + std::to_string(method_count) +
+                       ", offset=" + std::to_string(offset);
+              };
+          uint64_t bucket_size_bytes = checked_encoded_size_within(
+              DexDebugItem::encode(nullptr, output + offset, line_addin,
+                                   param_size, dbgops),
+              bound, "DexDebugItem::encode", describe_bucket);
+          offset += bucket_size_bytes;
           *dbgcount += 1;
         }
       }
@@ -2081,7 +2115,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
         }
         for (auto it = best_iter; it != end; it++) {
           TRACE(IODI, 4,
-                "[IODI][savings] %s saved %u bytes (%u), cost of %f, net %f",
+                "[IODI][savings] %s saved %" PRIu64
+                " bytes (%u), cost of %f, net %f",
                 SHOW(it->first.method), it->second, it->first.size,
                 ammortized_cost, (double)it->second - ammortized_cost);
         }
@@ -2120,7 +2155,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     } else {
       auto sizes_wo_clusters = dbg_sizes;
       size_t max_cluster_len{0};
-      size_t sum_cluster_sizes{0};
+      uint64_t sum_cluster_sizes{0};
       for (auto& p : UnorderedIterable(clusters_in_sizes)) {
         for (const auto& k : p.second) {
           sizes_wo_clusters.erase(k);
@@ -2131,17 +2166,17 @@ uint32_t emit_instruction_offset_debug_info_helper(
           sum_cluster_sizes += dbg_sizes.at(k);
         }
       }
-      TRACE(IODI, 3, "max_cluster_len=%zu sum_cluster_sizes=%zu",
+      TRACE(IODI, 3, "max_cluster_len=%zu sum_cluster_sizes=%" PRIu64,
             max_cluster_len, sum_cluster_sizes);
 
       // Very simple heuristic, "walk" in lock-step, do not try all combinations
       // (too expensive).
       size_t best_iter{0};
-      size_t best_size{0};
+      uint64_t best_size{0};
 
       auto add_iteration = [&dbg_sizes, &clusters_in_sizes,
                             max_cluster_len](auto& cur_sizes, size_t iter) {
-        size_t added_sizes{0};
+        uint64_t added_sizes{0};
         for (const auto& p : UnorderedIterable(clusters_in_sizes)) {
           size_t p_idx = p.second.size() -
                          std::min(p.second.size(), max_cluster_len - iter);
@@ -2160,7 +2195,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
         auto out_size = compute(cur_sizes, /*dry_run=*/true) +
                         (sum_cluster_sizes - added_sizes);
         TRACE(IODI, 3,
-              "Iteration %zu: added_sizes=%zu out_size=%zu extra_size=%zu",
+              "Iteration %zu: added_sizes=%" PRIu64 " out_size=%" PRIu64
+              " extra_size=%" PRIu64,
               iter, added_sizes, out_size, sum_cluster_sizes - added_sizes);
         if (iter == 0) {
           best_size = out_size;
@@ -2170,7 +2206,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
         }
       }
 
-      TRACE(IODI, 3, "Best iteration %zu (%zu)", best_iter, best_size);
+      TRACE(IODI, 3, "Best iteration %zu (%" PRIu64 ")", best_iter, best_size);
       auto cur_sizes = sizes_wo_clusters;
       add_iteration(cur_sizes, best_iter);
       compute(cur_sizes, /*dry_run=*/false);
@@ -2247,8 +2283,9 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                      /*line_addin=*/0);
         metadata = &no_line_addin_metadata;
       }
-      offset += emit_debug_info_for_metadata(dodx, *metadata, output, offset,
-                                             capacity, checked_through, true);
+      offset +=
+          emit_debug_info_for_metadata(dodx, *metadata, method, output, offset,
+                                       capacity, checked_through, true);
       *dbgcount += 1;
     }
     to_remove.insert(method);
@@ -2360,8 +2397,9 @@ uint32_t emit_instruction_offset_debug_info(
     DebugMetadata metadata =
         calculate_debug_metadata(dbg_item, dc, cie->code_item, pos_mapper,
                                  param_size, code_debug_map, /*line_addin=*/0);
-    offset += emit_debug_info_for_metadata(dodx, metadata, output, offset,
-                                           capacity, checked_through, true);
+    offset +=
+        emit_debug_info_for_metadata(dodx, metadata, method, output, offset,
+                                     capacity, checked_through, true);
     *dbgcount += 1;
     iodi_metadata.mark_method_huge(method);
   }
@@ -2408,12 +2446,11 @@ void DexOutput::generate_debug_items() {
       dbgcount++;
       uint32_t num_params =
           static_cast<uint32_t>(it.method->get_proto()->get_args()->size());
-      int dbg_size =
-          emit_debug_info(&m_dodx, emit_positions, dbg, dc, dci, m_pos_mapper,
-                          m_output.get(), m_offset, m_output_size,
+      uint64_t dbg_size =
+          emit_debug_info(&m_dodx, emit_positions, dbg, it.method, dc, dci,
+                          m_pos_mapper, m_output.get(), m_offset, m_output_size,
                           &m_checked_through, num_params, m_code_debug_lines);
-      inc_offset(
-          checked_encoded_size(dbg_size, "emit_debug_info", SHOW(it.method)));
+      inc_offset(dbg_size);
     }
   }
   if (emit_positions) {
@@ -3325,6 +3362,22 @@ void DexOutput::ensure_fits(uint64_t bytes,
                     " bytes does not fit at offset %u of the %zu-byte dex "
                     "output buffer: %s",
                     what, bytes, m_offset, m_output_size, subject);
+  m_checked_through = std::max(m_checked_through, end);
+}
+
+void DexOutput::ensure_fits(
+    uint64_t bytes,
+    const char* what,
+    const std::function<std::string()>& describe_subject) {
+  uint64_t end = (uint64_t)m_offset + bytes;
+  if (end > m_output_size) {
+    const auto subject = describe_subject();
+    always_assert_log(false,
+                      "A %s of up to %" PRIu64
+                      " bytes does not fit at offset %u of the %zu-byte dex "
+                      "output buffer: %s",
+                      what, bytes, m_offset, m_output_size, subject.c_str());
+  }
   m_checked_through = std::max(m_checked_through, end);
 }
 

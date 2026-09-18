@@ -19,9 +19,39 @@ TEST(DexOutput, checkMethodInstructionSizeLimit) {
   temp_json >> json_cfg;
   json_cfg["instruction_size_bitwidth_limit"] = 16;
   ConfigFiles conf(json_cfg);
-  EXPECT_NO_THROW(
-      DexOutput::check_method_instruction_size_limit(conf, 65536, "method"));
-  EXPECT_THROW(
-      DexOutput::check_method_instruction_size_limit(conf, 65537, "method"),
-      RedexException);
+  bool described = false;
+  EXPECT_NO_THROW(DexOutput::check_method_instruction_size_limit(
+      conf, 65536, [&described]() {
+        described = true;
+        return std::string("method");
+      }));
+  EXPECT_FALSE(described);
+  EXPECT_THROW(DexOutput::check_method_instruction_size_limit(
+                   conf,
+                   65537,
+                   [&described]() {
+                     described = true;
+                     return std::string("method");
+                   }),
+               RedexException);
+  EXPECT_TRUE(described);
+}
+
+TEST(DexOutput, rejectsNegativeSizeWithoutConfiguredLimit) {
+  Json::Value json_cfg;
+  std::istringstream temp_json(
+      "{\"redex\":{\"passes\":[]}, \"instruction_size_bitwidth_limit\": 0}");
+  temp_json >> json_cfg;
+  ConfigFiles conf(json_cfg);
+
+  bool described = false;
+  EXPECT_THROW(DexOutput::check_method_instruction_size_limit(
+                   conf,
+                   -1,
+                   [&described]() {
+                     described = true;
+                     return std::string("method");
+                   }),
+               RedexException);
+  EXPECT_TRUE(described);
 }

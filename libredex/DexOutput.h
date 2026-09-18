@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <string>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
@@ -391,6 +393,9 @@ class DexOutput {
   // that the cursor is checked that far. Every producer that advances a raw
   // pointer with no notion of an end goes through this first.
   void ensure_fits(uint64_t bytes, const char* what, const char* subject);
+  void ensure_fits(uint64_t bytes,
+                   const char* what,
+                   const std::function<std::string()>& describe_subject);
 
   // Furthest cursor position covered by ensure_fits.
   uint64_t m_checked_through{0};
@@ -420,7 +425,8 @@ class DexOutput {
                const std::string& dex_magic);
   void write();
   void metrics();
-  static void check_method_instruction_size_limit(const ConfigFiles& conf,
-                                                  int size,
-                                                  const char* method_name);
+  static void check_method_instruction_size_limit(
+      const ConfigFiles& conf,
+      int size,
+      const std::function<std::string()>& describe_method);
 };
