@@ -349,13 +349,13 @@ void GlobalConfig::bind_config() {
   bind("emit_outgoing_hashes", false, bool_param);
   bind("enable_low6bits_constant_propagation", true, bool_param,
        "When true, enable low 6 bit constant propagation");
-  bind("enable_object_domain_null_check_elim", false, bool_param,
+  bind("enable_object_domain_null_check_elim", true, bool_param,
        "When true, enable null check elimination for object domains "
        "(NewObjectDomain, SingletonObjectDomain, ObjectWithImmutAttrDomain)");
   bind("enable_check_cast_value_preservation", false, bool_param,
        "When true, constant propagation keeps a `check-cast` operand's value "
        "across the cast, instead of carrying only null");
-  bind("enable_known_non_null_returns", false, bool_param,
+  bind("enable_known_non_null_returns", true, bool_param,
        "When true, mark return values of well-known external methods as "
        "non-null in constant propagation, enabling removal of redundant "
        "Kotlin null-check intrinsics");
