@@ -1435,6 +1435,7 @@ struct DebugMetadata {
   dex_code_item* dci{nullptr};
   uint32_t line_start{0};
   uint32_t num_params{0};
+  size_t bound{0};
   uint64_t size{0};
   uint32_t dex_size{0};
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
@@ -1455,6 +1456,8 @@ DebugMetadata calculate_debug_metadata(
   metadata.num_params = num_params;
   metadata.dbgops = generate_debug_instructions(
       dbg, pos_mapper, &metadata.line_start, &debug_line_info, line_addin);
+  metadata.bound =
+      DexDebugItem::max_encoded_size(metadata.num_params, metadata.dbgops);
   if (dbg_lines != nullptr) {
     (*dbg_lines)[dc] = debug_line_info;
   }
@@ -1463,13 +1466,10 @@ DebugMetadata calculate_debug_metadata(
 
 // Check before calling `DexDebugItem::encode`, whose raw output pointer has no
 // end. Return the bound so callers can verify the reported size afterwards.
-uint64_t check_debug_item_fits(
-    uint32_t num_params,
-    const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops,
-    uint64_t offset,
-    uint64_t capacity,
-    uint64_t* checked_through) {
-  uint64_t bound = DexDebugItem::max_encoded_size(num_params, dbgops);
+uint64_t check_debug_item_fits(uint64_t bound,
+                               uint64_t offset,
+                               uint64_t capacity,
+                               uint64_t* checked_through) {
   always_assert_log(offset + bound <= capacity,
                     "A debug program of up to %" PRIu64
                     " bytes does not fit at offset %" PRIu64 " of a %" PRIu64
@@ -1490,8 +1490,8 @@ uint64_t emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                       uint64_t capacity,
                                       uint64_t* checked_through,
                                       bool set_dci_offset = true) {
-  uint64_t bound = check_debug_item_fits(metadata.num_params, metadata.dbgops,
-                                         offset, capacity, checked_through);
+  uint64_t bound =
+      check_debug_item_fits(metadata.bound, offset, capacity, checked_through);
   int size = DexDebugItem::encode(dodx, output + offset, metadata.line_start,
                                   metadata.num_params, metadata.dbgops);
   uint64_t encoded = checked_encoded_size_within(
@@ -1643,12 +1643,10 @@ uint64_t emit_instruction_offset_debug_info_helper(
   // 1)
   std::map<uint32_t, DebugMethodMap> param_to_sizes;
   UnorderedMap<const DexMethod*, DebugMetadata> method_to_debug_meta;
-  // We need this to calculate the size of normal debug programs for each
-  // method. Hopefully no debug program is > 128k. It's ok to increase this
-  // in the future.
-  constexpr int TMP_SIZE = 128 * 1024;
-  auto temporary_buffer = std::make_unique<uint8_t[]>(TMP_SIZE);
-  uint8_t* tmp = temporary_buffer.get();
+  // Scratch for measuring normal debug programs. Growth need not preserve or
+  // initialize its contents.
+  std::unique_ptr<uint8_t[]> temporary_buffer;
+  size_t temporary_buffer_size = 0;
   UnorderedMap<const DexMethod*, std::vector<const DexMethod*>>
       clustered_methods;
 
@@ -1667,9 +1665,18 @@ uint64_t emit_instruction_offset_debug_info_helper(
         calculate_debug_metadata(dbg_item, dc, it->code_item, pos_mapper,
                                  param_size, code_debug_map, line_addin);
 
-    uint64_t debug_size =
-        emit_debug_info_for_metadata(dodx, metadata, method, tmp, 0, TMP_SIZE,
-                                     /*checked_through=*/nullptr, false);
+    size_t required = metadata.bound;
+    if (temporary_buffer_size < required) {
+      size_t new_size = temporary_buffer_size <= SIZE_MAX / 2
+                            ? std::max(required, temporary_buffer_size * 2)
+                            : required;
+      temporary_buffer.reset();
+      temporary_buffer.reset(new uint8_t[new_size]);
+      temporary_buffer_size = new_size;
+    }
+    uint64_t debug_size = emit_debug_info_for_metadata(
+        dodx, metadata, method, temporary_buffer.get(), 0,
+        temporary_buffer_size, /*checked_through=*/nullptr, false);
     metadata.size = debug_size;
     const auto dex_size = dc->size();
     metadata.dex_size = dex_size;
@@ -1686,7 +1693,10 @@ uint64_t emit_instruction_offset_debug_info_helper(
           method);
     }
   }
-  temporary_buffer = nullptr;
+  // Release the scratch before the rest of the function runs; it can be the
+  // largest single allocation here and nothing below reads it.
+  temporary_buffer.reset();
+  temporary_buffer_size = 0;
 
   unordered_erase_if(clustered_methods,
                      [](auto& p) { return p.second.size() <= 1; });
@@ -2103,8 +2113,9 @@ uint64_t emit_instruction_offset_debug_info_helper(
               dbgops.push_back(DexDebugInstruction::create_line_entry(1, 1));
             }
           }
-          uint64_t bound = check_debug_item_fits(param_size, dbgops, offset,
-                                                 capacity, checked_through);
+          uint64_t bound = check_debug_item_fits(
+              DexDebugItem::max_encoded_size(param_size, dbgops), offset,
+              capacity, checked_through);
           const std::function<std::string()> describe_bucket =
               [param_size, bucket_size, method_count = bucket.second,
                offset]() {
