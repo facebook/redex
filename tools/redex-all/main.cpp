@@ -2177,7 +2177,7 @@ int main(int argc, char* argv[]) {
 
     constant_propagation_transform_internal::
         enable_object_domain_null_check_elim =
-            args.config.get("enable_object_domain_null_check_elim", false)
+            args.config.get("enable_object_domain_null_check_elim", true)
                 .asBool();
 
     constant_propagation_transform_internal::enable_replacing_areequal =
@@ -2190,7 +2190,7 @@ int main(int argc, char* argv[]) {
         "enable_replacing_areequal is turned on.");
     // TODO(T257927964): Remove this.
     constant_propagation::known_non_null_returns_enable =
-        args.config.get("enable_known_non_null_returns", false).asBool();
+        args.config.get("enable_known_non_null_returns", true).asBool();
 
     constant_propagation::enable_check_cast_value_preservation =
         args.config.get("enable_check_cast_value_preservation", false).asBool();

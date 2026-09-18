@@ -14,7 +14,7 @@
 namespace constant_propagation {
 
 // TODO(T257927964): Remove this.
-bool known_non_null_returns_enable = false;
+bool known_non_null_returns_enable = true;
 
 namespace {
 
