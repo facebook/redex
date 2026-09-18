@@ -407,6 +407,7 @@ inline std::string external_to_internal(std::string_view external_name) {
 }
 
 DexType* get_type_from_external_name(std::string_view external_name);
+DexType* get_element_type_from_external_name(std::string_view external_name);
 
 // Example: "Ljava/lang/String;" --> "String"
 // Example: "[Ljava/lang/String;" --> "String[]"
