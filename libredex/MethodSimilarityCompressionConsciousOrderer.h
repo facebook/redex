@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "DexClass.h"
@@ -34,9 +36,14 @@
  */
 class MethodSimilarityCompressionConsciousOrderer {
  private:
-  // The content of the method (a sequence of bytes representing the method).
-  std::vector<uint8_t> get_encoded_method_content(
-      DexMethod* meth, DexOutputIdx& dodx, std::unique_ptr<uint8_t[]>& output);
+  struct EncodingScratch {
+    std::vector<uint32_t> words;
+    size_t dirty_bytes{0};
+  };
+
+  std::vector<uint8_t> get_encoded_method_content(DexMethod* meth,
+                                                  DexOutputIdx& dodx,
+                                                  EncodingScratch& scratch);
 
  public:
   void order(std::vector<DexMethod*>& methods, GatheredTypes* m_gtypes);

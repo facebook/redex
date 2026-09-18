@@ -7,7 +7,9 @@
 
 #include "MethodSimilarityCompressionConsciousOrderer.h"
 
+#include <algorithm>
 #include <inttypes.h>
+#include <limits>
 
 #include "BalancedPartitioning.h"
 #include "Debug.h"
@@ -15,7 +17,10 @@
 #include "Show.h"
 
 namespace {
-constexpr size_t METHOD_MAX_OUTPUT_SIZE = static_cast<size_t>(512 * 1024);
+
+// Keep a violated max_encoded_size() contract inside the allocation long enough
+// for the post-encode assertion to report it.
+constexpr size_t kEncodingSafetyMargin = size_t{512} * 1024;
 
 /// Murmur-inspired hashing.
 constexpr uint64_t hash_128_to_64(const uint64_t upper,
@@ -208,28 +213,38 @@ std::vector<uint64_t> create_kmers(const std::vector<uint8_t>& content) {
 
 std::vector<uint8_t>
 MethodSimilarityCompressionConsciousOrderer::get_encoded_method_content(
-    DexMethod* meth, DexOutputIdx& dodx, std::unique_ptr<uint8_t[]>& output) {
-  // Get the code
+    DexMethod* meth, DexOutputIdx& dodx, EncodingScratch& scratch) {
   DexCode* code = meth->get_dex_code();
   always_assert_log(code != nullptr, "Empty code for method %s", SHOW(meth));
 
-  // Clean up
-  memset(output.get(), 0, METHOD_MAX_OUTPUT_SIZE);
-
-  // Encode
-  size_t size = code->encode(&dodx, reinterpret_cast<uint32_t*>(output.get()));
-  always_assert_log(size <= METHOD_MAX_OUTPUT_SIZE,
-                    "Encoded code size limit exceeded %zu versus %zu", size,
-                    METHOD_MAX_OUTPUT_SIZE);
-
-  // Collect the results
-  std::vector<uint8_t> content;
-  for (size_t i = 0; i < size; i++) {
-    uint8_t out_item = *(reinterpret_cast<uint8_t*>(output.get() + i));
-    content.push_back(out_item);
+  const size_t bound = code->max_encoded_size();
+  always_assert_log(
+      bound <= std::numeric_limits<size_t>::max() - kEncodingSafetyMargin,
+      "Encoded-code bound %zu leaves no room for the safety margin for %s",
+      bound, SHOW(meth));
+  const size_t capacity = bound + kEncodingSafetyMargin;
+  const size_t words = capacity / sizeof(uint32_t) +
+                       static_cast<size_t>(capacity % sizeof(uint32_t) != 0);
+  if (scratch.words.size() < words) {
+    scratch.words.resize(words, 0);
   }
 
-  return content;
+  auto* bytes = reinterpret_cast<uint8_t*>(scratch.words.data());
+  std::fill_n(bytes, scratch.dirty_bytes, uint8_t{0});
+
+  const int encoded_size = code->encode(&dodx, scratch.words.data());
+  always_assert_log(encoded_size >= 0,
+                    "DexCode::encode returned a negative size for %s",
+                    SHOW(meth));
+  const size_t size = static_cast<size_t>(encoded_size);
+  always_assert_log(size <= bound,
+                    "DexCode::encode wrote %zu bytes despite a %zu-byte bound "
+                    "for %s (scratch capacity %zu)",
+                    size, bound, SHOW(meth),
+                    scratch.words.size() * sizeof(uint32_t));
+  scratch.dirty_bytes = std::max(scratch.dirty_bytes, size);
+
+  return std::vector<uint8_t>(bytes, bytes + size);
 }
 
 void MethodSimilarityCompressionConsciousOrderer::order(
@@ -240,8 +255,7 @@ void MethodSimilarityCompressionConsciousOrderer::order(
     return;
   }
 
-  // We assume no method takes more than 512KB
-  auto output = std::make_unique<uint8_t[]>(METHOD_MAX_OUTPUT_SIZE);
+  EncodingScratch scratch;
   auto dodx = m_gtypes->get_dodx();
 
   // Collect binary functions in the original order
@@ -256,7 +270,7 @@ void MethodSimilarityCompressionConsciousOrderer::order(
     }
     functions.emplace_back(method);
     auto& func = functions.back();
-    auto content = get_encoded_method_content(method, dodx, output);
+    auto content = get_encoded_method_content(method, dodx, scratch);
     func.kmers = create_kmers(content);
   }
 
