@@ -46,9 +46,6 @@ inline NumericIntervalDomain numeric_interval_domain_from_int(int64_t min,
 }
 
 namespace signed_constant_domain_internal {
-// TODO(T236830337): Remove this.
-extern bool enable_low6bits;
-
 struct Bounds final {
   Bounds() = delete; // Use bottom() or top() instead.
 
@@ -487,128 +484,14 @@ class SignedConstantDomain final
 
   Bounds m_bounds;
 
-  // TODO(T236830337): Remove OptionalLow6Bits.
-  // Not using the abstract class/inheritence pattern to avoid heap allocation.
-  class OptionalLow6Bits final {
-    // This class is a delegate to Bitset when bitset is enabled.
-    //
-    // When bitset is disabled, this is always top.
-    using Low6BitsType = std::optional<Low6Bits>;
-    Low6BitsType low6bits;
-
-   public:
-    OptionalLow6Bits(const OptionalLow6Bits&) = default;
-    OptionalLow6Bits(OptionalLow6Bits&&) = default;
-    OptionalLow6Bits& operator=(const OptionalLow6Bits&) = default;
-    OptionalLow6Bits& operator=(OptionalLow6Bits&&) = default;
-
-    explicit OptionalLow6Bits(const Low6Bits& l6b = Low6Bits::top())
-        : low6bits(signed_constant_domain_internal::enable_low6bits
-                       ? Low6BitsType(l6b)
-                       : std::nullopt) {}
-
-    explicit OptionalLow6Bits(int64_t value)
-        : low6bits(signed_constant_domain_internal::enable_low6bits
-                       ? Low6BitsType(value)
-                       : std::nullopt) {}
-
-    OptionalLow6Bits& operator=(const Low6Bits& bs) {
-      if (signed_constant_domain_internal::enable_low6bits) {
-        low6bits = bs;
-      }
-      return *this;
-    }
-
-    bool is_bottom() const {
-      if (low6bits) {
-        return low6bits->is_bottom();
-      } else {
-        return false;
-      }
-    }
-
-    bool is_top() const {
-      if (low6bits) {
-        return low6bits->is_top();
-      } else {
-        return true;
-      }
-    }
-
-    OptionalLow6Bits& set_to_bottom() {
-      if (low6bits) {
-        low6bits->set_to_bottom();
-      }
-      return *this;
-    }
-
-    OptionalLow6Bits& set_to_top() {
-      if (low6bits) {
-        low6bits->set_to_top();
-      }
-      return *this;
-    }
-
-    OptionalLow6Bits& join_with(const OptionalLow6Bits& that) {
-      if (low6bits) {
-        always_assert(that.low6bits);
-        low6bits->join_with(*that.low6bits);
-      }
-      return *this;
-    }
-
-    OptionalLow6Bits& meet_with(const OptionalLow6Bits& that) {
-      if (low6bits) {
-        always_assert(that.low6bits);
-        low6bits->meet_with(*that.low6bits);
-      }
-      return *this;
-    }
-
-    bool operator==(const OptionalLow6Bits& that) const {
-      if (low6bits) {
-        always_assert(that.low6bits);
-        return *low6bits == *that.low6bits;
-      }
-      return true;
-    }
-
-    bool operator<=(const OptionalLow6Bits& that) const {
-      if (low6bits) {
-        always_assert(that.low6bits);
-        return *low6bits <= *that.low6bits;
-      }
-      return true;
-    }
-
-    bool unequals_constant(int64_t integer) const {
-      if (low6bits) {
-        return low6bits->unequals_constant(integer);
-      }
-      return false;
-    }
-
-    uint64_t get_low6bits_state() const {
-      if (low6bits) {
-        return low6bits->get_low6bits_state();
-      }
-      return std::numeric_limits<uint64_t>::max();
-    }
-
-    std::optional<Low6Bits>& get_low6bits() { return low6bits; }
-  };
-
-  OptionalLow6Bits m_low6bits;
+  Low6Bits m_low6bits;
 
   Bitset m_bitset;
 
   // Cross inference based on interactions between subdomains.
   void cross_infer() {
-    auto top_low6bits = Low6Bits::top();
-    auto& low6bits =
-        m_low6bits.get_low6bits() ? *m_low6bits.get_low6bits() : top_low6bits;
     signed_constant_domain_internal::MinimizeSubdomainsSingleton::get()(
-        m_bounds, low6bits, m_bitset);
+        m_bounds, m_low6bits, m_bitset);
   }
 
   SignedConstantDomain(Bounds bounds, Low6Bits low6bits, Bitset bitset)
@@ -660,13 +543,9 @@ class SignedConstantDomain final
     return SignedConstantDomain(Bounds::nez(), Low6Bits::top(), Bitset::top());
   }
   bool is_bottom() const {
-    const bool res = m_bounds.is_bottom() ||
-                     (!signed_constant_domain_internal::enable_low6bits &&
-                      m_low6bits.is_bottom());
+    const bool res = m_bounds.is_bottom();
     if (res) {
-      always_assert(m_bounds.is_bottom());
-      always_assert(!signed_constant_domain_internal::enable_low6bits ||
-                    m_low6bits.is_bottom());
+      always_assert(m_low6bits.is_bottom());
       always_assert(m_bitset.is_bottom());
     }
     return res;

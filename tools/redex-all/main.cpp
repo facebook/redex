@@ -85,7 +85,6 @@
 #include "SanitizersConfig.h"
 #include "ScopedMemStats.h"
 #include "Show.h"
-#include "SignedConstantDomain.h"
 #include "ThreadPool.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -2171,9 +2170,6 @@ int main(int argc, char* argv[]) {
 
     keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
-
-    signed_constant_domain_internal::enable_low6bits =
-        args.config.get("enable_low6bits_constant_propagation", true).asBool();
 
     constant_propagation_transform_internal::
         enable_object_domain_null_check_elim =
