@@ -10,6 +10,7 @@
 #include "Creators.h"
 #include "Debug.h"
 #include "DexStore.h"
+#include "ModelMethodMerger.h"
 #include "Show.h"
 #include "Trace.h"
 

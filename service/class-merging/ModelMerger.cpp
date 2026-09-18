@@ -14,6 +14,7 @@
 #include "Debug.h"
 #include "Inliner.h"
 #include "MethodReference.h"
+#include "ModelMethodMerger.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "TypeReference.h"

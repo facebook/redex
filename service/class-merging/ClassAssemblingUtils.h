@@ -11,7 +11,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRInstruction.h"
-#include "ModelMethodMerger.h"
+#include "MergerType.h"
 
 namespace class_merging {
 
