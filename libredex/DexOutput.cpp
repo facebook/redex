@@ -1517,7 +1517,7 @@ uint64_t emit_debug_info(
     dex_code_item* dci,
     PositionMapper* pos_mapper,
     uint8_t* output,
-    uint32_t offset,
+    uint64_t offset,
     uint64_t capacity,
     uint64_t* checked_through,
     uint32_t num_params,
@@ -2318,10 +2318,18 @@ uint64_t emit_instruction_offset_debug_info_helper(
   TRACE(IODI, 2, "[IODI] Non-IODI programs took up %" PRIu64 " bytes\n",
         offset - post_iodi_offset);
   // Return how much data we've encoded
-  uint64_t emitted = offset - initial_offset;
-  always_assert_log(offset >= initial_offset && emitted <= UINT32_MAX,
-                    "IODI debug layer wrapped the 32-bit output cursor");
-  return (uint32_t)emitted;
+  // The absolute cursor is what gets narrowed back into m_offset, so that is
+  // what has to fit -- not merely this layer's length.
+  always_assert_log(offset >= initial_offset,
+                    "IODI debug layer wrapped the output cursor from %" PRIu64
+                    " to %" PRIu64,
+                    initial_offset,
+                    offset);
+  always_assert_log(offset <= UINT32_MAX,
+                    "IODI debug layer ran the output cursor to %" PRIu64
+                    ", past the 32-bit dex offset domain",
+                    offset);
+  return offset - initial_offset;
 }
 
 uint64_t emit_instruction_offset_debug_info(
@@ -2427,13 +2435,19 @@ uint64_t emit_instruction_offset_debug_info(
     iodi_metadata.mark_method_huge(method);
   }
 
-  // The caller stores this section length in the 32-bit output cursor. Keep
-  // this conversion explicit even though the configured buffer cap makes an
-  // oversized section unreachable today.
-  uint64_t emitted = offset - initial_offset;
-  always_assert_log(offset >= initial_offset && emitted <= UINT32_MAX,
-                    "IODI debug section wrapped the 32-bit output cursor");
-  return (uint32_t)emitted;
+  // The configured buffer cap keeps this cursor in the 32-bit DEX domain
+  // today. Keep the representation check local because debug_info_off fields
+  // and DexOutput's cursor are 32-bit.
+  always_assert_log(offset >= initial_offset,
+                    "IODI debug section wrapped the output cursor from %" PRIu64
+                    " to %" PRIu64,
+                    initial_offset,
+                    offset);
+  always_assert_log(offset <= UINT32_MAX,
+                    "IODI debug section ran the output cursor to %" PRIu64
+                    ", past the 32-bit dex offset domain",
+                    offset);
+  return offset - initial_offset;
 }
 
 } // namespace
