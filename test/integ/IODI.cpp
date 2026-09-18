@@ -28,8 +28,8 @@
 using namespace std::literals::string_literals;
 
 struct DexOutputTestHelper {
-  // Valid only while `output` is alive: DexOutput owns a single mapping that it
-  // unmaps on destruction, so the bytes cannot be detached from it.
+  // Valid only while `output` is alive: the bytes belong to the DexOutput and
+  // are released with it, so they cannot be detached from it.
   static std::span<const uint8_t> output_bytes(const DexOutput& output) {
     return {output.m_output.get(), output.m_offset};
   }

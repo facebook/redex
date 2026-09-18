@@ -389,7 +389,7 @@ class DexOutput {
   void init_header_offsets(const std::string& dex_magic);
   void write_symbol_files();
   uint32_t align(uint32_t offset) { return (offset + 3) & ~3; }
-  void align_output() { m_offset = align(m_offset); }
+  void align_output();
 
   void inc_offset(uint64_t v);
 
@@ -405,7 +405,8 @@ class DexOutput {
                    const char* what,
                    const std::function<std::string()>& describe_subject);
 
-  // Furthest cursor position covered by ensure_fits.
+  // Cursor extent granted by the most recent producer check. The next cursor
+  // advance consumes it so slack cannot cover another producer.
   uint64_t m_checked_through{0};
 
   friend struct DexOutputTestHelper;

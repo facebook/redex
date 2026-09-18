@@ -1476,7 +1476,8 @@ uint64_t check_debug_item_fits(
                     "-byte buffer.",
                     bound, offset, capacity);
   if (checked_through != nullptr) {
-    *checked_through = std::max(*checked_through, offset + bound);
+    // Each check covers only this write.
+    *checked_through = offset + bound;
   }
   return bound;
 }
@@ -3402,6 +3403,19 @@ uint64_t DexOutput::policy_cap() const {
   return m_output_size - k_output_margin;
 }
 
+void DexOutput::align_output() {
+  uint64_t aligned = (m_offset + uint64_t{3}) & ~uint64_t{3};
+  always_assert_log(aligned < policy_cap(),
+                    "Running into output safety margin while aligning the dex "
+                    "output cursor from %u to %" PRIu64 " of %" PRIu64
+                    " (%zu). Increase the buffer size with "
+                    "`-J dex_output_buffer_size=`.",
+                    m_offset, aligned, policy_cap(), m_output_size);
+  m_offset = static_cast<uint32_t>(aligned);
+  // Alignment moves the cursor without writing, so consume any prior check.
+  m_checked_through = m_offset;
+}
+
 void DexOutput::ensure_fits(uint64_t bytes,
                             const char* what,
                             const char* subject) {
@@ -3411,7 +3425,8 @@ void DexOutput::ensure_fits(uint64_t bytes,
                     " bytes does not fit at offset %u of the %zu-byte dex "
                     "output buffer: %s",
                     what, bytes, m_offset, m_output_size, subject);
-  m_checked_through = std::max(m_checked_through, end);
+  // Do not let slack in this bound cover a later producer.
+  m_checked_through = end;
 }
 
 void DexOutput::ensure_fits(
@@ -3427,7 +3442,7 @@ void DexOutput::ensure_fits(
                       "output buffer: %s",
                       what, bytes, m_offset, m_output_size, subject.c_str());
   }
-  m_checked_through = std::max(m_checked_through, end);
+  m_checked_through = end;
 }
 
 void DexOutput::inc_offset(uint64_t v) {
@@ -3452,4 +3467,6 @@ void DexOutput::inc_offset(uint64_t v) {
                     "size with `-J dex_output_buffer_size=`.",
                     next, policy_cap(), m_output_size);
   m_offset = (uint32_t)next;
+  // Consume this producer's check so its slack cannot cover the next one.
+  m_checked_through = m_offset;
 }
