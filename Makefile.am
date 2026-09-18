@@ -169,6 +169,7 @@ libredex_la_SOURCES = \
 	libredex/InstructionLowering.cpp \
 	libredex/InteractiveDebugging.cpp \
 	libredex/IODIMetadata.cpp \
+	libredex/IODIPlan.cpp \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \

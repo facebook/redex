@@ -7,9 +7,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "ConfigFiles.h"
 #include "DeterministicContainers.h"
