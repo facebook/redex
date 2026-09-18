@@ -749,6 +749,22 @@ struct ObjectCounts {
  */
 ObjectCounts count_objects(const DexStoresVector& stores);
 
+/*
+ * Builds the graph over the objects that `sweep` will remove: every in-scope,
+ * non-external class that was not marked, every member of such a class whatever
+ * its own mark state, and every unmarked member of a surviving class.
+ *
+ * The result uses the same orientation as the reachability graph --
+ * `graph[target]` holds the objects that reference `target` -- so a removed
+ * object that nothing removed references keeps an empty predecessor set. That
+ * is how roots of this graph are represented; see
+ * tools/reachability-analysis/lib/analysis.py.
+ *
+ * Must be called before `sweep`, which frees the objects this graph points at.
+ */
+ReachableObjectGraph compute_removed_reachability_graph(
+    const Scope& scope, const ReachableObjects& reachables);
+
 void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of);
 
 bool consider_dynamically_referenced(const DexClass* cls);

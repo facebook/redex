@@ -382,8 +382,9 @@ class ReachabilityHprof:
         self.write_reachable_type_objects(field_ids, global_ids, self.write_field)
         self.write_reachable_type_objects(anno_ids, global_ids, self.write_anno)
         self.write_reachable_type_objects(seeds_ids, global_ids, self.write_seed)
-        for seed_id in seeds_ids.values():
-            self.hprof.make_root(seed_id)
+        for node, object_id in global_ids.items():
+            if node.type == ReachableObjectType.SEED or not node.preds:
+                self.hprof.make_root(object_id)
         self.finish()
 
     def write_reachable_type_objects(

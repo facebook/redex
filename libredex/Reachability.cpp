@@ -2518,6 +2518,225 @@ ObjectCounts count_objects(const DexStoresVector& stores) {
   return counts;
 }
 
+namespace {
+
+/*
+ * Answers "will `sweep` delete this?", evaluated before any sweeping has run.
+ *
+ * A class is removed when it was not marked. Every member of a removed class
+ * goes with it whatever its own mark state, because the wholly-removed-class
+ * branch of `sweep` deletes them all; an unmarked member of a surviving class
+ * is removed on its own. Redex only deletes what it owns, so the in-scope check
+ * gates the member predicate as well as the class one.
+ */
+class RemovedObjectPredicate {
+ public:
+  RemovedObjectPredicate(const Scope& scope, const ReachableObjects& reachables)
+      : m_scope_set(scope.begin(), scope.end()), m_reachables(reachables) {}
+
+  bool is_removed(const DexClass* cls) const {
+    return in_scope(cls) && !m_reachables.marked_unsafe(cls);
+  }
+
+  template <class DexMember>
+  bool is_removed_member(const DexClass* owner, const DexMember* member) const {
+    return in_scope(owner) && (!m_reachables.marked_unsafe(owner) ||
+                               !m_reachables.marked_unsafe(member));
+  }
+
+  template <class DexMember>
+  bool is_removed_member(const DexMember* member) const {
+    return is_removed_member(type_class(member->get_class()), member);
+  }
+
+ private:
+  bool in_scope(const DexClass* cls) const {
+    return cls != nullptr && !cls->is_external() &&
+           m_scope_set.count(cls) != 0u;
+  }
+
+  UnorderedSet<const DexClass*> m_scope_set;
+  const ReachableObjects& m_reachables;
+};
+
+// The direct references of one source object, gathered before any lock is
+// taken.
+struct SourceReferences {
+  std::vector<const DexType*> types;
+  std::vector<DexFieldRef*> fields;
+  std::vector<DexMethodRef*> methods;
+};
+
+/*
+ * Shallow on purpose: the members of a removed class are sources in their own
+ * right, and `DexClass::gather_*` recurses into them, which would attribute
+ * every member's dependencies to the class.
+ */
+void gather_class_references(const DexClass* cls, SourceReferences* refs) {
+  refs->types.push_back(cls->get_super_class());
+  for (const auto* intf : *cls->get_interfaces()) {
+    refs->types.push_back(intf);
+  }
+  const auto* annos = cls->get_anno_set();
+  if (annos == nullptr) {
+    return;
+  }
+  for (const auto& anno : annos->get_annotations()) {
+    // Inner-class annotations, which the marker ignores as well.
+    if (anno->type() == type::dalvik_annotation_MemberClasses()) {
+      continue;
+    }
+    anno->gather_types(refs->types);
+    anno->gather_fields(refs->fields);
+    anno->gather_methods(refs->methods);
+  }
+}
+
+void gather_field_references(const DexField* field, SourceReferences* refs) {
+  // `DexField::gather_types` only covers the static value and the annotations,
+  // so the declared type has to come from the shallow gather.
+  field->gather_types_shallow(refs->types);
+  field->gather_types(refs->types);
+  field->gather_fields(refs->fields);
+  field->gather_methods(refs->methods);
+}
+
+void gather_method_references(const DexMethod* method, SourceReferences* refs) {
+  // `DexMethod::gather_types` subsumes the shallow prototype gather, and reads
+  // the CFG when one is built.
+  method->gather_types(refs->types);
+  method->gather_fields(refs->fields);
+  method->gather_methods(refs->methods);
+}
+
+/*
+ * Turns gathered references into edges. Targets are normalized -- arrays to
+ * their element class, refs to their definitions -- and kept only when they
+ * were removed too, so the result is the subgraph induced on removed objects.
+ */
+class RemovedEdgeRecorder {
+ public:
+  RemovedEdgeRecorder(const RemovedObjectPredicate& removed,
+                      ReachableObjectGraph& graph)
+      : m_removed(removed), m_graph(graph) {}
+
+  /*
+   * `owner` is the class declaring `source`, or `source` itself when that is a
+   * class. Edges to it are dropped, mirroring how the reachability graph
+   * suppresses the trivial member-to-own-class reference.
+   */
+  void record(const ReachableObject& source,
+              const DexClass* owner,
+              const SourceReferences& refs) const {
+    UnorderedSet<ReachableObject, ReachableObjectHash> targets;
+    for (const auto* type : refs.types) {
+      const auto* cls = type_class(type::get_element_type_if_array(type));
+      if (cls != owner && m_removed.is_removed(cls)) {
+        targets.insert(ReachableObject(cls));
+      }
+    }
+    for (auto* ref : refs.fields) {
+      auto* def = ref->as_def();
+      if (def == nullptr) {
+        def = resolve_field(ref->get_class(), ref->get_name(), ref->get_type());
+      }
+      if (def != nullptr && m_removed.is_removed_member(def)) {
+        targets.insert(ReachableObject(def));
+      }
+    }
+    for (auto* ref : refs.methods) {
+      const auto* def =
+          resolve_without_context(ref, type_class(ref->get_class()));
+      if (def != nullptr && m_removed.is_removed_member(def)) {
+        targets.insert(ReachableObject(def));
+      }
+    }
+    for (const auto& target : UnorderedIterable(targets)) {
+      if (!(target == source)) {
+        record_edge(source, target);
+      }
+    }
+  }
+
+  // Stored in the retainers_of orientation: `source` becomes a predecessor of
+  // `target`.
+  void record_edge(const ReachableObject& source,
+                   const ReachableObject& target) const {
+    m_graph.update(target,
+                   [&source](const ReachableObject&, ReachableObjectSet& set,
+                             bool /* exists */) { set.emplace(source); });
+  }
+
+ private:
+  const RemovedObjectPredicate& m_removed;
+  ReachableObjectGraph& m_graph;
+};
+
+} // namespace
+
+ReachableObjectGraph compute_removed_reachability_graph(
+    const Scope& scope, const ReachableObjects& reachables) {
+  Timer t("Computing removed reachability graph");
+  RemovedObjectPredicate removed(scope, reachables);
+  ReachableObjectGraph graph;
+
+  // Every removed object becomes a key, so that isolated ones are still
+  // serialized and so that the roots are exactly the keys whose predecessor set
+  // is still empty once edges have been gathered.
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    if (removed.is_removed(cls)) {
+      graph.emplace(ReachableObject(cls));
+    }
+    for (auto* field : cls->get_all_fields()) {
+      if (removed.is_removed_member(cls, field)) {
+        graph.emplace(ReachableObject(field));
+      }
+    }
+    for (auto* method : cls->get_all_methods()) {
+      if (removed.is_removed_member(cls, method)) {
+        graph.emplace(ReachableObject(method));
+      }
+    }
+  });
+
+  // A removed class also gets an edge to each member it takes with it. The
+  // reverse containment edge is deliberately absent, so that a member cannot
+  // keep its own class from being a root.
+  RemovedEdgeRecorder recorder(removed, graph);
+  walk::parallel::classes(scope, [&](DexClass* cls) {
+    bool class_removed = removed.is_removed(cls);
+    if (class_removed) {
+      SourceReferences refs;
+      gather_class_references(cls, &refs);
+      recorder.record(ReachableObject(cls), cls, refs);
+    }
+    for (auto* field : cls->get_all_fields()) {
+      if (!removed.is_removed_member(cls, field)) {
+        continue;
+      }
+      if (class_removed) {
+        recorder.record_edge(ReachableObject(cls), ReachableObject(field));
+      }
+      SourceReferences refs;
+      gather_field_references(field, &refs);
+      recorder.record(ReachableObject(field), cls, refs);
+    }
+    for (auto* method : cls->get_all_methods()) {
+      if (!removed.is_removed_member(cls, method)) {
+        continue;
+      }
+      if (class_removed) {
+        recorder.record_edge(ReachableObject(cls), ReachableObject(method));
+      }
+      SourceReferences refs;
+      gather_method_references(method, &refs);
+      recorder.record(ReachableObject(method), cls, refs);
+    }
+  });
+
+  return graph;
+}
+
 // Graph serialization helpers
 namespace {
 
