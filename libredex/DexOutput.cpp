@@ -1461,13 +1461,13 @@ DebugMetadata calculate_debug_metadata(
 uint64_t check_debug_item_fits(
     uint32_t num_params,
     const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops,
-    uint32_t offset,
+    uint64_t offset,
     uint64_t capacity,
     uint64_t* checked_through) {
   uint64_t bound = DexDebugItem::max_encoded_size(num_params, dbgops);
   always_assert_log(offset + bound <= capacity,
                     "A debug program of up to %" PRIu64
-                    " bytes does not fit at offset %u of a %" PRIu64
+                    " bytes does not fit at offset %" PRIu64 " of a %" PRIu64
                     "-byte buffer.",
                     bound, offset, capacity);
   if (checked_through != nullptr) {
@@ -1480,7 +1480,7 @@ uint64_t emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                       const DebugMetadata& metadata,
                                       const DexMethod* method,
                                       uint8_t* output,
-                                      uint32_t offset,
+                                      uint64_t offset,
                                       uint64_t capacity,
                                       uint64_t* checked_through,
                                       bool set_dci_offset = true) {
@@ -1491,7 +1491,14 @@ uint64_t emit_debug_info_for_metadata(DexOutputIdx* dodx,
   uint64_t encoded = checked_encoded_size_within(
       size, bound, "DexDebugItem::encode", [method]() { return show(method); });
   if (set_dci_offset) {
-    metadata.dci->debug_info_off = offset;
+    // debug_info_off is a 32-bit dex field, so the 64-bit cursor has to narrow
+    // here. Assert rather than truncate: a wrapped value is a valid-looking
+    // offset that points at the header.
+    always_assert_log(offset <= UINT32_MAX,
+                      "debug program sits at offset %" PRIu64
+                      ", past what debug_info_off can address",
+                      offset);
+    metadata.dci->debug_info_off = (uint32_t)offset;
   }
   return encoded;
 }
@@ -1602,7 +1609,7 @@ struct ParamSizeOrder {
   }
 };
 
-uint32_t emit_instruction_offset_debug_info_helper(
+uint64_t emit_instruction_offset_debug_info_helper(
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit*>& code_items,
@@ -1612,7 +1619,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
     size_t store_number,
     size_t dex_number,
     uint8_t* output,
-    uint32_t offset,
+    uint64_t offset,
     uint64_t capacity,
     uint64_t* checked_through,
     int* dbgcount,
@@ -1719,8 +1726,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
       (iodi_metadata.layer_mode ==
            IODIMetadata::IODILayerMode::kAlwaysSkipLayer0ExceptPrimary &&
        store_number == 0 && dex_number == 0);
-  UnorderedMap<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
-  uint32_t initial_offset = offset;
+  UnorderedMap<uint32_t, std::map<uint32_t, uint64_t>> param_size_to_oset;
+  uint64_t initial_offset = offset;
   for (int32_t size = pso.next(); size != -1; size = pso.next()) {
     auto param_size = size;
     const auto& dbg_sizes = param_to_sizes.at(size);
@@ -2057,7 +2064,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
       // 2.2) Emit IODI programs (other debug programs will be emitted below)
       if (requires_iodi_programs) {
         TRACE(IODI, 2,
-              "[IODI] @%u(%d): Of %zu methods %zu were too big, %zu at biggest "
+              "[IODI] @%" PRIu64
+              "(%d): Of %zu methods %zu were too big, %zu at biggest "
               "%zu",
               offset, param_size, sizes.size(), num_big, num_small_enough,
               insns_size);
@@ -2075,8 +2083,8 @@ uint32_t emit_instruction_offset_debug_info_helper(
         auto& size_to_offset = param_size_to_oset[param_size];
         for (auto& bucket : buckets) {
           auto bucket_size = bucket.first;
-          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %u", bucket.second,
-                bucket_size, offset);
+          TRACE(IODI, 3, "  - %u methods in bucket size %u @ %" PRIu64,
+                bucket.second, bucket_size, offset);
           size_to_offset.emplace(bucket_size, offset);
           std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
           dbgops.reserve(bucket_size);
@@ -2227,7 +2235,7 @@ uint32_t emit_instruction_offset_debug_info_helper(
   }
 
   auto post_iodi_offset = offset;
-  TRACE(IODI, 2, "[IODI] IODI programs took up %u bytes\n",
+  TRACE(IODI, 2, "[IODI] IODI programs took up %" PRIu64 " bytes\n",
         post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
@@ -2265,7 +2273,14 @@ uint32_t emit_instruction_offset_debug_info_helper(
         always_assert_log(offset_it != offset_end,
                           "Expected IODI program to be big enough for %s : %u",
                           SHOW(method), code_size);
-        it->code_item->debug_info_off = offset_it->second;
+        // Same 32-bit dex field as in emit_debug_info_for_metadata: the bucket
+        // offsets are tracked in 64 bits, so narrowing here is checked rather
+        // than silent.
+        always_assert_log(offset_it->second <= UINT32_MAX,
+                          "IODI program for %s sits at offset %" PRIu64
+                          ", past what debug_info_off can address",
+                          SHOW(method), offset_it->second);
+        it->code_item->debug_info_off = (uint32_t)offset_it->second;
       } else {
         it->code_item->debug_info_off = 0;
       }
@@ -2295,13 +2310,16 @@ uint32_t emit_instruction_offset_debug_info_helper(
                                     return to_remove.count(cie->method) > 0;
                                   }),
                    code_items.end());
-  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %u bytes\n",
+  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %" PRIu64 " bytes\n",
         offset - post_iodi_offset);
   // Return how much data we've encoded
-  return offset - initial_offset;
+  uint64_t emitted = offset - initial_offset;
+  always_assert_log(offset >= initial_offset && emitted <= UINT32_MAX,
+                    "IODI debug layer wrapped the 32-bit output cursor");
+  return (uint32_t)emitted;
 }
 
-uint32_t emit_instruction_offset_debug_info(
+uint64_t emit_instruction_offset_debug_info(
     DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit>& code_items,
@@ -2310,7 +2328,7 @@ uint32_t emit_instruction_offset_debug_info(
     size_t store_number,
     size_t dex_number,
     uint8_t* output,
-    uint32_t offset,
+    uint64_t offset,
     uint64_t capacity,
     uint64_t* checked_through,
     int* dbgcount,
@@ -2367,7 +2385,7 @@ uint32_t emit_instruction_offset_debug_info(
         code_items_tmp.end());
   }
 
-  const uint32_t initial_offset = offset;
+  const uint64_t initial_offset = offset;
   if (!code_items_tmp.empty()) {
     for (size_t i = 0; i < large_bound; ++i) {
       if (code_items_tmp.empty()) {
@@ -2404,8 +2422,13 @@ uint32_t emit_instruction_offset_debug_info(
     iodi_metadata.mark_method_huge(method);
   }
 
-  // Return how much data we've encoded
-  return offset - initial_offset;
+  // The caller stores this section length in the 32-bit output cursor. Keep
+  // this conversion explicit even though the configured buffer cap makes an
+  // oversized section unreachable today.
+  uint64_t emitted = offset - initial_offset;
+  always_assert_log(offset >= initial_offset && emitted <= UINT32_MAX,
+                    "IODI debug section wrapped the 32-bit output cursor");
+  return (uint32_t)emitted;
 }
 
 } // namespace
