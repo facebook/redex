@@ -28,6 +28,9 @@ class TestGraphDeserialization(unittest.TestCase):
         removed_root = graph.get_node("LRemovedRoot;")
         removed_cls = graph.get_node("LRemovedChild;")
 
+        self.assertIs(anno, graph.get_node("LAnno;"))
+        self.assertIs(seed, graph.get_node("<SEED>"))
+
         def assertEdge(pred, succ):
             self.assertIn(succ, pred.succs)
             self.assertIn(pred, succ.preds)
@@ -107,6 +110,15 @@ class TestGraphDeserialization(unittest.TestCase):
                 for node in annotation_records
             )
         )
+
+    def test_get_node_prefers_class_over_annotation(self):
+        graph = core.ReachabilityGraph()
+        annotation = core.ReachableObject(core.ReachableObjectType.ANNO, "LSame;")
+        cls = core.ReachableObject(core.ReachableObjectType.CLASS, "LSame;")
+        graph.add_node(annotation)
+        graph.add_node(cls)
+
+        self.assertIs(cls, graph.get_node("LSame;"))
 
     def test_method_override_graph(self):
         """

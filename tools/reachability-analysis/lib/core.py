@@ -248,10 +248,17 @@ class ReachabilityGraph(AbstractGraph):
             return self.nodes[(ReachableObjectType.METHOD, node_name)]
         if is_field(node_name):
             return self.nodes[(ReachableObjectType.FIELD, node_name)]
-        # If we get here, we may have an annotation or a class. Just assume
-        # we have a class. Users should call `get_anno` if they want to
-        # retrieve an annotation.
-        return self.nodes[(ReachableObjectType.CLASS, node_name)]
+        # Prefer classes to preserve the existing behavior when a class and
+        # annotation have the same name.
+        for node_type in (
+            ReachableObjectType.CLASS,
+            ReachableObjectType.ANNO,
+            ReachableObjectType.SEED,
+        ):
+            node = self.nodes.get((node_type, node_name))
+            if node is not None:
+                return node
+        raise KeyError((ReachableObjectType.CLASS, node_name))
 
     def get_anno(self, node_name):
         return self.nodes[(ReachableObjectType.ANNO, node_name)]
