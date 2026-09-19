@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import tempfile
 import unittest
 
 from lib import analysis, core
@@ -41,6 +42,71 @@ class TestGraphDeserialization(unittest.TestCase):
         roots = {node for node in graph.nodes.values() if len(node.preds) == 0}
         self.assertSetEqual(roots, {seed, removed_root})
         self.assertSetEqual(analysis.get_dominated(graph, set()), set())
+
+    def test_reachability_graph_dump_round_trip(self):
+        graph = core.ReachabilityGraph()
+        graph.load(os.environ["REACHABILITY_GRAPH_FILE"])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first_file = os.path.join(temp_dir, "first-graph")
+            second_file = os.path.join(temp_dir, "second-graph")
+            graph.dump(first_file)
+
+            round_tripped = core.ReachabilityGraph()
+            round_tripped.load(first_file)
+            round_tripped.dump(second_file)
+
+            self.assertEqual(set(graph.nodes), set(round_tripped.nodes))
+            self.assertEqual(
+                {
+                    key: {
+                        (predecessor.type, predecessor.name)
+                        for predecessor in node.preds
+                    }
+                    for key, node in graph.nodes.items()
+                },
+                {
+                    key: {
+                        (predecessor.type, predecessor.name)
+                        for predecessor in node.preds
+                    }
+                    for key, node in round_tripped.nodes.items()
+                },
+            )
+            with open(first_file, "rb") as first, open(second_file, "rb") as second:
+                self.assertEqual(first.read(), second.read())
+
+    def test_dump_preserves_duplicate_node_records(self):
+        graph = core.ReachabilityGraph()
+        cls = core.ReachableObject(core.ReachableObjectType.CLASS, "LFoo;")
+        first_anno = core.ReachableObject(core.ReachableObjectType.ANNO, "LAnno;")
+        second_anno = core.ReachableObject(core.ReachableObjectType.ANNO, "LAnno;")
+        graph.add_node(cls)
+        graph.add_node(first_anno)
+        graph.add_node(second_anno)
+        graph.add_edge(first_anno, cls)
+        graph.add_edge(second_anno, cls)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph_file = os.path.join(temp_dir, "graph")
+            graph.dump(graph_file)
+            round_tripped = core.ReachabilityGraph()
+            round_tripped.load(graph_file)
+
+        self.assertEqual(3, len(round_tripped.node_records))
+        self.assertEqual(2, len(round_tripped.nodes))
+        annotation_records = [
+            node
+            for node in round_tripped.node_records
+            if node.type == core.ReachableObjectType.ANNO
+        ]
+        self.assertEqual(2, len(annotation_records))
+        self.assertTrue(
+            all(
+                cls.name in {predecessor.name for predecessor in node.preds}
+                for node in annotation_records
+            )
+        )
 
     def test_method_override_graph(self):
         """
