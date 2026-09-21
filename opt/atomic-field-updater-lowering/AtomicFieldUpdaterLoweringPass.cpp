@@ -37,6 +37,7 @@
 #include "LocalDce.h"
 #include "MethodOverrideGraph.h"
 #include "PassManager.h"
+#include "ReachableClasses.h"
 #include "ReflectionAnalysis.h"
 #include "Resolver.h"
 #include "Show.h"
@@ -1599,6 +1600,14 @@ void lower_calls(const Scope& scope,
 struct CleanupStats {
   size_t updater_fields_removed{0};
   size_t updater_inits_removed{0};
+  // Counted per field, so a holder whose updater and offset field are both
+  // pinned contributes two. `can_delete` is false for any root or kept member,
+  // not only for one named by a keep rule.
+  size_t skipped_undeletable{0};
+  // Also per field, and only for one that was otherwise about to be removed --
+  // a holder whose fields are all still referenced is not counted, however its
+  // <clinit> is written.
+  size_t skipped_try_region{0};
   size_t offset_fields_removed{0};
   size_t offset_inits_removed{0};
 };
@@ -1653,6 +1662,33 @@ void collect_single_use_init_slice(cfg::ControlFlowGraph& cfg,
   }
 }
 
+// Does this method have a try region that can actually be entered?
+//
+// Cleanup deletes a field's init slice, and the slice is built from
+// `newUpdater` and `getDeclaredField`, both of which throw. Deleting one out of
+// a try region removes a path the catch block was written for.
+//
+// Refusing the whole method is deliberate, rather than asking which blocks the
+// slice lands in. Throw edges are how a CFG records "reachable from a handler",
+// but `add_catch_edges` only attaches them to blocks that *end* in a may-throw
+// instruction, so a slice instruction sitting in the non-throwing tail of a try
+// region carries none and a per-block test would wave it through.
+//
+// A try region containing nothing that throws has no edges either, so it reads
+// as absent here. Nothing is lost by that: its handler cannot be reached.
+//
+// R8 declines to instrument such a class at all (`Reason.UNDER_CATCH_HANDLER`).
+// Declining only to clean it up is enough here, because the code this pass
+// *inserts* cannot throw -- recognition has already proven the named volatile
+// field exists on the holder, so the added `getDeclaredField` resolves.
+bool has_live_try_region(cfg::ControlFlowGraph& cfg) {
+  const auto blocks = cfg.blocks();
+  return std::any_of(blocks.begin(), blocks.end(), [&cfg](cfg::Block* block) {
+    return block != nullptr &&
+           cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) != nullptr;
+  });
+}
+
 CleanupStats cleanup_redundant_fields(const Scope& scope,
                                       std::vector<UpdaterInfo>* updaters,
                                       PassManager& mgr) {
@@ -1660,6 +1696,8 @@ CleanupStats cleanup_redundant_fields(const Scope& scope,
   if (updaters->empty()) {
     mgr.set_metric("updater_fields_removed", 0);
     mgr.set_metric("updater_inits_removed", 0);
+    mgr.set_metric("cleanup_skipped_undeletable", 0);
+    mgr.set_metric("cleanup_skipped_try_region", 0);
     mgr.set_metric("offset_fields_removed", 0);
     mgr.set_metric("offset_inits_removed", 0);
     return stats;
@@ -1723,29 +1761,65 @@ CleanupStats cleanup_redundant_fields(const Scope& scope,
     auto use_defs = chains.get_use_def_chains();
     auto def_uses = chains.get_def_use_chains();
     const auto& c = counts.at(&info);
+
+    // Answered at most once per holder, and only for a field that reached the
+    // point of being removed -- both so the metric counts real refusals and so
+    // holders with nothing to clean up do not pay for the walk.
+    std::optional<bool> under_handler;
+    auto in_try_region = [&]() {
+      if (!under_handler) {
+        under_handler = has_live_try_region(cfg);
+      }
+      return *under_handler;
+    };
+
+    // May this field be deleted at all, and if so, which instructions exist
+    // only to initialize it?
+    auto removable = [&](DexField* field, IROpcode store_opcode,
+                         UnorderedSet<IRInstruction*>* slice) {
+      if (!can_delete(field)) {
+        stats.skipped_undeletable++;
+        return false;
+      }
+      if (in_try_region()) {
+        stats.skipped_try_region++;
+        return false;
+      }
+      auto* store = find_static_store(clinit, field, store_opcode);
+      if (store != nullptr) {
+        collect_single_use_init_slice(cfg, use_defs, def_uses, store, slice);
+      }
+      return true;
+    };
+
     if (c.offset_refs.load(std::memory_order_relaxed) == 0 &&
         info.offset_field != nullptr) {
-      auto* offset_store =
-          find_static_store(clinit, info.offset_field, OPCODE_SPUT_WIDE);
-      fields_to_delete.emplace_back(holder_cls, info.offset_field);
-      stats.offset_fields_removed++;
-      if (offset_store != nullptr) {
-        collect_single_use_init_slice(cfg, use_defs, def_uses, offset_store,
-                                      &remove_from_method[clinit]);
+      UnorderedSet<IRInstruction*> slice;
+      if (removable(info.offset_field, OPCODE_SPUT_WIDE, &slice)) {
+        fields_to_delete.emplace_back(holder_cls, info.offset_field);
+        stats.offset_fields_removed++;
+        info.offset_field = nullptr;
+        // A field with no store has an empty slice and removes no init. Only
+        // the field itself goes.
+        if (!slice.empty()) {
+          insert_unordered_iterable(remove_from_method[clinit], slice);
+          stats.offset_inits_removed++;
+        }
       }
-      info.offset_field = nullptr;
-      stats.offset_inits_removed++;
     }
     if (c.updater_refs.load(std::memory_order_relaxed) == 0) {
-      auto* updater_store =
-          find_static_store(clinit, info.updater, OPCODE_SPUT_OBJECT);
-      fields_to_delete.emplace_back(holder_cls, info.updater);
-      stats.updater_fields_removed++;
-      if (updater_store != nullptr) {
-        collect_single_use_init_slice(cfg, use_defs, def_uses, updater_store,
-                                      &remove_from_method[clinit]);
+      // The offset field is one we synthesize and may not exist; the updater is
+      // what recognition matched on, so it is always present.
+      always_assert(info.updater != nullptr);
+      UnorderedSet<IRInstruction*> slice;
+      if (removable(info.updater, OPCODE_SPUT_OBJECT, &slice)) {
+        fields_to_delete.emplace_back(holder_cls, info.updater);
+        stats.updater_fields_removed++;
+        if (!slice.empty()) {
+          insert_unordered_iterable(remove_from_method[clinit], slice);
+          stats.updater_inits_removed++;
+        }
       }
-      stats.updater_inits_removed++;
     }
   }
 
@@ -1771,6 +1845,8 @@ CleanupStats cleanup_redundant_fields(const Scope& scope,
 
   mgr.set_metric("updater_fields_removed", stats.updater_fields_removed);
   mgr.set_metric("updater_inits_removed", stats.updater_inits_removed);
+  mgr.set_metric("cleanup_skipped_undeletable", stats.skipped_undeletable);
+  mgr.set_metric("cleanup_skipped_try_region", stats.skipped_try_region);
   mgr.set_metric("offset_fields_removed", stats.offset_fields_removed);
   mgr.set_metric("offset_inits_removed", stats.offset_inits_removed);
   return stats;

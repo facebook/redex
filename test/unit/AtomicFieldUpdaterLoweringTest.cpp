@@ -83,12 +83,16 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
   // (AtomicFieldUpdaterApiGateTest), which drives both sides of the boundary.
   // `extra_classes` join the same store, for tests whose shape needs a second
   // class in the pass's scope rather than merely in the global type registry.
+  // `configure` runs on the assembled holder just before the pass does, for
+  // tests that need something this signature cannot express -- a keep bit on a
+  // field, or a <clinit> of their own.
   void run(const std::string& cls_name,
            const std::string& updater_desc,
            const std::string& field_name,
            const std::string& field_type,
            const std::vector<DexMethod*>& extra_methods = {},
-           const std::vector<DexClass*>& extra_classes = {}) {
+           const std::vector<DexClass*>& extra_classes = {},
+           const std::function<void(DexClass*)>& configure = nullptr) {
     ClassCreator cc(DexType::make_type(cls_name));
     cc.set_super(type::java_lang_Object());
     cc.add_field(
@@ -117,6 +121,9 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
       cc.add_method(m);
     }
     auto* cls = cc.create();
+    if (configure) {
+      configure(cls);
+    }
 
     AtomicFieldUpdaterLoweringPass pass;
     ConfigFiles config(Json::nullValue);
@@ -375,4 +382,117 @@ TEST_F(AtomicFieldUpdaterLoweringTest, referenceGetAndSetIsStillLowered) {
   EXPECT_EQ(metric("blocked_hidden_api"), 0);
   EXPECT_EQ(metric("rewritable_total"), 1);
   EXPECT_EQ(metric("calls_rewritten"), 1);
+}
+
+// A keep rule on the updater field survives the lowering. Cleanup removes a
+// field once nothing reads it, and "nothing reads it" is not the same as "it
+// may be deleted" -- a keep rule can pin a field precisely because something
+// outside the dex, typically reflection, still names it.
+TEST_F(AtomicFieldUpdaterLoweringTest, keptUpdaterFieldIsNotRemoved) {
+  static constexpr const char* kGet = R"((
+    (load-param-object v0)
+    (sget-object "LKept;.U:$UPD")
+    (move-result-pseudo-object v1)
+    (invoke-virtual (v1 v0) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+    (move-result-object v2)
+    (return-void)
+  ))";
+  auto* m = DexMethod::make_method("LKept;.read:(LKept;)V")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(kGet, {{"$UPD", REFERENCE_DESC}})));
+
+  run("LKept;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m}, {},
+      [](DexClass* cls) {
+        for (auto* f : cls->get_sfields()) {
+          if (f->get_type() == DexType::get_type(REFERENCE_DESC)) {
+            f->rstate.set_root();
+          }
+        }
+      });
+
+  // The site still lowers -- the keep bit is about deleting the field, not
+  // about rewriting its uses.
+  EXPECT_EQ(metric("calls_rewritten"), 1);
+  EXPECT_EQ(metric("updater_fields_removed"), 0);
+  EXPECT_GE(metric("cleanup_skipped_undeletable"), 1);
+
+  auto* cls = type_class(DexType::get_type("LKept;"));
+  ASSERT_NE(cls, nullptr);
+  size_t updater_fields = 0;
+  for (auto* f : cls->get_sfields()) {
+    if (f->get_type() == DexType::get_type(REFERENCE_DESC)) {
+      updater_fields++;
+    }
+  }
+  EXPECT_EQ(updater_fields, 1u) << "a kept field must survive cleanup";
+}
+
+// An updater initialized inside a try region is left alone by cleanup. Removing
+// the init slice would delete instructions the catch block was written for:
+// `newUpdater` throws, and this shape exists precisely to handle that.
+TEST_F(AtomicFieldUpdaterLoweringTest, updaterInitInTryRegionIsNotCleanedUp) {
+  // try { U = newUpdater(...); } catch (Throwable t) { throw new
+  // RuntimeException(); } The catch rethrows because that is the only shape
+  // javac accepts for a final field: a swallowing catch leaves it unassigned,
+  // and assigning in both arms leaves it possibly-already-assigned.
+  static constexpr const char* kClinitTry = R"((
+    (.try_start t)
+    (const-class "LTryHolder;")
+    (move-result-pseudo-object v0)
+    (const-class "Ljava/lang/Object;")
+    (move-result-pseudo-object v1)
+    (const-string "next")
+    (move-result-pseudo-object v2)
+    (invoke-static (v0 v1 v2) "$UPD.newUpdater:(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/String;)$UPD")
+    (move-result-object v3)
+    (sput-object v3 "LTryHolder;.U:$UPD")
+    (.try_end t)
+    (return-void)
+
+    (.catch (t))
+    (new-instance "Ljava/lang/RuntimeException;")
+    (move-result-pseudo-object v4)
+    (invoke-direct (v4) "Ljava/lang/RuntimeException;.<init>:()V")
+    (throw v4)
+  ))";
+  static constexpr const char* kGet = R"((
+    (load-param-object v0)
+    (sget-object "LTryHolder;.U:$UPD")
+    (move-result-pseudo-object v1)
+    (invoke-virtual (v1 v0) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+    (move-result-object v2)
+    (return-void)
+  ))";
+  auto* m = DexMethod::make_method("LTryHolder;.read:(LTryHolder;)V")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(kGet, {{"$UPD", REFERENCE_DESC}})));
+
+  // Only the <clinit> differs from the standard holder, so swap that in rather
+  // than assembling a second copy of the fixture by hand.
+  run("LTryHolder;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {m}, {},
+      [](DexClass* cls) {
+        cls->get_clinit()->set_code(assembler::ircode_from_string(
+            ir(kClinitTry, {{"$UPD", REFERENCE_DESC}})));
+      });
+
+  EXPECT_EQ(metric("updaters_recognized"), 1);
+  // Exactly one refusal, and it is the updater's: the offset field is still
+  // read by the site that lowered, so cleanup never considers removing it and
+  // cannot be the source of this count.
+  EXPECT_EQ(metric("cleanup_skipped_try_region"), 1);
+  EXPECT_EQ(metric("updater_fields_removed"), 0);
+  EXPECT_EQ(metric("updater_inits_removed"), 0);
+
+  auto* cls = type_class(DexType::get_type("LTryHolder;"));
+  ASSERT_NE(cls, nullptr);
+  size_t updater_fields = 0;
+  for (auto* f : cls->get_sfields()) {
+    if (f->get_type() == DexType::get_type(REFERENCE_DESC)) {
+      updater_fields++;
+    }
+  }
+  EXPECT_EQ(updater_fields, 1u)
+      << "an updater built under a catch handler must survive cleanup";
 }
