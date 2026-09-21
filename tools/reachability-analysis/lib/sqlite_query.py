@@ -203,3 +203,110 @@ def neighbors(
         yield from _neighbors_in_direction(connection, node, "retainer")
     if direction in ("retained", "both"):
         yield from _neighbors_in_direction(connection, node, "retained")
+
+
+def _create_path_tables(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        DROP TABLE IF EXISTS temp.path_seen;
+        DROP TABLE IF EXISTS temp.path_frontier;
+        DROP TABLE IF EXISTS temp.path_next;
+        CREATE TEMP TABLE path_seen(
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          parent_kind TEXT,
+          parent_name TEXT,
+          PRIMARY KEY(kind, name)
+        ) WITHOUT ROWID;
+        CREATE TEMP TABLE path_frontier(
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          PRIMARY KEY(kind, name)
+        ) WITHOUT ROWID;
+        CREATE TEMP TABLE path_next(
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          parent_kind TEXT NOT NULL,
+          parent_name TEXT NOT NULL,
+          PRIMARY KEY(kind, name)
+        ) WITHOUT ROWID;
+        """
+    )
+
+
+def _advance_path_frontier(connection: sqlite3.Connection) -> bool:
+    connection.execute("DELETE FROM path_next")
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO path_next(kind, name, parent_kind, parent_name)
+        SELECT child.kind, child.name, parent.kind, parent.name
+        FROM path_frontier AS frontier
+        JOIN nodes AS parent
+          ON parent.kind = frontier.kind AND parent.name = frontier.name
+        JOIN edges AS edge INDEXED BY edges_by_retainer
+          ON edge.retainer_id = parent.id
+        JOIN nodes AS child ON child.id = edge.retained_id
+        LEFT JOIN path_seen AS seen
+          ON seen.kind = child.kind AND seen.name = child.name
+        WHERE seen.kind IS NULL
+        ORDER BY child.kind, child.name, parent.kind, parent.name
+        """
+    )
+    has_next = connection.execute("SELECT EXISTS(SELECT 1 FROM path_next)").fetchone()[
+        0
+    ]
+    connection.execute(
+        """
+        INSERT INTO path_seen(kind, name, parent_kind, parent_name)
+        SELECT kind, name, parent_kind, parent_name FROM path_next
+        """
+    )
+    connection.execute("DELETE FROM path_frontier")
+    connection.execute(
+        "INSERT INTO path_frontier(kind, name) SELECT kind, name FROM path_next"
+    )
+    return bool(has_next)
+
+
+def shortest_path(
+    connection: sqlite3.Connection,
+    start: tuple[str, str],
+    end: tuple[str, str],
+) -> list[dict[str, object]] | None:
+    _create_path_tables(connection)
+    connection.execute(
+        "INSERT INTO path_seen(kind, name) VALUES (?, ?)",
+        start,
+    )
+    connection.execute(
+        "INSERT INTO path_frontier(kind, name) VALUES (?, ?)",
+        start,
+    )
+    while start != end:
+        if not _advance_path_frontier(connection):
+            return None
+        if connection.execute(
+            "SELECT 1 FROM path_seen WHERE kind = ? AND name = ?",
+            end,
+        ).fetchone():
+            break
+
+    path = []
+    node: tuple[str, str] | None = end
+    while node is not None:
+        path.append(node)
+        parent = connection.execute(
+            "SELECT parent_kind, parent_name FROM path_seen "
+            "WHERE kind = ? AND name = ?",
+            node,
+        ).fetchone()
+        node = (
+            None
+            if parent["parent_kind"] is None
+            else (parent["parent_kind"], parent["parent_name"])
+        )
+    path.reverse()
+    return [
+        {"status": "found", "step": step, "type": node[0], "name": node[1]}
+        for step, node in enumerate(path)
+    ]

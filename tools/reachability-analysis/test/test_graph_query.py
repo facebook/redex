@@ -231,3 +231,70 @@ class GraphQueryTest(unittest.TestCase):
             ],
             json.loads(result.stdout),
         )
+
+    def test_path_follows_retainer_to_retained(self):
+        output = self._run("json", "path", "<SEED>", "LFoo;.field1:I")
+        rows = json.loads(output)
+
+        self.assertEqual(
+            [
+                "<SEED>",
+                "LFoo;",
+                "LFoo;.method1:()I",
+                "LFoo;.field1:I",
+            ],
+            [row["name"] for row in rows],
+        )
+        self.assertEqual([0, 1, 2, 3], [row["step"] for row in rows])
+
+    def test_path_reports_no_path(self):
+        self.assertEqual(
+            [{"status": "no path", "step": "", "type": "", "name": ""}],
+            json.loads(self._run("json", "path", "LFoo;.field1:I", "<SEED>")),
+        )
+
+    def test_path_disambiguates_both_endpoint_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            start = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            target = ReachableObject(ReachableObjectType.ANNO, "LTarget;")
+            for node in (
+                start,
+                ReachableObject(ReachableObjectType.ANNO, "LCollision;"),
+                ReachableObject(ReachableObjectType.CLASS, "LTarget;"),
+                target,
+            ):
+                graph.add_node(node)
+            graph.add_edge(target, start)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(
+                db_file,
+                "json",
+                "path",
+                "LCollision;",
+                "LTarget;",
+                "--from-kind",
+                "class",
+                "--to-kind",
+                "anno",
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                {
+                    "status": "found",
+                    "step": 0,
+                    "type": "CLASS",
+                    "name": "LCollision;",
+                },
+                {
+                    "status": "found",
+                    "step": 1,
+                    "type": "ANNO",
+                    "name": "LTarget;",
+                },
+            ],
+            json.loads(result.stdout),
+        )
