@@ -298,3 +298,69 @@ class GraphQueryTest(unittest.TestCase):
             ],
             json.loads(result.stdout),
         )
+
+    def test_dominated_disambiguates_class_and_annotation_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            root = ReachableObject(ReachableObjectType.SEED, "<SEED>")
+            selected = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            child = ReachableObject(ReachableObjectType.CLASS, "LClassChild;")
+            other = ReachableObject(ReachableObjectType.ANNO, "LCollision;")
+            for node in (root, selected, child, other):
+                graph.add_node(node)
+            graph.add_edge(selected, root)
+            graph.add_edge(child, selected)
+            graph.add_edge(other, root)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(
+                db_file,
+                "json",
+                "dominated",
+                "LCollision;",
+                "--kind",
+                "class",
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                {"type": "CLASS", "name": "LClassChild;"},
+                {"type": "CLASS", "name": "LCollision;"},
+            ],
+            json.loads(result.stdout),
+        )
+
+    def test_dominated_returns_selected_node_and_dominated_set(self):
+        output = self._run("json", "dominated", "LRemovedRoot;")
+
+        self.assertCountEqual(
+            [
+                {"type": "CLASS", "name": "LRemovedRoot;"},
+                {"type": "CLASS", "name": "LRemovedChild;"},
+            ],
+            json.loads(output),
+        )
+
+    def test_dominated_terminates_on_cycles(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            root = ReachableObject(ReachableObjectType.SEED, "<SEED>")
+            selected = ReachableObject(ReachableObjectType.CLASS, "selected")
+            child = ReachableObject(ReachableObjectType.CLASS, "child")
+            for node in (root, selected, child):
+                graph.add_node(node)
+            graph.add_edge(selected, root)
+            graph.add_edge(child, selected)
+            graph.add_edge(selected, child)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            output = self._run_db(db_file, "json", "dominated", "selected")
+
+        self.assertEqual(
+            [
+                {"type": "CLASS", "name": "child"},
+                {"type": "CLASS", "name": "selected"},
+            ],
+            json.loads(output),
+        )

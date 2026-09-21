@@ -310,3 +310,53 @@ def shortest_path(
         {"status": "found", "step": step, "type": node[0], "name": node[1]}
         for step, node in enumerate(path)
     ]
+
+
+def dominated(
+    connection: sqlite3.Connection,
+    blocked: tuple[str, str],
+) -> Iterator[dict[str, object]]:
+    cursor = connection.execute(
+        """
+        WITH RECURSIVE
+        logical_nodes(kind, name) AS (
+          SELECT DISTINCT kind, name FROM nodes
+        ),
+        reachable(kind, name) AS (
+          SELECT node.kind, node.name
+          FROM logical_nodes AS node
+          WHERE NOT (node.kind = :blocked_kind AND node.name = :blocked_name)
+            AND NOT EXISTS (
+              SELECT 1
+              FROM nodes AS raw
+              JOIN edges AS edge INDEXED BY edges_by_retained
+                ON edge.retained_id = raw.id
+              WHERE raw.kind = node.kind AND raw.name = node.name
+            )
+          UNION
+          SELECT retained.kind, retained.name
+          FROM reachable
+          JOIN nodes AS retainer
+            ON retainer.kind = reachable.kind
+           AND retainer.name = reachable.name
+          JOIN edges AS edge INDEXED BY edges_by_retainer
+            ON edge.retainer_id = retainer.id
+          JOIN nodes AS retained ON retained.id = edge.retained_id
+          WHERE NOT (
+            retained.kind = :blocked_kind AND retained.name = :blocked_name
+          )
+        )
+        SELECT node.kind AS type, node.name AS name
+        FROM logical_nodes AS node
+        WHERE NOT EXISTS (
+          SELECT 1 FROM reachable
+          WHERE reachable.kind = node.kind AND reachable.name = node.name
+        )
+        ORDER BY node.kind, node.name
+        """,
+        {
+            "blocked_kind": blocked[0],
+            "blocked_name": blocked[1],
+        },
+    )
+    return _rows(cursor)
