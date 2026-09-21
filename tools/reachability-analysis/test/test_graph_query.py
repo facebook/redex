@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import unittest
 
+from lib.core import ReachabilityGraph, ReachableObject, ReachableObjectType
 from lib.sqlite_export import export_graph
 
 
@@ -49,6 +50,13 @@ class GraphQueryTest(unittest.TestCase):
     def _copy_db(self, directory):
         db_file = os.path.join(directory, "reachability.sqlite")
         shutil.copyfile(self.db_file, db_file)
+        return db_file
+
+    def _write_graph_db(self, graph, directory):
+        graph_file = os.path.join(directory, "reachability.graph")
+        db_file = os.path.join(directory, "reachability.sqlite")
+        graph.dump(graph_file)
+        export_graph(graph_file, db_file)
         return db_file
 
     def test_roots_filters_by_kind_and_limit(self):
@@ -152,4 +160,74 @@ class GraphQueryTest(unittest.TestCase):
                 {"type": "CLASS", "name": "LRemovedRoot;", "reason": ""},
             ],
             json.loads(output),
+        )
+
+    def test_neighbors_labels_both_edge_directions(self):
+        output = self._run("csv", "neighbors", "LFoo;")
+
+        self.assertEqual(
+            [
+                {"direction": "retainer", "type": "SEED", "name": "<SEED>"},
+                {"direction": "retained", "type": "ANNO", "name": "LAnno;"},
+                {
+                    "direction": "retained",
+                    "type": "METHOD",
+                    "name": "LFoo;.method1:()I",
+                },
+            ],
+            list(csv.DictReader(io.StringIO(output))),
+        )
+
+    def test_neighbors_resolves_annotation_names(self):
+        output = self._run("json", "neighbors", "LAnno;", "--direction", "retainers")
+
+        self.assertEqual(
+            [{"direction": "retainer", "type": "CLASS", "name": "LFoo;"}],
+            json.loads(output),
+        )
+
+    def test_table_format_and_missing_node_error(self):
+        output = self._run("table", "neighbors", "LFoo;", "--direction", "retainers")
+        self.assertIn("direction", output)
+        self.assertIn("retainer", output)
+        self.assertIn("<SEED>", output)
+
+        result = self._invoke(self.db_file, "table", "neighbors", "LMissing;")
+        self.assertEqual(1, result.returncode)
+        self.assertEqual("Error: No node named 'LMissing;'\n", result.stderr)
+
+    def test_neighbors_disambiguates_class_and_annotation_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            class_node = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            annotation_node = ReachableObject(ReachableObjectType.ANNO, "LCollision;")
+            annotation_retainer = ReachableObject(
+                ReachableObjectType.CLASS, "LAnnotationRetainer;"
+            )
+            for node in (class_node, annotation_node, annotation_retainer):
+                graph.add_node(node)
+            graph.add_edge(annotation_node, annotation_retainer)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(
+                db_file,
+                "json",
+                "neighbors",
+                "LCollision;",
+                "--kind",
+                "anno",
+                "--direction",
+                "retainers",
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                {
+                    "direction": "retainer",
+                    "type": "CLASS",
+                    "name": "LAnnotationRetainer;",
+                }
+            ],
+            json.loads(result.stdout),
         )

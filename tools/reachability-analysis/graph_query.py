@@ -17,7 +17,9 @@ from typing import TextIO
 
 from lib.sqlite_query import (
     KINDS,
+    neighbors as query_neighbors,
     open_database,
+    resolve_node,
     roots as query_roots,
     semantic_roots as query_semantic_roots,
 )
@@ -38,6 +40,14 @@ def _semantic_roots(
     connection: sqlite3.Connection,
 ) -> Iterable[Mapping[str, object]]:
     return query_semantic_roots(connection)
+
+
+def _neighbors(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    node = resolve_node(connection, args.name, args.kind)
+    return query_neighbors(connection, node, args.direction)
 
 
 def _write_table(
@@ -111,6 +121,15 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
         help="List program roots with their seed reasons",
     )
 
+    neighbors = subparsers.add_parser("neighbors", help="List a node's neighbors")
+    neighbors.add_argument("name")
+    neighbors.add_argument("--kind", type=str.upper, choices=KINDS)
+    neighbors.add_argument(
+        "--direction",
+        choices=("retainers", "retained", "both"),
+        default="both",
+    )
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -136,6 +155,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("type", "name"), _roots(connection, args)
     if args.command == "semantic-roots":
         return ("type", "name", "reason"), _semantic_roots(connection)
+    if args.command == "neighbors":
+        return ("direction", "type", "name"), _neighbors(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
 
 
