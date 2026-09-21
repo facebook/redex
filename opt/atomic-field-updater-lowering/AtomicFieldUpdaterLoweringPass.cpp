@@ -24,6 +24,7 @@
 #include "ConfigFiles.h"
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
@@ -781,7 +782,7 @@ UnorderedSet<DexMethod*> find_receiver_chain_accessors(
 // class delegating to a getter in another would otherwise silently drop the
 // bridge class's static initializer.
 size_t inline_updater_accessors(DexStoresVector& stores,
-                                const Scope& scope,
+                                Scope& scope,
                                 ConfigFiles& conf,
                                 PassManager& mgr,
                                 const UnorderedSet<DexMethod*>& candidates) {
@@ -790,6 +791,7 @@ size_t inline_updater_accessors(DexStoresVector& stores,
     // Record it anyway: a metric that vanishes when the count is zero is
     // indistinguishable from the pass not having run.
     mgr.set_metric("accessors_inlined", 0);
+    mgr.set_metric("accessors_deleted", 0);
     return 0;
   }
   auto method_override_graph = method_override_graph::build_graph(scope);
@@ -811,12 +813,29 @@ size_t inline_updater_accessors(DexStoresVector& stores,
       std::ref(concurrent_method_resolver), inliner_config,
       mgr.get_redex_options().min_sdk, MultiMethodInlinerMode::InterDex);
   inliner.inline_methods();
-  auto inlined = inliner.get_inlined().size();
+  auto inlined_methods = inliner.get_inlined();
+  auto inlined = inlined_methods.size();
   mgr.set_metric("accessors_inlined", inlined);
+
+  // Inlining copies a body; it does not remove the original. The leftover still
+  // reads the updater, so the reference count cleanup relies on never reaches
+  // zero and every holder keeps its field. Deleting the accessors is what makes
+  // cleanup possible at all on Kotlin code.
+  //
+  // MethodInliner has to withhold true virtuals here, because a monomorphic
+  // callsite it inlined can still resolve elsewhere at runtime. Every accessor
+  // we select is reached through invoke-static and resolved with
+  // MethodSearch::Static, so that case cannot arise. `delete_methods` still
+  // checks each candidate for remaining callers, annotation references and keep
+  // rules, so a partially inlined accessor survives.
+  auto deleted = delete_methods(scope, inlined_methods,
+                                std::ref(concurrent_method_resolver));
+  mgr.set_metric("accessors_deleted", deleted.size());
+
   TRACE(ATOMUP, 1,
-        "SUMMARY accessors selected=%zu inlined=%zu (rejected_impure counted "
-        "separately)",
-        candidates.size(), inlined);
+        "SUMMARY accessors selected=%zu inlined=%zu deleted=%zu "
+        "(rejected_impure counted separately)",
+        candidates.size(), inlined, deleted.size());
   return inlined;
 }
 
