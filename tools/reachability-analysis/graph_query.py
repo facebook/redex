@@ -15,7 +15,12 @@ import tempfile
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TextIO
 
-from lib.sqlite_query import KINDS, open_database, roots as query_roots
+from lib.sqlite_query import (
+    KINDS,
+    open_database,
+    roots as query_roots,
+    semantic_roots as query_semantic_roots,
+)
 
 
 def _nonnegative_int(value: str) -> int:
@@ -27,6 +32,12 @@ def _nonnegative_int(value: str) -> int:
 
 def _roots(connection: sqlite3.Connection, args) -> Iterable[Mapping[str, object]]:
     return query_roots(connection, args.kind, args.limit)
+
+
+def _semantic_roots(
+    connection: sqlite3.Connection,
+) -> Iterable[Mapping[str, object]]:
+    return query_semantic_roots(connection)
 
 
 def _write_table(
@@ -95,6 +106,11 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     roots.add_argument("--kind", type=str.upper, choices=KINDS)
     roots.add_argument("--limit", type=_nonnegative_int)
 
+    subparsers.add_parser(
+        "semantic-roots",
+        help="List program roots with their seed reasons",
+    )
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -118,6 +134,8 @@ def parse_args(argv: Sequence[str]):
 def _run_query(connection: sqlite3.Connection, args):
     if args.command == "roots":
         return ("type", "name"), _roots(connection, args)
+    if args.command == "semantic-roots":
+        return ("type", "name", "reason"), _semantic_roots(connection)
     raise ValueError(f"Unknown command {args.command!r}")
 
 

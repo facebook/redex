@@ -140,3 +140,16 @@ class GraphQueryTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("--db", result.stdout)
         self.assertNotIn("--input", result.stdout)
+
+    def test_semantic_roots_resolves_seed_reasons_and_excludes_non_program_nodes(
+        self,
+    ):
+        output = self._run("json", "semantic-roots")
+
+        self.assertEqual(
+            [
+                {"type": "CLASS", "name": "LFoo;", "reason": "<SEED>"},
+                {"type": "CLASS", "name": "LRemovedRoot;", "reason": ""},
+            ],
+            json.loads(output),
+        )
