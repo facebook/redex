@@ -16,6 +16,8 @@ import unittest
 from lib.core import ReachabilityGraph, ReachableObject, ReachableObjectType
 from lib.sqlite_export import export_graph
 
+from .test_utils import write_diff_graph
+
 
 class GraphQueryTest(unittest.TestCase):
     @classmethod
@@ -437,3 +439,43 @@ class GraphQueryTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("target", result.stderr)
         self.assertIn("not reachable from any root", result.stderr)
+
+    def test_new_nodes_returns_marker_predecessors_and_filters_kind(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph_file = os.path.join(temp_dir, "diff.graph")
+            db_file = os.path.join(temp_dir, "diff.sqlite")
+            write_diff_graph(graph_file)
+            export_graph(graph_file, db_file)
+
+            result = self._invoke(db_file, "json", "new-nodes")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(
+                [
+                    {"type": "ANNO", "name": "LNewAnno;"},
+                    {"type": "CLASS", "name": "LNewClass;"},
+                    {"type": "FIELD", "name": "LNewClass;.field:I"},
+                    {"type": "METHOD", "name": "LNewClass;.method:()V"},
+                ],
+                json.loads(result.stdout),
+            )
+
+            filtered = self._invoke(
+                db_file,
+                "json",
+                "new-nodes",
+                "--kind",
+                "class",
+            )
+            self.assertEqual(0, filtered.returncode, filtered.stderr)
+            self.assertEqual(
+                [{"type": "CLASS", "name": "LNewClass;"}],
+                json.loads(filtered.stdout),
+            )
+
+    def test_new_nodes_rejects_a_non_diff_graph(self):
+        result = self._invoke(self.db_file, "table", "new-nodes")
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(
+            "Error: input is not a reachability-diff graph: no <NEW> marker\n",
+            result.stderr,
+        )

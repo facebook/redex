@@ -452,3 +452,29 @@ def dominators(
     graph = _load_ancestor_graph(connection, target)
     result = analysis.get_dominators(graph, graph.nodes[target])
     return [{"type": node.kind, "name": node.name} for node in result]
+
+
+def new_nodes(
+    connection: sqlite3.Connection,
+    kind: str | None,
+) -> Iterator[dict[str, object]]:
+    marker_exists = connection.execute(
+        "SELECT 1 FROM nodes WHERE kind = 'ANNO' AND name = '<NEW>' LIMIT 1"
+    ).fetchone()
+    if marker_exists is None:
+        raise ValueError("input is not a reachability-diff graph: no <NEW> marker")
+
+    cursor = connection.execute(
+        """
+        SELECT DISTINCT node.kind AS type, node.name AS name
+        FROM nodes AS marker
+        JOIN edges AS edge INDEXED BY edges_by_retained
+          ON edge.retained_id = marker.id
+        JOIN nodes AS node ON node.id = edge.retainer_id
+        WHERE marker.kind = 'ANNO' AND marker.name = '<NEW>'
+          AND (:kind IS NULL OR node.kind = :kind)
+        ORDER BY node.kind, node.name
+        """,
+        {"kind": kind},
+    )
+    return _rows(cursor)
