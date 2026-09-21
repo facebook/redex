@@ -17,6 +17,7 @@ from typing import TextIO
 
 from lib.sqlite_query import (
     dominated as query_dominated,
+    dominators as query_dominators,
     KINDS,
     neighbors as query_neighbors,
     open_database,
@@ -80,6 +81,14 @@ def _dominated(
 ) -> Iterable[Mapping[str, object]]:
     node = resolve_node(connection, args.name, args.kind)
     return query_dominated(connection, node)
+
+
+def _dominators(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    node = resolve_node(connection, args.name, args.kind)
+    return query_dominators(connection, node)
 
 
 def _write_table(
@@ -187,6 +196,17 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     dominated.add_argument("name")
     dominated.add_argument("--kind", type=str.upper, choices=KINDS)
 
+    dominators = subparsers.add_parser(
+        "dominators",
+        help="List a node's proper dominators",
+        description=(
+            "List every node through which all root-to-target paths pass, ordered "
+            "from the immediate dominator toward the root. The target is omitted."
+        ),
+    )
+    dominators.add_argument("name")
+    dominators.add_argument("--kind", type=str.upper, choices=KINDS)
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -218,6 +238,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("status", "step", "type", "name"), _path(connection, args)
     if args.command == "dominated":
         return ("type", "name"), _dominated(connection, args)
+    if args.command == "dominators":
+        return ("type", "name"), _dominators(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
 
 
