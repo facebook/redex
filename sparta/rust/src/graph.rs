@@ -96,7 +96,7 @@ pub trait ReverseGraph<const S: usize = DEFAULT_GRAPH_SUCCS_NUM> {
     type G: Graph<S>;
 
     /// Reversed graph.
-    fn rev(&self) -> ReversedRefGraph<Self::G, S>;
+    fn rev(&self) -> ReversedRefGraph<'_, Self::G, S>;
 
     /// Reversed graph that consumes the original graph.
     fn into_rev(self) -> ReversedIntoGraph<Self::G, S>;
@@ -109,7 +109,7 @@ pub trait ReverseGraph<const S: usize = DEFAULT_GRAPH_SUCCS_NUM> {
 impl<const S: usize, T: Graph<S>> ReverseGraph<S> for T {
     type G = T;
 
-    fn rev(&self) -> ReversedRefGraph<T, S> {
+    fn rev(&self) -> ReversedRefGraph<'_, T, S> {
         ReversedGraph {
             graph: self,
             phantom: PhantomData,
