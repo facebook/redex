@@ -799,7 +799,7 @@ impl<V> PatriciaTree<V> {
         self.update_by_key(key, |_| None);
     }
 
-    pub(crate) fn iter(&self) -> PatriciaTreePostOrderIterator<V> {
+    pub(crate) fn iter(&self) -> PatriciaTreePostOrderIterator<'_, V> {
         PatriciaTreePostOrderIterator::<V>::from_tree(self)
     }
 
