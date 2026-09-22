@@ -136,7 +136,7 @@ class GraphQueryTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual("", result.stdout)
         self.assertEqual(
-            "Error: Unsupported reachability SQLite schema version 0; expected 1\n",
+            "Error: Unsupported reachability SQLite schema version 0; expected 2\n",
             result.stderr,
         )
 

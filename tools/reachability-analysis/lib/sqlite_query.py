@@ -11,7 +11,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from . import analysis
-from .sqlite_export import EDGE_DIRECTION, SCHEMA_VERSION
+from .sqlite_export import (
+    DOMINATOR_ALGORITHM,
+    DOMINATOR_TREE_VERSION,
+    EDGE_DIRECTION,
+    SCHEMA_VERSION,
+)
 
 
 SOURCE_FORMAT = "Redex reachability graph binary v1"
@@ -29,10 +34,13 @@ def _validate_database(connection: sqlite3.Connection) -> None:
     metadata = dict(
         connection.execute(
             "SELECT key, value FROM meta "
-            "WHERE key IN ('edge_direction', 'source_format')"
+            "WHERE key IN ('dominator_algorithm', 'dominator_tree_version', "
+            "'edge_direction', 'source_format')"
         )
     )
     expected = {
+        "dominator_algorithm": DOMINATOR_ALGORITHM,
+        "dominator_tree_version": DOMINATOR_TREE_VERSION,
         "edge_direction": EDGE_DIRECTION,
         "source_format": SOURCE_FORMAT,
     }
