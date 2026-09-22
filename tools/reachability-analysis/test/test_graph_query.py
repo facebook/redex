@@ -367,6 +367,183 @@ class GraphQueryTest(unittest.TestCase):
             json.loads(output),
         )
 
+    def test_retained_count_matches_dominated_for_leaf_and_root(self):
+        scenarios = (
+            ("LFoo;.field1:I", "FIELD", 1),
+            ("<SEED>", "SEED", 5),
+        )
+        for name, kind, expected_count in scenarios:
+            with self.subTest(name=name):
+                dominated = json.loads(self._run("json", "dominated", name))
+                count = json.loads(self._run("json", "retained-count", name))
+
+                self.assertEqual(expected_count, len(dominated))
+                self.assertEqual(
+                    [
+                        {
+                            "type": kind,
+                            "name": name,
+                            "retained_count": expected_count,
+                        }
+                    ],
+                    count,
+                )
+
+    def test_retained_count_supports_csv_table_and_describes_node_count(self):
+        csv_output = self._run("csv", "retained-count", "LFoo;.field1:I")
+        self.assertEqual(
+            [
+                {
+                    "type": "FIELD",
+                    "name": "LFoo;.field1:I",
+                    "retained_count": "1",
+                }
+            ],
+            list(csv.DictReader(io.StringIO(csv_output))),
+        )
+
+        table_output = self._run("table", "retained-count", "LFoo;.field1:I")
+        self.assertIn("retained_count", table_output)
+        self.assertIn("LFoo;.field1:I", table_output)
+
+        help_result = subprocess.run(
+            [os.environ["GRAPH_QUERY"], "retained-count", "--help"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(0, help_result.returncode, help_result.stderr)
+        self.assertIn("node count", help_result.stdout)
+        self.assertIn("graph contains no size data", help_result.stdout)
+
+    def test_top_retained_orders_limits_filters_and_supports_formats(self):
+        output = self._run("json", "top-retained", "--top", "3")
+        self.assertEqual(
+            [
+                {"type": "SEED", "name": "<SEED>", "retained_count": 5},
+                {"type": "CLASS", "name": "LFoo;", "retained_count": 4},
+                {
+                    "type": "CLASS",
+                    "name": "LRemovedRoot;",
+                    "retained_count": 2,
+                },
+            ],
+            json.loads(output),
+        )
+
+        csv_output = self._run(
+            "csv",
+            "top-retained",
+            "--kind",
+            "class",
+            "--top",
+            "2",
+        )
+        self.assertEqual(
+            [
+                {"type": "CLASS", "name": "LFoo;", "retained_count": "4"},
+                {
+                    "type": "CLASS",
+                    "name": "LRemovedRoot;",
+                    "retained_count": "2",
+                },
+            ],
+            list(csv.DictReader(io.StringIO(csv_output))),
+        )
+
+        table_output = self._run("table", "top-retained", "--top", "1")
+        self.assertIn("retained_count", table_output)
+        self.assertIn("<SEED>", table_output)
+
+    def test_retained_count_disambiguates_kind(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            root = ReachableObject(ReachableObjectType.SEED, "<SEED>")
+            selected = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            child = ReachableObject(ReachableObjectType.CLASS, "LClassChild;")
+            other = ReachableObject(ReachableObjectType.ANNO, "LCollision;")
+            for node in (root, selected, child, other):
+                graph.add_node(node)
+            graph.add_edge(selected, root)
+            graph.add_edge(child, selected)
+            graph.add_edge(other, root)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            ambiguous = self._invoke(
+                db_file,
+                "json",
+                "retained-count",
+                "LCollision;",
+            )
+            selected_class = self._invoke(
+                db_file,
+                "json",
+                "retained-count",
+                "LCollision;",
+                "--kind",
+                "class",
+            )
+
+        self.assertEqual(1, ambiguous.returncode)
+        self.assertIn("Ambiguous node named 'LCollision;'", ambiguous.stderr)
+        self.assertEqual(0, selected_class.returncode, selected_class.stderr)
+        self.assertEqual(
+            [
+                {
+                    "type": "CLASS",
+                    "name": "LCollision;",
+                    "retained_count": 2,
+                }
+            ],
+            json.loads(selected_class.stdout),
+        )
+
+    def test_retained_count_preserves_missing_and_root_unreachable_errors(self):
+        missing = self._invoke(
+            self.db_file,
+            "table",
+            "retained-count",
+            "LMissing;",
+        )
+        self.assertEqual(1, missing.returncode)
+        self.assertEqual("Error: No node named 'LMissing;'\n", missing.stderr)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            first = ReachableObject(ReachableObjectType.CLASS, "first")
+            target = ReachableObject(ReachableObjectType.CLASS, "target")
+            graph.add_node(first)
+            graph.add_node(target)
+            graph.add_edge(target, first)
+            graph.add_edge(first, target)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            unreachable_count = self._invoke(
+                db_file,
+                "table",
+                "retained-count",
+                "target",
+            )
+            unreachable_set = self._invoke(
+                db_file,
+                "json",
+                "dominated",
+                "target",
+            )
+            top_retained = self._invoke(
+                db_file,
+                "json",
+                "top-retained",
+            )
+
+        for result in (unreachable_count, unreachable_set):
+            self.assertEqual(1, result.returncode)
+            self.assertEqual(
+                "Error: Node 'target' is not reachable from any root\n",
+                result.stderr,
+            )
+        self.assertEqual(0, top_retained.returncode, top_retained.stderr)
+        self.assertEqual([], json.loads(top_retained.stdout))
+
     def test_dominators_disambiguates_class_and_annotation_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             graph = ReachabilityGraph()

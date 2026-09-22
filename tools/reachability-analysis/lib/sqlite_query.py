@@ -321,53 +321,90 @@ def shortest_path(
     ]
 
 
+def _dom_stats(
+    connection: sqlite3.Connection,
+    node: tuple[str, str],
+) -> sqlite3.Row:
+    row = connection.execute(
+        """
+        SELECT stats.node_id, stats.retained_count
+        FROM nodes AS selected INDEXED BY nodes_by_kind_name
+        JOIN dom_stats AS stats ON stats.node_id = selected.id
+        WHERE selected.kind = :kind AND selected.name = :name
+        LIMIT 1
+        """,
+        {"kind": node[0], "name": node[1]},
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"Node {node[1]!r} is not reachable from any root")
+    return row
+
+
 def dominated(
     connection: sqlite3.Connection,
     blocked: tuple[str, str],
 ) -> Iterator[dict[str, object]]:
+    node_id = _dom_stats(connection, blocked)["node_id"]
     cursor = connection.execute(
         """
-        WITH RECURSIVE
-        logical_nodes(kind, name) AS (
-          SELECT DISTINCT kind, name FROM nodes
-        ),
-        reachable(kind, name) AS (
-          SELECT node.kind, node.name
-          FROM logical_nodes AS node
-          WHERE NOT (node.kind = :blocked_kind AND node.name = :blocked_name)
-            AND NOT EXISTS (
-              SELECT 1
-              FROM nodes AS raw
-              JOIN edges AS edge INDEXED BY edges_by_retained
-                ON edge.retained_id = raw.id
-              WHERE raw.kind = node.kind AND raw.name = node.name
-            )
-          UNION
-          SELECT retained.kind, retained.name
-          FROM reachable
-          JOIN nodes AS retainer
-            ON retainer.kind = reachable.kind
-           AND retainer.name = reachable.name
-          JOIN edges AS edge INDEXED BY edges_by_retainer
-            ON edge.retainer_id = retainer.id
-          JOIN nodes AS retained ON retained.id = edge.retained_id
-          WHERE NOT (
-            retained.kind = :blocked_kind AND retained.name = :blocked_name
-          )
+        WITH RECURSIVE subtree(node_id) AS (
+          VALUES(:node_id)
+          UNION ALL
+          SELECT child.node_id
+          FROM subtree
+          JOIN dom_stats AS child INDEXED BY dom_stats_by_idom
+            ON child.idom_id = subtree.node_id
         )
         SELECT node.kind AS type, node.name AS name
-        FROM logical_nodes AS node
-        WHERE NOT EXISTS (
-          SELECT 1 FROM reachable
-          WHERE reachable.kind = node.kind AND reachable.name = node.name
-        )
+        FROM subtree
+        JOIN nodes AS node ON node.id = subtree.node_id
         ORDER BY node.kind, node.name
         """,
-        {
-            "blocked_kind": blocked[0],
-            "blocked_name": blocked[1],
-        },
+        {"node_id": node_id},
     )
+    return _rows(cursor)
+
+
+def retained_count(
+    connection: sqlite3.Connection,
+    blocked: tuple[str, str],
+) -> dict[str, object]:
+    stats = _dom_stats(connection, blocked)
+    return {
+        "type": blocked[0],
+        "name": blocked[1],
+        "retained_count": stats["retained_count"],
+    }
+
+
+def top_retained(
+    connection: sqlite3.Connection,
+    kind: str | None,
+    limit: int,
+) -> Iterator[dict[str, object]]:
+    if kind is None:
+        cursor = connection.execute(
+            """
+            SELECT node.kind AS type, node.name AS name, stats.retained_count
+            FROM dom_stats AS stats INDEXED BY dom_stats_by_retained_count
+            JOIN nodes AS node ON node.id = stats.node_id
+            ORDER BY stats.retained_count DESC, node.kind, node.name
+            LIMIT :limit
+            """,
+            {"limit": limit},
+        )
+    else:
+        cursor = connection.execute(
+            """
+            SELECT node.kind AS type, node.name AS name, stats.retained_count
+            FROM dom_stats AS stats INDEXED BY dom_stats_by_kind_retained_count
+            JOIN nodes AS node ON node.id = stats.node_id
+            WHERE stats.kind = :kind
+            ORDER BY stats.retained_count DESC, node.name
+            LIMIT :limit
+            """,
+            {"kind": kind, "limit": limit},
+        )
     return _rows(cursor)
 
 
