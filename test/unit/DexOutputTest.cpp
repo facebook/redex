@@ -5,11 +5,49 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <cstring>
+
 #include "DexOutput.h"
 #include "IODIPlan.h"
+#include "RedexOptions.h"
+#include "RedexTest.h"
 #include <gtest/gtest.h>
 #include <json/reader.h>
 #include <json/value.h>
+
+class DexOutputTest : public RedexTest {
+ protected:
+  static std::vector<uint32_t> emit_xref(ParamAnnotations* annotations,
+                                         asetmap_t& asetmap) {
+    Json::Value json_cfg;
+    json_cfg["dex_output_buffer_size"] = 1024;
+    ConfigFiles config_files(json_cfg);
+    DexClasses classes;
+    auto gathered_types = std::make_shared<GatheredTypes>(&classes);
+    DexOutput output("", &classes, std::move(gathered_types), false, 0, nullptr,
+                     0, DebugInfoKind::NoCustomSymbolication, nullptr,
+                     config_files, nullptr, nullptr, nullptr);
+    xrefmap_t xrefmap;
+    std::vector<ParamAnnotations*> xreflist{annotations};
+
+    output.unique_xrefs(asetmap, xrefmap, xreflist);
+
+    std::vector<uint32_t> result(output.m_offset / sizeof(uint32_t));
+    std::memcpy(result.data(), output.m_output.get(), output.m_offset);
+    return result;
+  }
+};
+
+TEST_F(DexOutputTest, preservesSparseParameterAnnotationSlots) {
+  ParamAnnotations annotations;
+  annotations.emplace(1, std::make_unique<DexAnnotationSet>());
+
+  asetmap_t asetmap;
+  asetmap.emplace(annotations.at(1).get(), 0x1234);
+
+  EXPECT_EQ(emit_xref(&annotations, asetmap),
+            (std::vector<uint32_t>{2, 0, 0x1234}));
+}
 
 TEST(DexOutput, checkMethodInstructionSizeLimit) {
 
