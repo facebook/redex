@@ -1305,13 +1305,23 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     if (xrefmap.count(xref) != 0u) {
       continue;
     }
-    std::vector<uint32_t> xref_bytes;
-    xref_bytes.push_back((unsigned int)xref->size());
-    for (auto& param : *xref) {
-      auto& das = param.second;
-      always_assert_log(asetmap.count(das.get()) != 0,
-                        "Uninitialized aset %p '%s'", das.get(), SHOW(das));
-      xref_bytes.push_back(asetmap[das.get()]);
+    uint32_t xref_size = 0;
+    if (!xref->empty()) {
+      const auto last_param_index = xref->rbegin()->first;
+      always_assert_log(last_param_index >= 0,
+                        "Invalid parameter annotation index %d",
+                        last_param_index);
+      xref_size = static_cast<uint32_t>(last_param_index) + 1;
+    }
+    std::vector<uint32_t> xref_bytes(static_cast<size_t>(xref_size) + 1, 0);
+    xref_bytes[0] = xref_size;
+    for (const auto& [param_index, das] : *xref) {
+      always_assert_log(param_index >= 0,
+                        "Invalid parameter annotation index %d", param_index);
+      auto aset_it = asetmap.find(das.get());
+      always_assert_log(aset_it != asetmap.end(), "Uninitialized aset %p '%s'",
+                        das.get(), SHOW(das));
+      xref_bytes[static_cast<size_t>(param_index) + 1] = aset_it->second;
     }
     if (xref_offsets.count(xref_bytes) != 0u) {
       xrefmap[xref] = xref_offsets[xref_bytes];
