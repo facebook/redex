@@ -301,6 +301,140 @@ class GraphQueryTest(unittest.TestCase):
             json.loads(result.stdout),
         )
 
+    def test_path_to_root_follows_shortest_retainer_chain(self):
+        output = self._run("json", "path-to-root", "LFoo;.field1:I")
+
+        self.assertEqual(
+            [
+                {
+                    "status": "found",
+                    "step": 0,
+                    "type": "FIELD",
+                    "name": "LFoo;.field1:I",
+                },
+                {
+                    "status": "found",
+                    "step": 1,
+                    "type": "METHOD",
+                    "name": "LFoo;.method1:()I",
+                },
+                {
+                    "status": "found",
+                    "step": 2,
+                    "type": "CLASS",
+                    "name": "LFoo;",
+                },
+                {
+                    "status": "found",
+                    "step": 3,
+                    "type": "SEED",
+                    "name": "<SEED>",
+                },
+            ],
+            json.loads(output),
+        )
+
+    def test_path_to_root_returns_a_root_and_supports_formats(self):
+        csv_output = self._run("csv", "path-to-root", "<SEED>")
+        self.assertEqual(
+            [
+                {
+                    "status": "found",
+                    "step": "0",
+                    "type": "SEED",
+                    "name": "<SEED>",
+                }
+            ],
+            list(csv.DictReader(io.StringIO(csv_output))),
+        )
+
+        table_output = self._run("table", "path-to-root", "<SEED>")
+        self.assertIn("status", table_output)
+        self.assertIn("<SEED>", table_output)
+
+    def test_path_to_root_chooses_the_nearest_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            selected = ReachableObject(ReachableObjectType.CLASS, "selected")
+            near_root = ReachableObject(ReachableObjectType.CLASS, "near-root")
+            middle = ReachableObject(ReachableObjectType.CLASS, "middle")
+            far_root = ReachableObject(ReachableObjectType.CLASS, "far-root")
+            for node in (selected, near_root, middle, far_root):
+                graph.add_node(node)
+            graph.add_edge(selected, near_root)
+            graph.add_edge(selected, middle)
+            graph.add_edge(middle, far_root)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            output = self._run_db(db_file, "json", "path-to-root", "selected")
+
+        self.assertEqual(
+            ["selected", "near-root"],
+            [row["name"] for row in json.loads(output)],
+        )
+
+    def test_path_to_root_disambiguates_kind(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            root = ReachableObject(ReachableObjectType.SEED, "<SEED>")
+            selected = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            other = ReachableObject(ReachableObjectType.ANNO, "LCollision;")
+            for node in (root, selected, other):
+                graph.add_node(node)
+            graph.add_edge(selected, root)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            ambiguous = self._invoke(
+                db_file,
+                "json",
+                "path-to-root",
+                "LCollision;",
+            )
+            selected_class = self._invoke(
+                db_file,
+                "json",
+                "path-to-root",
+                "LCollision;",
+                "--kind",
+                "class",
+            )
+
+        self.assertEqual(1, ambiguous.returncode)
+        self.assertIn("Ambiguous node named 'LCollision;'", ambiguous.stderr)
+        self.assertEqual(0, selected_class.returncode, selected_class.stderr)
+        self.assertEqual(
+            ["LCollision;", "<SEED>"],
+            [row["name"] for row in json.loads(selected_class.stdout)],
+        )
+
+    def test_path_to_root_reports_missing_and_root_unreachable_nodes(self):
+        missing = self._invoke(
+            self.db_file,
+            "table",
+            "path-to-root",
+            "LMissing;",
+        )
+        self.assertEqual(1, missing.returncode)
+        self.assertEqual("Error: No node named 'LMissing;'\n", missing.stderr)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            first = ReachableObject(ReachableObjectType.CLASS, "first")
+            target = ReachableObject(ReachableObjectType.CLASS, "target")
+            graph.add_node(first)
+            graph.add_node(target)
+            graph.add_edge(target, first)
+            graph.add_edge(first, target)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(db_file, "json", "path-to-root", "target")
+
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(
+            "Error: Node 'target' is not reachable from any root\n",
+            result.stderr,
+        )
+
     def test_dominated_disambiguates_class_and_annotation_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             graph = ReachabilityGraph()

@@ -22,6 +22,7 @@ from lib.sqlite_query import (
     neighbors as query_neighbors,
     new_nodes as query_new_nodes,
     open_database,
+    path_to_root as query_path_to_root,
     resolve_node,
     retained_count as query_retained_count,
     roots as query_roots,
@@ -76,6 +77,14 @@ def _path(
     if path is None:
         return [{"status": "no path", "step": "", "type": "", "name": ""}]
     return path
+
+
+def _path_to_root(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    node = resolve_node(connection, args.name, args.kind)
+    return query_path_to_root(connection, node)
 
 
 def _dominated(
@@ -209,6 +218,17 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     path.add_argument("--from-kind", type=str.upper, choices=KINDS)
     path.add_argument("--to-kind", type=str.upper, choices=KINDS)
 
+    path_to_root = subparsers.add_parser(
+        "path-to-root",
+        help="Find a shortest path from a node to any root",
+        description=(
+            "Find an unweighted shortest path following retainer edges from the "
+            "selected node to any zero-predecessor root."
+        ),
+    )
+    path_to_root.add_argument("name")
+    path_to_root.add_argument("--kind", type=str.upper, choices=KINDS)
+
     dominated = subparsers.add_parser(
         "dominated",
         help="List a node's dominance cut-set",
@@ -290,6 +310,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("direction", "type", "name"), _neighbors(connection, args)
     if args.command == "path":
         return ("status", "step", "type", "name"), _path(connection, args)
+    if args.command == "path-to-root":
+        return ("status", "step", "type", "name"), _path_to_root(connection, args)
     if args.command == "dominated":
         return ("type", "name"), _dominated(connection, args)
     if args.command == "dominators":

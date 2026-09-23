@@ -243,22 +243,33 @@ def _create_path_tables(connection: sqlite3.Connection) -> None:
     )
 
 
-def _advance_path_frontier(connection: sqlite3.Connection) -> bool:
+def _advance_path_frontier(
+    connection: sqlite3.Connection,
+    *,
+    toward_retainers: bool,
+) -> bool:
+    if toward_retainers:
+        edge_join = "edge.retained_id = current.id"
+        neighbor_id = "edge.retainer_id"
+        index = "edges_by_retained"
+    else:
+        edge_join = "edge.retainer_id = current.id"
+        neighbor_id = "edge.retained_id"
+        index = "edges_by_retainer"
     connection.execute("DELETE FROM path_next")
     connection.execute(
-        """
+        f"""
         INSERT OR IGNORE INTO path_next(kind, name, parent_kind, parent_name)
-        SELECT child.kind, child.name, parent.kind, parent.name
+        SELECT neighbor.kind, neighbor.name, current.kind, current.name
         FROM path_frontier AS frontier
-        JOIN nodes AS parent
-          ON parent.kind = frontier.kind AND parent.name = frontier.name
-        JOIN edges AS edge INDEXED BY edges_by_retainer
-          ON edge.retainer_id = parent.id
-        JOIN nodes AS child ON child.id = edge.retained_id
+        JOIN nodes AS current
+          ON current.kind = frontier.kind AND current.name = frontier.name
+        JOIN edges AS edge INDEXED BY {index} ON {edge_join}
+        JOIN nodes AS neighbor ON neighbor.id = {neighbor_id}
         LEFT JOIN path_seen AS seen
-          ON seen.kind = child.kind AND seen.name = child.name
+          ON seen.kind = neighbor.kind AND seen.name = neighbor.name
         WHERE seen.kind IS NULL
-        ORDER BY child.kind, child.name, parent.kind, parent.name
+        ORDER BY neighbor.kind, neighbor.name, current.kind, current.name
         """
     )
     has_next = connection.execute("SELECT EXISTS(SELECT 1 FROM path_next)").fetchone()[
@@ -277,11 +288,10 @@ def _advance_path_frontier(connection: sqlite3.Connection) -> bool:
     return bool(has_next)
 
 
-def shortest_path(
+def _start_path_search(
     connection: sqlite3.Connection,
     start: tuple[str, str],
-    end: tuple[str, str],
-) -> list[dict[str, object]] | None:
+) -> None:
     _create_path_tables(connection)
     connection.execute(
         "INSERT INTO path_seen(kind, name) VALUES (?, ?)",
@@ -291,15 +301,12 @@ def shortest_path(
         "INSERT INTO path_frontier(kind, name) VALUES (?, ?)",
         start,
     )
-    while start != end:
-        if not _advance_path_frontier(connection):
-            return None
-        if connection.execute(
-            "SELECT 1 FROM path_seen WHERE kind = ? AND name = ?",
-            end,
-        ).fetchone():
-            break
 
+
+def _path_from_seen(
+    connection: sqlite3.Connection,
+    end: tuple[str, str],
+) -> list[dict[str, object]]:
     path = []
     node: tuple[str, str] | None = end
     while node is not None:
@@ -319,6 +326,59 @@ def shortest_path(
         {"status": "found", "step": step, "type": node[0], "name": node[1]}
         for step, node in enumerate(path)
     ]
+
+
+def _path_frontier_root(
+    connection: sqlite3.Connection,
+) -> tuple[str, str] | None:
+    row = connection.execute(
+        """
+        SELECT frontier.kind, frontier.name
+        FROM path_frontier AS frontier
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM nodes AS raw
+          JOIN edges AS edge INDEXED BY edges_by_retained
+            ON edge.retained_id = raw.id
+          WHERE raw.kind = frontier.kind AND raw.name = frontier.name
+        )
+        ORDER BY frontier.kind, frontier.name
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return None
+    return row["kind"], row["name"]
+
+
+def shortest_path(
+    connection: sqlite3.Connection,
+    start: tuple[str, str],
+    end: tuple[str, str],
+) -> list[dict[str, object]] | None:
+    _start_path_search(connection, start)
+    while start != end:
+        if not _advance_path_frontier(connection, toward_retainers=False):
+            return None
+        if connection.execute(
+            "SELECT 1 FROM path_seen WHERE kind = ? AND name = ?",
+            end,
+        ).fetchone():
+            break
+    return _path_from_seen(connection, end)
+
+
+def path_to_root(
+    connection: sqlite3.Connection,
+    start: tuple[str, str],
+) -> list[dict[str, object]]:
+    _start_path_search(connection, start)
+    while True:
+        root = _path_frontier_root(connection)
+        if root is not None:
+            return _path_from_seen(connection, root)
+        if not _advance_path_frontier(connection, toward_retainers=True):
+            raise ValueError(f"Node {start[1]!r} is not reachable from any root")
 
 
 def _dom_stats(
