@@ -1695,6 +1695,36 @@ def get_compression_list() -> typing.List[CompressionEntry]:
             None,
             CompressionLevel.FAST,  # Large, and not much difference to default size.
         ),
+        CompressionEntry(
+            "Redex Reachability Graph",
+            lambda args: True,
+            False,
+            [],
+            ["reachability-graph"],
+            "redex-reachability-graph.zst",
+            None,
+            CompressionLevel.FAST,  # Large.
+        ),
+        CompressionEntry(
+            "Redex Method Override Graph",
+            lambda args: True,
+            False,
+            [],
+            ["method-override-graph"],
+            "redex-method-override-graph.zst",
+            None,
+            CompressionLevel.FAST,  # Large.
+        ),
+        CompressionEntry(
+            "Redex Removed Reachability Graph",
+            lambda args: True,
+            True,
+            [],
+            ["redex-removed-reachability-graph"],
+            "redex-removed-reachability-graph.zst",
+            None,
+            CompressionLevel.FAST,  # Large.
+        ),
     ]
 
 
