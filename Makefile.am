@@ -237,6 +237,7 @@ libredex_la_SOURCES = \
 	libredex/SourceBlockConsistencyCheck.cpp \
 	libredex/SourceBlocks.cpp \
 	libredex/SourceBlocksViolations.cpp \
+	libredex/SourceDebugExtension.cpp \
 	libredex/StringTreeSet.cpp \
 	libredex/Timer.cpp \
 	libredex/ThreadPool.cpp \
