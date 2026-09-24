@@ -550,7 +550,12 @@ def verify_dexes(dex_dir: str, cmd: str) -> None:
 
     LOGGER.info("Verifying %d dex files...", len(dex_files))
 
-    with multiprocessing.Pool() as pool:
+    mp_context = (
+        multiprocessing.get_context("fork")
+        if sys.platform == "linux"
+        else multiprocessing.get_context()
+    )
+    with mp_context.Pool() as pool:
         result = pool.starmap(
             _verify_dex,
             ((dex_file, cmd) for dex_file in dex_files),

@@ -391,7 +391,12 @@ def compress_entries(
             if _is_selected(item):
                 _compress((item, src_dir, trg_dir, args))
     else:
-        with multiprocessing.Pool(processes=processes) as pool:
+        mp_context = (
+            multiprocessing.get_context("fork")
+            if platform.system() == "Linux"
+            else multiprocessing.get_context()
+        )
+        with mp_context.Pool(processes=processes) as pool:
 
             imap_iter = pool.imap_unordered(
                 _compress,
