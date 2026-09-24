@@ -26,6 +26,7 @@
 #include "IRInstruction.h"
 #include "RedexContext.h"
 #include "Show.h"
+#include "SourceDebugExtension.h"
 #include "StringBuilder.h"
 #include "Trace.h"
 #include "TypeUtil.h"
@@ -58,6 +59,51 @@
   template void METHOD(UnorderedSet<const TYPE>&, OTYPE) const;
 
 namespace {
+
+std::optional<source_debug_extension::SourceDebugExtension>
+get_source_debug_extension(const DexAnnotationSet* annotations) {
+  if (annotations == nullptr) {
+    return std::nullopt;
+  }
+  constexpr std::string_view type_name =
+      "Ldalvik/annotation/SourceDebugExtension;";
+  for (const auto& annotation_owner : annotations->get_annotations()) {
+    const auto* annotation = annotation_owner.get();
+    if (annotation == nullptr) {
+      continue;
+    }
+    const auto* annotation_type = annotation->type();
+    if (annotation_type == nullptr) {
+      continue;
+    }
+    const auto* annotation_type_name = annotation_type->get_name();
+    if (annotation_type_name == nullptr ||
+        annotation_type_name->str() != type_name) {
+      continue;
+    }
+    for (const auto& element : annotation->anno_elems()) {
+      const auto* element_name = element.string;
+      const auto* element_value = element.encoded_value.get();
+      if (element_name == nullptr || element_value == nullptr ||
+          element_name->str() != "value" ||
+          element_value->evtype() != DEVT_STRING) {
+        continue;
+      }
+      const auto* encoded_value =
+          dynamic_cast<const DexEncodedValueString*>(element_value);
+      if (encoded_value == nullptr) {
+        return std::nullopt;
+      }
+      const auto* value = encoded_value->string();
+      if (value == nullptr) {
+        return std::nullopt;
+      }
+      return source_debug_extension::SourceDebugExtension::parse(value->str());
+    }
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
 
 template <typename C, typename T>
 struct InsertionHelper;
@@ -654,21 +700,78 @@ int DexDebugItem::encode(
   return (int)(encdata - output);
 }
 
-void DexDebugItem::bind_positions(DexMethod* method, const DexString* file) {
+void DexDebugItem::bind_positions(
+    DexMethod* method,
+    const DexString* file,
+    const source_debug_extension::SourceDebugExtension*
+        source_debug_extension) {
   const auto* method_str = DexString::make_string(show(method));
-  for (auto& entry : m_dbg_entries) {
-    switch (entry.type) {
-    case DexDebugEntryType::Position:
+  if (source_debug_extension == nullptr) {
+    for (auto& entry : m_dbg_entries) {
+      if (entry.type != DexDebugEntryType::Position) {
+        continue;
+      }
       if (file != nullptr) {
         entry.pos->bind(method_str, file);
       } else {
         entry.pos->bind(method_str);
       }
+    }
+    return;
+  }
+
+  std::vector<DexDebugEntry> entries;
+  entries.reserve(m_dbg_entries.size() * 2);
+  UnorderedMap<
+      const DexPosition*,
+      UnorderedMap<const DexString*, UnorderedMap<uint32_t, DexPosition*>>>
+      caller_positions;
+  for (auto& entry : m_dbg_entries) {
+    switch (entry.type) {
+    case DexDebugEntryType::Position: {
+      auto position = std::move(entry.pos);
+      if (position == nullptr) {
+        not_reached();
+      }
+      if (file != nullptr) {
+        position->bind(method_str, file);
+      } else {
+        position->bind(method_str);
+      }
+      auto mapped = source_debug_extension->map(position->line);
+      if (mapped) {
+        DexPosition* parent = nullptr;
+        for (auto caller = mapped->callers.rbegin();
+             caller != mapped->callers.rend();
+             ++caller) {
+          const auto* caller_file = DexString::make_string(caller->file);
+          auto& positions_by_line = caller_positions[parent][caller_file];
+          auto [it, inserted] =
+              positions_by_line.emplace(caller->line, nullptr);
+          if (inserted) {
+            auto caller_position = std::make_unique<DexPosition>(
+                method_str, caller_file, caller->line);
+            caller_position->parent = parent;
+            it->second = caller_position.get();
+            entries.emplace_back(entry.addr, std::move(caller_position));
+          }
+          parent = it->second;
+        }
+        position->parent = parent;
+        position->file = DexString::make_string(mapped->source.file);
+        position->line = mapped->source.line;
+        caller_positions[parent][position->file].try_emplace(position->line,
+                                                             position.get());
+      }
+      entries.emplace_back(entry.addr, std::move(position));
       break;
+    }
     case DexDebugEntryType::Instruction:
+      entries.emplace_back(entry.addr, std::move(entry.insn));
       break;
     }
   }
+  m_dbg_entries = std::move(entries);
 }
 
 void DexDebugItem::gather_types(std::vector<const DexType*>& ltype) const {
@@ -1375,9 +1478,11 @@ void DexClass::load_class_data_item(
 
   std::unordered_set<DexMethod*> method_pointer_cache;
   method_pointer_cache.reserve(dmethod_count + vmethod_count);
+  auto source_debug_extension = get_source_debug_extension(m_anno.get());
 
-  auto process_method = [this, &encd, &idx, &method_pointer_cache](
-                            uint32_t& ndex, bool is_virtual) {
+  auto process_method = [this, &encd, &idx, &method_pointer_cache,
+                         &source_debug_extension](uint32_t& ndex,
+                                                  bool is_virtual) {
     ndex += idx->read_uleb128_checked(&encd);
     auto access_flags = (DexAccessFlags)idx->read_uleb128_checked(&encd);
     uint32_t code_off = idx->read_uleb128_checked(&encd);
@@ -1387,7 +1492,9 @@ void DexClass::load_class_data_item(
                            "Referenced method does not belong to class");
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && (dc->get_debug_item() != nullptr)) {
-      dc->get_debug_item()->bind_positions(dm, m_source_file);
+      dc->get_debug_item()->bind_positions(
+          dm, m_source_file,
+          source_debug_extension ? &*source_debug_extension : nullptr);
     }
     dm->make_concrete(access_flags, std::move(dc), is_virtual);
 

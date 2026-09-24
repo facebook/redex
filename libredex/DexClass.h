@@ -72,6 +72,10 @@ class DexType;
 class PositionMapper;
 struct SourceBlock;
 
+namespace source_debug_extension {
+class SourceDebugExtension;
+} // namespace source_debug_extension
+
 struct dex_class_def;
 
 // Must be same as in DexAnnotations.h!
@@ -687,7 +691,10 @@ class DexDebugItem {
   uint32_t get_on_disk_size() const { return m_on_disk_size; }
   uint32_t get_source_checksum() const { return m_source_checksum; }
   uint32_t get_source_offset() const { return m_source_offset; }
-  void bind_positions(DexMethod* method, const DexString* file);
+  void bind_positions(DexMethod* method,
+                      const DexString* file,
+                      const source_debug_extension::SourceDebugExtension*
+                          source_debug_extension);
 
   // Upper bound on the bytes `encode` writes. Computable before the write,
   // which is what lets DexOutput check that the item fits.
