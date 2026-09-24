@@ -413,5 +413,43 @@ public class InlineTestCode {
                   "com.facebook.redexlinemap.InlineTestCodeKt.withPrecond(InlineTestCodeKt.kt:16)",
                   "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:405)"));
     }
+
+    try {
+      InlineTestCodeKt.callKotlinInlineThrower();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 3))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineThrower(InlineTestCodeKt.kt:38)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinInlineThrower(InlineTestCodeKt.kt:22)",
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:418)"));
+    }
+
+    try {
+      InlineTestCodeKt.callKotlinInlineRegularThrower();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 4))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.KotlinInlineFunctionsKt.kotlinRegularThrower(KotlinInlineFunctions.kt:17)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineRegularThrower(InlineTestCodeKt.kt:39)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinInlineRegularThrower(InlineTestCodeKt.kt:28)",
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:430)"));
+    }
+
+    try {
+      InlineTestCodeKt.callKotlinNestedInlineRegularThrower();
+    } catch (Exception e) {
+      ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
+      assertThat(TraceUtil.traceToString(trace, 4))
+          .isEqualTo(
+              Arrays.asList(
+                  "com.facebook.redexlinemap.KotlinInlineFunctionsKt.kotlinRegularThrower(KotlinInlineFunctions.kt:17)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinNestedInlineRegularThrower(InlineTestCodeKt.kt:42)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinNestedInlineRegularThrower(InlineTestCodeKt.kt:34)",
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:443)"));
+    }
   }
 }
