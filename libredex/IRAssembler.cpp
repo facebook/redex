@@ -63,7 +63,7 @@ std::string reg_to_str(reg_t reg) { return "v" + std::to_string(reg); }
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
-  const auto& opcode_str = opcode_to_string_table.at(op);
+  const auto& opcode_str = assembler::get_opcode_name(op);
   std::vector<s_expr> s_exprs{s_expr(opcode_str)};
   if (insn->has_dest()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
@@ -218,11 +218,10 @@ std::vector<s_expr> to_s_exprs(
 
 std::unique_ptr<IRInstruction> instruction_from_s_expr(
     const std::string& opcode_str, const s_expr& e, LabelRefs* label_refs) {
-  auto op_it = string_to_opcode_table.find(opcode_str);
-  always_assert_log(op_it != string_to_opcode_table.end(),
-                    "'%s' is not a valid opcode",
+  auto found = assembler::find_opcode(opcode_str);
+  always_assert_log(found.has_value(), "'%s' is not a valid opcode",
                     opcode_str.c_str());
-  auto op = op_it->second;
+  auto op = *found;
   auto insn = std::make_unique<IRInstruction>(op);
   std::string reg_str;
   s_expr tail = e;
@@ -768,6 +767,18 @@ s_expr create_remark_expr(const MethodItemEntry* mie) {
 } // namespace
 
 namespace assembler {
+
+std::optional<IROpcode> find_opcode(const std::string& name) {
+  auto it = string_to_opcode_table.find(name);
+  if (it == string_to_opcode_table.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
+
+const std::string& get_opcode_name(IROpcode op) {
+  return opcode_to_string_table.at(op);
+}
 
 s_expr to_s_expr(const IRCode* code) {
   std::vector<s_expr> exprs;

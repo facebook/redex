@@ -123,6 +123,18 @@ TEST_F(IRAssemblerTest, rejectsMalformedRegister) {
   }
 }
 
+TEST_F(IRAssemblerTest, findOpcodeMapsANameToItsOpcode) {
+  EXPECT_EQ(assembler::find_opcode("const-string"), OPCODE_CONST_STRING);
+}
+
+TEST_F(IRAssemblerTest, findOpcodeRejectsAnUnknownName) {
+  EXPECT_EQ(assembler::find_opcode("frobnicate"), std::nullopt);
+}
+
+TEST_F(IRAssemblerTest, getOpcodeNameReturnsTheAssemblerSpelling) {
+  EXPECT_EQ(assembler::get_opcode_name(OPCODE_CONST_STRING), "const-string");
+}
+
 TEST_F(IRAssemblerTest, sourceBlockIdRoundTrips) {
   for (uint32_t want_id : {0u, 7u, SourceBlock::kSyntheticId}) {
     auto s = std::string("((.src_block \"LFoo;.bar:()V\" ") +

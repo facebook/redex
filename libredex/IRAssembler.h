@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,13 @@ class DexMethod;
  */
 
 namespace assembler {
+
+// The opcode written as `name`, such as OPCODE_CONST_STRING for "const-string",
+// or nullopt if no opcode has that name.
+std::optional<IROpcode> find_opcode(const std::string& name);
+
+// The name `op` is written as.
+const std::string& get_opcode_name(IROpcode op);
 
 sparta::s_expr to_s_expr(const IRCode* code);
 
