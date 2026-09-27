@@ -342,6 +342,7 @@ void GlobalConfig::bind_config() {
   bind("default_coldstart_classes", "", string_param);
   bind("disable_violation_fixes", false, bool_param);
   bind("emit_class_method_info_map", false, bool_param);
+  bind("emit_dexvt", false, bool_param);
   bind("iodi_layer_mode", "full", string_param,
        "IODI layer mode. One of \"full\", \"skip-layer-0-at-api-26\" or "
        "\"always-skip-layer-0\"");
