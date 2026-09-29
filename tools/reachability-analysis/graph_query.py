@@ -22,6 +22,7 @@ from lib.sqlite_query import (
     resolve_node,
     roots as query_roots,
     semantic_roots as query_semantic_roots,
+    shortest_path,
 )
 
 
@@ -48,6 +49,28 @@ def _neighbors(
 ) -> Iterable[Mapping[str, object]]:
     node = resolve_node(connection, args.name, args.kind)
     return query_neighbors(connection, node, args.direction)
+
+
+def _path(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    start = resolve_node(
+        connection,
+        args.from_name,
+        args.from_kind,
+        kind_option="--from-kind",
+    )
+    end = resolve_node(
+        connection,
+        args.to_name,
+        args.to_kind,
+        kind_option="--to-kind",
+    )
+    path = shortest_path(connection, start, end)
+    if path is None:
+        return [{"status": "no path", "step": "", "type": "", "name": ""}]
+    return path
 
 
 def _write_table(
@@ -130,6 +153,19 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
         default="both",
     )
 
+    path = subparsers.add_parser(
+        "path",
+        help="Find a shortest retainer-to-retained path",
+        description=(
+            "Find an unweighted shortest path following reachability edges from "
+            "retainer to retained node."
+        ),
+    )
+    path.add_argument("from_name", metavar="from")
+    path.add_argument("to_name", metavar="to")
+    path.add_argument("--from-kind", type=str.upper, choices=KINDS)
+    path.add_argument("--to-kind", type=str.upper, choices=KINDS)
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -157,6 +193,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("type", "name", "reason"), _semantic_roots(connection)
     if args.command == "neighbors":
         return ("direction", "type", "name"), _neighbors(connection, args)
+    if args.command == "path":
+        return ("status", "step", "type", "name"), _path(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
 
 

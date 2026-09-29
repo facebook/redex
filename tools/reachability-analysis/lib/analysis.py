@@ -170,6 +170,25 @@ def get_dominated(graph, query_set):
     return closure
 
 
+def shortest_path(start, end):
+    """Return a shortest path from start to end following successor edges."""
+    queue = deque([start])
+    parents = {start: None}
+    while queue:
+        node = queue.popleft()
+        if node is end:
+            path = []
+            while node is not None:
+                path.append(node)
+                node = parents[node]
+            return list(reversed(path))
+        for successor in node.succs:
+            if successor not in parents:
+                parents[successor] = node
+                queue.append(successor)
+    return None
+
+
 class Ranker(object):
     """
     Given a list of leak roots and leaked methods, rank the roots in order of
