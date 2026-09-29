@@ -364,3 +364,76 @@ class GraphQueryTest(unittest.TestCase):
             ],
             json.loads(output),
         )
+
+    def test_dominators_disambiguates_class_and_annotation_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            root = ReachableObject(ReachableObjectType.SEED, "<SEED>")
+            selected_retainer = ReachableObject(
+                ReachableObjectType.CLASS, "LAnnotationRetainer;"
+            )
+            selected = ReachableObject(ReachableObjectType.ANNO, "LCollision;")
+            other_retainer = ReachableObject(
+                ReachableObjectType.CLASS, "LClassRetainer;"
+            )
+            other = ReachableObject(ReachableObjectType.CLASS, "LCollision;")
+            for node in (
+                root,
+                selected_retainer,
+                selected,
+                other_retainer,
+                other,
+            ):
+                graph.add_node(node)
+            graph.add_edge(selected_retainer, root)
+            graph.add_edge(selected, selected_retainer)
+            graph.add_edge(other_retainer, root)
+            graph.add_edge(other, other_retainer)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(
+                db_file,
+                "json",
+                "dominators",
+                "LCollision;",
+                "--kind",
+                "anno",
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                {"type": "CLASS", "name": "LAnnotationRetainer;"},
+                {"type": "SEED", "name": "<SEED>"},
+            ],
+            json.loads(result.stdout),
+        )
+
+    def test_dominators_returns_proper_chain_nearest_first(self):
+        output = self._run("json", "dominators", "LFoo;.field1:I")
+
+        self.assertEqual(
+            [
+                {"type": "METHOD", "name": "LFoo;.method1:()I"},
+                {"type": "CLASS", "name": "LFoo;"},
+                {"type": "SEED", "name": "<SEED>"},
+            ],
+            json.loads(output),
+        )
+
+    def test_dominators_reports_a_target_unreachable_from_roots(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph = ReachabilityGraph()
+            first = ReachableObject(ReachableObjectType.CLASS, "first")
+            target = ReachableObject(ReachableObjectType.CLASS, "target")
+            graph.add_node(first)
+            graph.add_node(target)
+            graph.add_edge(target, first)
+            graph.add_edge(first, target)
+            db_file = self._write_graph_db(graph, temp_dir)
+
+            result = self._invoke(db_file, "table", "dominators", "target")
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("target", result.stderr)
+        self.assertIn("not reachable from any root", result.stderr)

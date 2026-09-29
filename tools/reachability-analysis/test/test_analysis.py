@@ -9,6 +9,18 @@ from lib import analysis, core
 from lib.core import ReachableObject, ReachableObjectType
 
 
+def make_graph(node_names, edges):
+    graph = core.ReachabilityGraph()
+    nodes = {
+        name: ReachableObject(ReachableObjectType.CLASS, name) for name in node_names
+    }
+    for node in nodes.values():
+        graph.add_node(node)
+    for retainer, retained in edges:
+        graph.add_edge(nodes[retained], nodes[retainer])
+    return graph, nodes
+
+
 class TestAnalysis(unittest.TestCase):
     def test_group_by_common_keys(self):
         d1 = {"k1": {"v1", "v2", "v3"}, "k2": {"v1", "v2"}, "k3": {"v1", "v2"}}
@@ -74,3 +86,56 @@ class TestAnalysis(unittest.TestCase):
             {nodes[-1]},
             analysis.get_dominated(graph, {nodes[-1]}),
         )
+
+    def test_get_dominators_on_linear_chain(self):
+        graph, nodes = make_graph(
+            ("root", "a", "b", "target"),
+            (("root", "a"), ("a", "b"), ("b", "target")),
+        )
+
+        self.assertEqual(
+            [nodes["b"], nodes["a"], nodes["root"]],
+            analysis.get_dominators(graph, nodes["target"]),
+        )
+
+    def test_get_dominators_keeps_only_shared_nodes_across_roots(self):
+        graph, nodes = make_graph(
+            ("root1", "root2", "left", "right", "shared", "target"),
+            (
+                ("root1", "left"),
+                ("root2", "right"),
+                ("left", "shared"),
+                ("right", "shared"),
+                ("shared", "target"),
+            ),
+        )
+
+        self.assertEqual(
+            [nodes["shared"]],
+            analysis.get_dominators(graph, nodes["target"]),
+        )
+
+    def test_get_dominators_handles_a_reachable_cycle(self):
+        graph, nodes = make_graph(
+            ("root", "a", "b", "target"),
+            (
+                ("root", "a"),
+                ("a", "b"),
+                ("b", "a"),
+                ("b", "target"),
+            ),
+        )
+
+        self.assertEqual(
+            [nodes["b"], nodes["a"], nodes["root"]],
+            analysis.get_dominators(graph, nodes["target"]),
+        )
+
+    def test_get_dominators_rejects_a_target_unreachable_from_roots(self):
+        graph, nodes = make_graph(
+            ("a", "target"),
+            (("a", "target"), ("target", "a")),
+        )
+
+        with self.assertRaisesRegex(ValueError, "not reachable from any root"):
+            analysis.get_dominators(graph, nodes["target"])

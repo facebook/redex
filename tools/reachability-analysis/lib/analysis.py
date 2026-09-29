@@ -174,6 +174,95 @@ def get_dominated(graph, query_set):
     return closure
 
 
+def _get_ancestors(target):
+    ancestors = set()
+    queue = deque([target])
+    while queue:
+        node = queue.popleft()
+        if node in ancestors:
+            continue
+        ancestors.add(node)
+        queue.extend(node.preds)
+    return ancestors
+
+
+def _reverse_postorder(roots, ancestors, virtual_root):
+    visited = {virtual_root}
+    postorder = []
+    stack = [(virtual_root, iter(roots))]
+    while stack:
+        node, successors = stack[-1]
+        try:
+            successor = next(successors)
+        except StopIteration:
+            postorder.append(node)
+            stack.pop()
+            continue
+        if successor in visited or successor not in ancestors:
+            continue
+        visited.add(successor)
+        stack.append((successor, iter(successor.succs)))
+    return list(reversed(postorder))
+
+
+def _intersect_idoms(left, right, immediate_dominators, positions):
+    while left is not right:
+        while positions[left] > positions[right]:
+            left = immediate_dominators[left]
+        while positions[right] > positions[left]:
+            right = immediate_dominators[right]
+    return left
+
+
+def get_dominators(graph, target):
+    """Return target's proper dominators, ordered from nearest to root."""
+    ancestors = _get_ancestors(target)
+    roots = [
+        node
+        for node in graph.nodes.values()
+        if node in ancestors and len(node.preds) == 0
+    ]
+
+    virtual_root = object()
+    reverse_postorder = _reverse_postorder(roots, ancestors, virtual_root)
+    positions = {node: position for position, node in enumerate(reverse_postorder)}
+    if target not in positions:
+        raise ValueError(f"Node {target.name!r} is not reachable from any root")
+
+    immediate_dominators = {virtual_root: virtual_root}
+    changed = True
+    while changed:
+        changed = False
+        for node in reverse_postorder[1:]:
+            predecessors = [
+                predecessor
+                for predecessor in node.preds
+                if predecessor in immediate_dominators
+            ]
+            if len(node.preds) == 0:
+                predecessors.append(virtual_root)
+            if not predecessors:
+                continue
+            new_dominator = predecessors[0]
+            for predecessor in predecessors[1:]:
+                new_dominator = _intersect_idoms(
+                    predecessor,
+                    new_dominator,
+                    immediate_dominators,
+                    positions,
+                )
+            if immediate_dominators.get(node) is not new_dominator:
+                immediate_dominators[node] = new_dominator
+                changed = True
+
+    dominators = []
+    node = target
+    while immediate_dominators[node] is not virtual_root:
+        node = immediate_dominators[node]
+        dominators.append(node)
+    return dominators
+
+
 def shortest_path(start, end):
     """Return a shortest path from start to end following successor edges."""
     queue = deque([start])

@@ -10,6 +10,7 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+from . import analysis
 from .sqlite_export import EDGE_DIRECTION, SCHEMA_VERSION
 
 
@@ -360,3 +361,94 @@ def dominated(
         },
     )
     return _rows(cursor)
+
+
+class _LogicalNode:
+    __slots__ = ("kind", "name", "preds", "succs")
+
+    def __init__(self, kind: str, name: str) -> None:
+        self.kind = kind
+        self.name = name
+        self.preds: set[_LogicalNode] = set()
+        self.succs: set[_LogicalNode] = set()
+
+
+class _LogicalGraph:
+    __slots__ = ("nodes",)
+
+    def __init__(self, nodes: dict[tuple[str, str], _LogicalNode]) -> None:
+        self.nodes = nodes
+
+
+def _load_ancestor_graph(
+    connection: sqlite3.Connection,
+    target: tuple[str, str],
+) -> _LogicalGraph:
+    connection.executescript(
+        """
+        DROP TABLE IF EXISTS temp.dominator_nodes;
+        CREATE TEMP TABLE dominator_nodes(
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          PRIMARY KEY(kind, name)
+        ) WITHOUT ROWID;
+        """
+    )
+    connection.execute(
+        """
+        WITH RECURSIVE ancestors(kind, name) AS (
+          VALUES(:kind, :name)
+          UNION
+          SELECT predecessor.kind, predecessor.name
+          FROM ancestors
+          JOIN nodes AS retained
+            ON retained.kind = ancestors.kind
+           AND retained.name = ancestors.name
+          JOIN edges AS edge INDEXED BY edges_by_retained
+            ON edge.retained_id = retained.id
+          JOIN nodes AS predecessor ON predecessor.id = edge.retainer_id
+        )
+        INSERT INTO dominator_nodes(kind, name)
+        SELECT kind, name FROM ancestors
+        """,
+        {"kind": target[0], "name": target[1]},
+    )
+
+    nodes = {
+        (row["kind"], row["name"]): _LogicalNode(row["kind"], row["name"])
+        for row in connection.execute(
+            "SELECT kind, name FROM dominator_nodes ORDER BY kind, name"
+        )
+    }
+    for row in connection.execute(
+        """
+        SELECT DISTINCT
+          retainer.kind AS retainer_kind,
+          retainer.name AS retainer_name,
+          retained.kind AS retained_kind,
+          retained.name AS retained_name
+        FROM edges AS edge
+        JOIN nodes AS retainer ON retainer.id = edge.retainer_id
+        JOIN dominator_nodes AS predecessor
+          ON predecessor.kind = retainer.kind
+         AND predecessor.name = retainer.name
+        JOIN nodes AS retained ON retained.id = edge.retained_id
+        JOIN dominator_nodes AS successor
+          ON successor.kind = retained.kind
+         AND successor.name = retained.name
+        """
+    ):
+        predecessor = nodes[(row["retainer_kind"], row["retainer_name"])]
+        successor = nodes[(row["retained_kind"], row["retained_name"])]
+        predecessor.succs.add(successor)
+        successor.preds.add(predecessor)
+    return _LogicalGraph(nodes)
+
+
+def dominators(
+    connection: sqlite3.Connection,
+    target: tuple[str, str],
+) -> list[dict[str, object]]:
+    graph = _load_ancestor_graph(connection, target)
+    result = analysis.get_dominators(graph, graph.nodes[target])
+    return [{"type": node.kind, "name": node.name} for node in result]
