@@ -10,6 +10,8 @@ import unittest
 
 from lib import sqlite_export
 
+from .test_utils import write_diff_graph
+
 
 class SqliteExportTest(unittest.TestCase):
     def test_exports_faithful_graph_with_named_edge_direction(self):
@@ -95,3 +97,33 @@ class SqliteExportTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as output_file:
             with self.assertRaisesRegex(FileExistsError, "already exists"):
                 sqlite_export.export_graph(graph_file, output_file.name)
+
+    def test_exports_new_marker_edges_in_retainer_direction(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            graph_file = os.path.join(temp_dir, "diff.graph")
+            output_file = os.path.join(temp_dir, "diff.sqlite")
+            write_diff_graph(graph_file)
+            sqlite_export.export_graph(graph_file, output_file)
+
+            connection = sqlite3.connect(output_file)
+            try:
+                self.assertCountEqual(
+                    connection.execute(
+                        """
+                        SELECT retainer.name, retainer.kind,
+                               retained.name, retained.kind
+                        FROM edges
+                        JOIN nodes AS retainer ON retainer.id = edges.retainer_id
+                        JOIN nodes AS retained ON retained.id = edges.retained_id
+                        WHERE retained.name = '<NEW>'
+                        """
+                    ),
+                    [
+                        ("LNewAnno;", "ANNO", "<NEW>", "ANNO"),
+                        ("LNewClass;", "CLASS", "<NEW>", "ANNO"),
+                        ("LNewClass;.field:I", "FIELD", "<NEW>", "ANNO"),
+                        ("LNewClass;.method:()V", "METHOD", "<NEW>", "ANNO"),
+                    ],
+                )
+            finally:
+                connection.close()

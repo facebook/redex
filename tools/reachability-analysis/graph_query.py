@@ -20,6 +20,7 @@ from lib.sqlite_query import (
     dominators as query_dominators,
     KINDS,
     neighbors as query_neighbors,
+    new_nodes as query_new_nodes,
     open_database,
     resolve_node,
     roots as query_roots,
@@ -89,6 +90,13 @@ def _dominators(
 ) -> Iterable[Mapping[str, object]]:
     node = resolve_node(connection, args.name, args.kind)
     return query_dominators(connection, node)
+
+
+def _new_nodes(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    return query_new_nodes(connection, args.kind)
 
 
 def _write_table(
@@ -207,6 +215,12 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     dominators.add_argument("name")
     dominators.add_argument("--kind", type=str.upper, choices=KINDS)
 
+    new_nodes = subparsers.add_parser(
+        "new-nodes",
+        help="List newly retained nodes from a reachability diff graph",
+    )
+    new_nodes.add_argument("--kind", type=str.upper, choices=KINDS)
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -240,6 +254,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("type", "name"), _dominated(connection, args)
     if args.command == "dominators":
         return ("type", "name"), _dominators(connection, args)
+    if args.command == "new-nodes":
+        return ("type", "name"), _new_nodes(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
 
 
