@@ -124,3 +124,82 @@ def semantic_roots(
         """
     )
     return _rows(cursor)
+
+
+def resolve_node(
+    connection: sqlite3.Connection,
+    name: str,
+    kind: str | None = None,
+    kind_option: str = "--kind",
+) -> tuple[str, str]:
+    if kind is None:
+        matches = connection.execute(
+            """
+            SELECT DISTINCT kind, name
+            FROM nodes INDEXED BY nodes_by_kind_name
+            WHERE kind IN ('ANNO', 'CLASS', 'FIELD', 'METHOD', 'SEED')
+              AND name = ?
+            ORDER BY kind
+            """,
+            (name,),
+        ).fetchall()
+    else:
+        matches = connection.execute(
+            "SELECT DISTINCT kind, name FROM nodes "
+            "WHERE kind = ? AND name = ? ORDER BY kind",
+            (kind, name),
+        ).fetchall()
+    if not matches:
+        qualifier = f"{kind} " if kind is not None else ""
+        raise ValueError(f"No {qualifier}node named {name!r}")
+    if len(matches) > 1:
+        kinds = ", ".join(row["kind"] for row in matches)
+        raise ValueError(
+            f"Ambiguous node named {name!r} ({kinds}); "
+            f"use {kind_option} to select one"
+        )
+    return matches[0]["kind"], matches[0]["name"]
+
+
+def _neighbors_in_direction(
+    connection: sqlite3.Connection,
+    node: tuple[str, str],
+    direction: str,
+) -> Iterator[dict[str, object]]:
+    if direction == "retainer":
+        join = "edge.retained_id = selected.id"
+        neighbor_id = "edge.retainer_id"
+        index = "edges_by_retained"
+    else:
+        join = "edge.retainer_id = selected.id"
+        neighbor_id = "edge.retained_id"
+        index = "edges_by_retainer"
+    cursor = connection.execute(
+        f"""
+        SELECT DISTINCT :direction AS direction,
+               neighbor.kind AS type,
+               neighbor.name AS name
+        FROM nodes AS selected
+        JOIN edges AS edge INDEXED BY {index} ON {join}
+        JOIN nodes AS neighbor ON neighbor.id = {neighbor_id}
+        WHERE selected.kind = :kind AND selected.name = :name
+        ORDER BY neighbor.kind, neighbor.name
+        """,
+        {
+            "direction": direction,
+            "kind": node[0],
+            "name": node[1],
+        },
+    )
+    return _rows(cursor)
+
+
+def neighbors(
+    connection: sqlite3.Connection,
+    node: tuple[str, str],
+    direction: str,
+) -> Iterator[dict[str, object]]:
+    if direction in ("retainers", "both"):
+        yield from _neighbors_in_direction(connection, node, "retainer")
+    if direction in ("retained", "both"):
+        yield from _neighbors_in_direction(connection, node, "retained")
