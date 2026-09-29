@@ -1701,7 +1701,7 @@ void redex_backend(ConfigFiles& conf,
   // dexvt is enabled either as a redex-all CLI switch (--emit-dexvt, for
   // redex.py direct runs) or via the JSON config key emit_dexvt=true -- the
   // latter lets an app build turn it on through the standard
-  // `redex.extra_args=-J emit_dexvt=true` path without a bespoke passthrough.
+  // `redex.globals.emit_dexvt=true` path without a bespoke passthrough.
   const bool emit_dexvt = redex_options.emit_dexvt ||
                           conf.get_json_config().get("emit_dexvt", false);
 
