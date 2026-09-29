@@ -119,6 +119,7 @@ class AbstractGraph(object):
 
     def __init__(self):
         self.nodes = {}
+        self.node_records = []
 
     def expected_version(self):
         raise NotImplementedError()
@@ -182,7 +183,47 @@ class ReachabilityGraph(AbstractGraph):
         return ReachableObject(node_type, node_name)
 
     def add_node(self, node):
+        self.node_records.append(node)
         self.nodes[(node.type, node.name)] = node
+
+    def dump(self, fn):
+        nodes = sorted(self.node_records, key=lambda node: (node.type, node.name))
+        if len(nodes) > 0xFFFFFFFF:
+            raise ValueError("Too many nodes to serialize")
+
+        node_ids = {node: node_id for node_id, node in enumerate(nodes)}
+        if len(node_ids) != len(nodes):
+            raise ValueError("A node was added to the graph more than once")
+
+        with open(fn, "wb") as output:
+            output.write(
+                struct.pack("<LLL", 0xFACEB000, self.expected_version(), len(nodes))
+            )
+            for node in nodes:
+                if not 0 <= node.type <= 0xFF:
+                    raise ValueError(
+                        f"Node type is outside the uint8 range: {node.type}"
+                    )
+                name = node.name.encode("ascii")
+                if len(name) > 0xFFFFFFFF:
+                    raise ValueError("Node name is too long to serialize")
+
+                try:
+                    predecessor_ids = sorted(node_ids[pred] for pred in node.preds)
+                except KeyError as error:
+                    raise ValueError(
+                        f"Predecessor of {(node.type, node.name)} is not in the graph"
+                    ) from error
+                if len(predecessor_ids) > 0xFFFFFFFF:
+                    raise ValueError("Too many predecessors to serialize")
+
+                output.write(struct.pack("<BL", node.type, len(name)))
+                output.write(name)
+                output.write(struct.pack("<L", len(predecessor_ids)))
+                if predecessor_ids:
+                    output.write(
+                        struct.pack(f"<{len(predecessor_ids)}L", *predecessor_ids)
+                    )
 
     def list_nodes(self, search_str=None):
         for key in list(self.nodes.keys()):
@@ -227,7 +268,7 @@ class MethodOverrideGraph(AbstractGraph):
             self.children = []
 
     def __init__(self):
-        self.nodes = {}
+        super().__init__()
 
     @staticmethod
     def expected_version():
@@ -239,6 +280,7 @@ class MethodOverrideGraph(AbstractGraph):
         return self.Node(node_name)
 
     def add_node(self, node):
+        self.node_records.append(node)
         self.nodes[node.name] = node
 
     def list_nodes(self, search_str=None):
