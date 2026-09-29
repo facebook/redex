@@ -13,6 +13,24 @@ import subprocess
 import tempfile
 
 
+class GraphFormatError(ValueError):
+    pass
+
+
+def _read_exact(mapping, size, description):
+    data = mapping.read(size)
+    if len(data) != size:
+        raise GraphFormatError(
+            "Truncated graph while reading %s: expected %d bytes, found %d"
+            % (description, size, len(data))
+        )
+    return data
+
+
+def _read_uint32(mapping, description):
+    return struct.unpack("<L", _read_exact(mapping, 4, description))[0]
+
+
 class ReachableObjectType(object):
     ANNO = 0
     CLASS = 1
@@ -137,34 +155,57 @@ class AbstractGraph(object):
         raise NotImplementedError()
 
     def read_header(self, mapping):
-        magic = struct.unpack("<L", mapping.read(4))[0]
+        magic = _read_uint32(mapping, "magic number")
         if magic != 0xFACEB000:
-            raise Exception("Magic number mismatch")
-        version = struct.unpack("<L", mapping.read(4))[0]
+            raise GraphFormatError("Magic number mismatch")
+        version = _read_uint32(mapping, "version")
         if version != self.expected_version():
-            raise Exception("Version mismatch")
+            raise GraphFormatError("Version mismatch")
+
+    def iter_serialized_records(self, fn):
+        """Yield node IDs, nodes, and adjacency IDs without building the graph."""
+        with open(fn, "rb") as f:
+            if os.fstat(f.fileno()).st_size == 0:
+                raise GraphFormatError(
+                    "Truncated graph while reading magic number: "
+                    "expected 4 bytes, found 0"
+                )
+            with mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ) as mapping:
+                self.read_header(mapping)
+                nodes_count = _read_uint32(mapping, "node count")
+                for i in range(nodes_count):
+                    node = self.read_node(mapping)
+                    edges_size = _read_uint32(
+                        mapping, "adjacency count for node %d" % i
+                    )
+                    adjacent_node_ids = array.array("I")
+                    adjacent_node_ids.frombytes(
+                        _read_exact(
+                            mapping,
+                            4 * edges_size,
+                            "adjacency for node %d" % i,
+                        )
+                    )
+                    for adjacent_node_id in adjacent_node_ids:
+                        if adjacent_node_id >= nodes_count:
+                            raise GraphFormatError(
+                                "Invalid adjacent node ID %d for node %d"
+                                % (adjacent_node_id, i)
+                            )
+                    yield i, node, adjacent_node_ids
 
     def load(self, fn):
-        with open(fn) as f:
-            mapping = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
-            self.read_header(mapping)
-            nodes_count = struct.unpack("<L", mapping.read(4))[0]
-            nodes = [None] * nodes_count
-            out_edges = [None] * nodes_count
-            for i in range(nodes_count):
-                node = self.read_node(mapping)
-                nodes[i] = node
-                self.add_node(node)
+        nodes = []
+        out_edges = []
+        for _, node, adjacent_node_ids in self.iter_serialized_records(fn):
+            nodes.append(node)
+            out_edges.append(adjacent_node_ids)
+            self.add_node(node)
 
-                edges_size = struct.unpack("<L", mapping.read(4))[0]
-                out_edges[i] = array.array("I")
-                out_edges[i].frombytes(mapping.read(4 * edges_size))
-
-            for i in range(nodes_count):
-                node = nodes[i]
-                for target in out_edges[i]:
-                    target_node = nodes[target]
-                    self.add_edge(node, target_node)
+        for i, node in enumerate(nodes):
+            for target in out_edges[i]:
+                target_node = nodes[target]
+                self.add_edge(node, target_node)
 
     def __repr__(self):
         sorted_keys = sorted(self.nodes.keys())
@@ -177,9 +218,11 @@ class ReachabilityGraph(AbstractGraph):
         return 1
 
     def read_node(self, mapping):
-        node_type = struct.unpack("<B", mapping.read(1))[0]
-        node_name_size = struct.unpack("<L", mapping.read(4))[0]
-        node_name = mapping.read(node_name_size).decode("ascii")
+        node_type = struct.unpack("<B", _read_exact(mapping, 1, "node type"))[0]
+        if ReachableObjectType.to_string(node_type) is None:
+            raise GraphFormatError("Unsupported reachability node type %d" % node_type)
+        node_name_size = _read_uint32(mapping, "node name length")
+        node_name = _read_exact(mapping, node_name_size, "node name").decode("ascii")
         return ReachableObject(node_type, node_name)
 
     def add_node(self, node):
@@ -282,8 +325,8 @@ class MethodOverrideGraph(AbstractGraph):
         return 1
 
     def read_node(self, mapping):
-        node_name_size = struct.unpack("<L", mapping.read(4))[0]
-        node_name = mapping.read(node_name_size).decode("ascii")
+        node_name_size = _read_uint32(mapping, "node name length")
+        node_name = _read_exact(mapping, node_name_size, "node name").decode("ascii")
         return self.Node(node_name)
 
     def add_node(self, node):
