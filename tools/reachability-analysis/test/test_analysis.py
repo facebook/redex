@@ -58,3 +58,19 @@ class TestAnalysis(unittest.TestCase):
 
         grouped = analysis.group_members_by_class(graph)
         self.assertDictEqual(grouped, {foo: {foo_bar, foo_baz}})
+
+    def test_get_dominated_handles_a_deep_graph(self):
+        graph = core.ReachabilityGraph()
+        nodes = [
+            ReachableObject(ReachableObjectType.CLASS, f"node{index}")
+            for index in range(1100)
+        ]
+        for node in nodes:
+            graph.add_node(node)
+        for retainer, retained in zip(nodes, nodes[1:]):
+            graph.add_edge(retained, retainer)
+
+        self.assertSetEqual(
+            {nodes[-1]},
+            analysis.get_dominated(graph, {nodes[-1]}),
+        )

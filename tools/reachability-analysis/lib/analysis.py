@@ -148,14 +148,18 @@ def get_dominated(graph, query_set):
     """
     visited = set()
 
-    def mark(node):
-        if node in visited:
-            return
-        if node in query_set:
-            return
-        visited.add(node)
-        for succ in node.succs:
-            mark(succ)
+    def mark(start):
+        to_visit = {start}
+        while to_visit:
+            node = to_visit.pop()
+            if node in visited or node in query_set:
+                continue
+            visited.add(node)
+            to_visit.update(
+                successor
+                for successor in node.succs
+                if successor not in visited and successor not in query_set
+            )
 
     seeds = [node for node in list(graph.nodes.values()) if len(node.preds) == 0]
 

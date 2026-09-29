@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TextIO
 
 from lib.sqlite_query import (
+    dominated as query_dominated,
     KINDS,
     neighbors as query_neighbors,
     open_database,
@@ -71,6 +72,14 @@ def _path(
     if path is None:
         return [{"status": "no path", "step": "", "type": "", "name": ""}]
     return path
+
+
+def _dominated(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    node = resolve_node(connection, args.name, args.kind)
+    return query_dominated(connection, node)
 
 
 def _write_table(
@@ -166,6 +175,18 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     path.add_argument("--from-kind", type=str.upper, choices=KINDS)
     path.add_argument("--to-kind", type=str.upper, choices=KINDS)
 
+    dominated = subparsers.add_parser(
+        "dominated",
+        help="List nodes unreachable from roots while blocking one node",
+        description=(
+            "List the selected node and every node that cannot be reached from any "
+            "zero-predecessor root while traversal is blocked at the selected "
+            "node. This is the dominated set, not the node's dominator chain."
+        ),
+    )
+    dominated.add_argument("name")
+    dominated.add_argument("--kind", type=str.upper, choices=KINDS)
+
 
 def parse_args(argv: Sequence[str]):
     parser = argparse.ArgumentParser(
@@ -195,6 +216,8 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("direction", "type", "name"), _neighbors(connection, args)
     if args.command == "path":
         return ("status", "step", "type", "name"), _path(connection, args)
+    if args.command == "dominated":
+        return ("type", "name"), _dominated(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
 
 
