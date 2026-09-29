@@ -86,3 +86,41 @@ def roots(
         },
     )
     return _rows(cursor)
+
+
+def semantic_roots(
+    connection: sqlite3.Connection,
+) -> Iterator[dict[str, object]]:
+    cursor = connection.execute(
+        """
+        WITH logical_nodes(kind, name) AS (
+          SELECT DISTINCT kind, name FROM nodes
+        ),
+        seed_roots(type, name, reason) AS (
+          SELECT DISTINCT target.kind, target.name, seed.name
+          FROM nodes AS target
+          JOIN edges AS edge INDEXED BY edges_by_retained
+            ON edge.retained_id = target.id
+          JOIN nodes AS seed ON seed.id = edge.retainer_id
+          WHERE target.kind IN ('CLASS', 'FIELD', 'METHOD')
+            AND seed.kind = 'SEED'
+        ),
+        literal_roots(type, name, reason) AS (
+          SELECT node.kind, node.name, ''
+          FROM logical_nodes AS node
+          WHERE node.kind IN ('CLASS', 'FIELD', 'METHOD')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM nodes AS raw
+              JOIN edges AS edge INDEXED BY edges_by_retained
+                ON edge.retained_id = raw.id
+              WHERE raw.kind = node.kind AND raw.name = node.name
+            )
+        )
+        SELECT type, name, reason FROM seed_roots
+        UNION
+        SELECT type, name, reason FROM literal_roots
+        ORDER BY type, name, reason
+        """
+    )
+    return _rows(cursor)
