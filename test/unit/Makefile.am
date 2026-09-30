@@ -59,6 +59,7 @@ check_PROGRAMS = \
     cfg_positions_test \
     chrome_trace_writer_test \
     class_checker_test \
+    class_merging_hot_cold_grouping_test \
     class_order_sample_test \
     check_breadcrumbs_test \
     check_cast_analysis_test \
@@ -280,6 +281,9 @@ EXTRA_clinit_batching_pass_test_DEPENDENCIES = clinit_batching_pass_test.env
 $(eval $(call make_env,clinit_batching_pass_test,manifest=$(srcdir)/../integ/ClinitBatchingTestManifest.xml))
 
 class_checker_test_SOURCES = ClassCheckerTest.cpp ScopeHelper.cpp
+
+class_merging_hot_cold_grouping_test_SOURCES = \
+    ClassMergingHotColdGroupingTest.cpp ScopeHelper.cpp
 
 concurrent_containers_test_SOURCES = ConcurrentContainersTest.cpp
 

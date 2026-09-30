@@ -14,6 +14,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexStore.h"
+#include "HotColdGrouping.h"
 #include "InterDexGrouping.h"
 #include "MergerType.h"
 #include "MergingStrategies.h"
@@ -144,6 +145,8 @@ struct ModelSpec {
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
   InterDexGroupingConfig interdex_config{InterDexGroupingType::DISABLED};
+  // Splits each group into hot and cold mergeables, after the InterDex split.
+  bool hot_cold_grouping{false};
   // whether to perform class merging on the primary dex.
   bool include_primary_dex{false};
   // Process @MethodMeta annotations
@@ -214,6 +217,11 @@ struct ModelStats {
   uint32_t m_dropped = 0;
   // InterDex grouping stats
   std::map<InterdexSubgroupIdx, size_t> m_interdex_groups;
+  // Hot/cold grouping stats
+  uint32_t m_hot_cold_split_groups = 0;
+  uint32_t m_hot_mergeables = 0;
+  uint32_t m_cold_mergeables = 0;
+  uint32_t m_hot_cold_dropped = 0;
   // MergingStrategy grouping stats
   std::map<size_t, size_t> m_merging_size_counts;
   // Stats for approximate shape merging
@@ -374,6 +382,8 @@ class Model {
   // so every spec reads the same pre-merge scope.
   const virtual_scope::VirtualScopes& m_vscopes;
   const RefChecker& m_ref_checker;
+  // Methods the baseline profile marks hot; only built for hot/cold grouping.
+  UnorderedSet<const DexMethod*> m_hot_methods;
 
   // Number of merger types created with the same shape per model.
   std::map<MergerType::Shape, size_t, MergerType::ShapeComp> m_shape_to_count;
@@ -442,6 +452,16 @@ class Model {
       const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx,
       const std::optional<size_t>& max_mergeables_count,
       size_t min_mergeables_count);
+
+  // Hot/cold grouping layer: splits `group_values` into hot and cold
+  // mergeables when enabled, then applies the merging strategy to each part.
+  void create_hot_cold_mergers(
+      const DexType* merger_type,
+      const MergerType::Shape& shape,
+      const TypeSet& intf_set,
+      const std::optional<size_t>& dex_id,
+      const TypeSet& group_values,
+      const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx);
 
   // make shapes out of the model classes
   void shape_model();
