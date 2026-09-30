@@ -55,6 +55,8 @@ void IntraDexClassMergingPass::bind_config() {
        interdex_grouping_inferring_mode);
   m_merging_spec.interdex_config.init_inferring_mode(
       interdex_grouping_inferring_mode);
+  bind("hot_cold_grouping", false, m_merging_spec.hot_cold_grouping,
+       "Split each merging group into hot and cold mergeables");
   bind("enable_reshuffle", true, m_enable_reshuffle);
   bind("enable_mergeability_aware_reshuffle", true,
        m_enable_mergeability_aware_reshuffle);
