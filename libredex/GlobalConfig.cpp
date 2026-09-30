@@ -314,6 +314,8 @@ void GlobalConfig::bind_config() {
   std::unordered_map<std::string, std::string> string_map_param;
   std::vector<std::string> string_vector_param;
   uint32_t uint32_param;
+  int64_t int64_param;
+  size_t size_t_param;
   Json::Value json_param;
   // Sorted alphabetically
   bind("agg_method_stats_files", {}, string_vector_param);
@@ -340,6 +342,7 @@ void GlobalConfig::bind_config() {
   bind("debug_info_kind", "", string_param);
   bind("default_class_frequencies", "", string_param);
   bind("default_coldstart_classes", "", string_param);
+  bind("dex_output_buffer_size", size_t{64} * 1024 * 1024, size_t_param);
   bind("disable_violation_fixes", false, bool_param);
   bind("emit_class_method_info_map", false, bool_param);
   bind("emit_dexvt", false, bool_param);
@@ -367,12 +370,16 @@ void GlobalConfig::bind_config() {
        "when the receiver is proven non-null by constant propagation");
   bind("ignore_no_keep_rules", {}, bool_param);
   bind("instruction_size_bitwidth_limit", 0u, uint32_param);
+  bind("instrument_pass_enabled", false, bool_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
   bind("record_accessed_rules", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("lower_with_cfg", {}, bool_param);
+  bind("mem_stats", true, bool_param);
+  bind("mem_stats_per_pass", true, bool_param);
+  bind("min_sdk_override", 0, int64_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("no_optimizations_blocklist", {}, string_vector_param);
   bind("preserve_count_integrity", false, bool_param);
