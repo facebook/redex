@@ -256,12 +256,18 @@ static void generate_branch_targets(
 static void associate_debug_entries(IRList* ir,
                                     DexDebugItem& dbg,
                                     const EntryAddrBiMap& bm) {
+  UnorderedMap<DexPosition*, std::unique_ptr<DexPosition>>
+      unassociated_positions;
   for (auto& entry : dbg.get_entries()) {
     auto insert_point_it = bm.by<Addr>().find(entry.addr);
     if (insert_point_it == bm.by<Addr>().end()) {
       // This should not happen if our input is an "ordinary" dx/d8-generated
       // dex file, but things like IODI can generate debug entries that don't
       // correspond to code addresses.
+      if (entry.type == DexDebugEntryType::Position) {
+        auto* position = entry.pos.get();
+        unassociated_positions.emplace(position, std::move(entry.pos));
+      }
       continue;
     }
     MethodItemEntry* mentry;
@@ -274,6 +280,27 @@ static void associate_debug_entries(IRList* ir,
       break;
     }
     ir->insert_before(ir->iterator_to(*insert_point_it->second), *mentry);
+  }
+
+  if (!unassociated_positions.empty()) {
+    for (auto it = ir->begin(); it != ir->end(); ++it) {
+      if (it->type != MFLOW_POSITION || it->pos->parent == nullptr) {
+        continue;
+      }
+      std::vector<std::unique_ptr<DexPosition>> parents;
+      for (auto* parent = it->pos->parent; parent != nullptr;) {
+        auto unassociated = unassociated_positions.find(parent);
+        if (unassociated == unassociated_positions.end()) {
+          break;
+        }
+        parent = parent->parent;
+        parents.emplace_back(std::move(unassociated->second));
+        unassociated_positions.erase(unassociated);
+      }
+      for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
+        ir->insert_before(it, *(new MethodItemEntry(std::move(*parent))));
+      }
+    }
   }
   dbg.get_entries().clear();
 }

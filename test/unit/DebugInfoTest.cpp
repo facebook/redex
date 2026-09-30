@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "DexInstruction.h"
 #include "DexPosition.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
@@ -189,4 +190,78 @@ Kotlin
   ASSERT_EQ(copied_entries.size(), 3);
   EXPECT_EQ(copied_entries[1].pos->parent, copied_entries[0].pos.get());
   EXPECT_EQ(copied_entries[2].pos->parent, copied_entries[0].pos.get());
+}
+
+TEST_F(DexPositionTest, sourceDebugExtensionKeepsParentAtUnmappedAddress) {
+  auto extension = source_debug_extension::SourceDebugExtension::parse(R"(SMAP
+Generated.kt
+Kotlin
+*S Kotlin
+*F
+1 Caller.kt
+2 Inline.kt
+*L
+27#2:41
+22#2:42
+*S KotlinDebug
+*F
+1 Caller.kt
+*L
+33#1:41
+33#1:42
+*E
+)");
+  ASSERT_TRUE(extension);
+
+  auto* method = DexMethod::make_method("LFoo;.bar:()V")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1000)
+      (return-void)
+    )
+  )");
+  method->set_code(std::move(code));
+  instruction_lowering::lower(method);
+  method->sync();
+
+  auto* dex_code = method->get_dex_code();
+  ASSERT_NE(dex_code, nullptr);
+  const auto& instructions = dex_code->get_instructions();
+  ASSERT_EQ(instructions.size(), 2);
+  ASSERT_GT(instructions[0]->size(), 1);
+
+  auto debug_item = std::make_unique<DexDebugItem>();
+  std::vector<DexDebugEntry> entries;
+  entries.emplace_back(1, std::make_unique<DexPosition>(
+                              DexString::make_string("Generated.kt"), 41));
+  entries.emplace_back(instructions[0]->size(),
+                       std::make_unique<DexPosition>(
+                           DexString::make_string("Generated.kt"), 42));
+  debug_item->set_entries(std::move(entries));
+  debug_item->bind_positions(method, DexString::make_string("Generated.kt"),
+                             &*extension);
+  dex_code->set_debug_item(std::move(debug_item));
+
+  method->balloon();
+  auto* ir_code = method->get_code();
+  ir_code->build_cfg();
+  ir_code->clear_cfg();
+
+  std::vector<const DexPosition*> positions;
+  for (const auto& entry : *ir_code) {
+    if (entry.type == MFLOW_POSITION) {
+      positions.push_back(entry.pos.get());
+    }
+  }
+  ASSERT_EQ(positions.size(), 3);
+  EXPECT_EQ(positions[0]->file->str(), "Caller.kt");
+  EXPECT_EQ(positions[0]->line, 33);
+  EXPECT_EQ(positions[0]->parent, nullptr);
+  EXPECT_EQ(positions[1]->file->str(), "Inline.kt");
+  EXPECT_EQ(positions[1]->line, 27);
+  EXPECT_EQ(positions[1]->parent, positions[0]);
+  EXPECT_EQ(positions[2]->file->str(), "Inline.kt");
+  EXPECT_EQ(positions[2]->line, 22);
+  EXPECT_EQ(positions[2]->parent, positions[1]);
 }
