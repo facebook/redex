@@ -46,6 +46,7 @@ check_PROGRAMS = \
     assert_test \
     atomic_field_updater_lowering_test \
     atomic_map_test \
+    baseline_profile_test \
     blaming_escape_test \
     block_offset_sink_test \
     boxed_boolean_propagation_test \
@@ -239,6 +240,8 @@ assert_test_SOURCES = AssertTest.cpp
 atomic_field_updater_lowering_test_SOURCES = AtomicFieldUpdaterLoweringTest.cpp
 
 atomic_stat_counter_test_SOURCES = AtomicStatCounterTest.cpp
+
+baseline_profile_test_SOURCES = BaselineProfileTest.cpp
 
 blaming_escape_test_SOURCES = BlamingEscapeTest.cpp
 

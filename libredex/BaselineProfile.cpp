@@ -7,16 +7,135 @@
 
 #include "BaselineProfile.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <fstream>
 
+#include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
+#include "DexUtil.h"
+#include "IRCode.h"
 #include "MethodUtil.h"
+#include "Show.h"
+#include "TypeUtil.h"
 #include "Walkers.h"
 
 namespace baseline_profiles {
 
 bool is_compiled(const DexMethod* method, const MethodFlags& flags) {
   return flags.hot && !method::is_clinit(method);
+}
+
+uint32_t dex2oat_code_units(DexMethod* method) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
+    return 0;
+  }
+  auto code_units = code->estimate_code_units();
+  if (code->cfg_built()) {
+    code_units += code->cfg().get_size_adjustment();
+  }
+  return code_units;
+}
+
+UncompilableReason uncompilable_reason(DexMethod* method,
+                                       uint32_t huge_method_max) {
+  if (method->get_code() == nullptr || is_abstract(method) ||
+      is_native(method)) {
+    return UncompilableReason::kNoCode;
+  }
+  // Test the access flags rather than the name: dex2oat's gate is
+  // ACC_CONSTRUCTOR && ACC_STATIC, and matching it exactly keeps this in step
+  // with the compiler even if a name-based helper drifts. An instance <init>
+  // is ACC_CONSTRUCTOR without ACC_STATIC and is compiled normally.
+  if (is_static(method) && method::is_constructor(method)) {
+    return UncompilableReason::kClinit;
+  }
+  if (has_anno(method, type::dalvik_annotation_optimization_NeverCompile())) {
+    return UncompilableReason::kNeverCompile;
+  }
+  if (dex2oat_code_units(method) > huge_method_max) {
+    return UncompilableReason::kHugeMethod;
+  }
+  return UncompilableReason::kNone;
+}
+
+bool flags_request_compilation(const MethodFlags& flags) {
+  return flags.hot || flags.startup;
+}
+
+TopOffSelection select_smallest_topoff_methods(
+    const Scope& candidate_scope,
+    const BaselineProfile& baseline_profile,
+    size_t count,
+    uint32_t huge_method_max) {
+  TopOffSelection selection;
+  if (count == 0) {
+    return selection;
+  }
+
+  InsertOnlyConcurrentMap<DexMethod*, uint32_t> eligible;
+  walk::parallel::classes(candidate_scope, [&](DexClass* cls) {
+    for (auto* method : cls->get_all_methods()) {
+      if (baseline_profile.methods.count(method) != 0) {
+        continue;
+      }
+      if (uncompilable_reason(method, huge_method_max) !=
+          UncompilableReason::kNone) {
+        continue;
+      }
+      eligible.emplace(method, dex2oat_code_units(method));
+    }
+  });
+  selection.candidates = eligible.size();
+
+  std::vector<std::pair<uint32_t, DexMethod*>> candidates;
+  candidates.reserve(eligible.size());
+  for (auto&& [method, code_units] : UnorderedIterable(eligible)) {
+    candidates.emplace_back(code_units, method);
+  }
+
+  if (candidates.size() <= count) {
+    // The whole pool is taken, so nothing has to be ranked.
+    selection.methods.reserve(candidates.size());
+    for (auto&& [code_units, method] : candidates) {
+      selection.methods.push_back(method);
+    }
+    return selection;
+  }
+
+  auto by_size = [](const auto& a, const auto& b) { return a.first < b.first; };
+  std::nth_element(candidates.begin(),
+                   candidates.begin() + static_cast<std::ptrdiff_t>(count - 1),
+                   candidates.end(), by_size);
+  uint32_t cutoff = candidates[count - 1].first;
+
+  // Everything strictly below the cutoff is in regardless of ordering; only
+  // the methods sitting exactly on it need a tie-break, and there are few
+  // enough of those to afford building their names.
+  std::vector<std::pair<std::string, DexMethod*>> at_cutoff;
+  selection.methods.reserve(count);
+  for (auto&& [code_units, method] : candidates) {
+    if (code_units < cutoff) {
+      selection.methods.push_back(method);
+    } else if (code_units == cutoff) {
+      at_cutoff.emplace_back(show_deobfuscated(method), method);
+    }
+  }
+  // Both follow from nth_element's contract, but a violation would underflow
+  // the resize below into an allocation the size of the address space, so pay
+  // for the check in opt too.
+  always_assert(selection.methods.size() < count);
+  size_t remaining = count - selection.methods.size();
+  always_assert(at_cutoff.size() >= remaining);
+  std::sort(at_cutoff.begin(), at_cutoff.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+  at_cutoff.resize(remaining);
+  for (auto&& [name, method] : at_cutoff) {
+    selection.methods.push_back(method);
+  }
+  return selection;
 }
 
 bool is_compiled(const BaselineProfile& baseline_profile,
