@@ -113,6 +113,7 @@ libredex_la_SOURCES = \
 	libredex/AnnotationSignatureParser.cpp \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkResources.cpp \
+	libredex/Armv7JitLoopChecker.cpp \
 	libredex/AssetManager.cpp \
 	libredex/BalancedPartitioning.cpp \
 	libredex/BaselineProfile.cpp \

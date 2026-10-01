@@ -125,6 +125,20 @@ void IRTypeCheckerConfig::bind_config() {
   bind("annotated_cfg_on_error_reduced", annotated_cfg_on_error_reduced,
        annotated_cfg_on_error_reduced);
   bind("check_classes", check_classes, check_classes);
+  bind("armv7_jit_loop_max_score", armv7_jit_loop_max_score,
+       armv7_jit_loop_max_score,
+       "Fail the build if a method has a loop that would make the Android "
+       "10/11 ARMv7 JIT emit at least this many stack-to-stack copies at the "
+       "loop's merge block (weighted for large frames). Offenders in the "
+       "input are only reported. 0 disables.");
+  bind("armv7_jit_loop_large_frame_carried_values",
+       armv7_jit_loop_large_frame_carried_values,
+       armv7_jit_loop_large_frame_carried_values,
+       "Carried values past which the frame passes 4 KB and copies cost more.");
+  bind("armv7_jit_loop_large_frame_weight_divisor",
+       armv7_jit_loop_large_frame_weight_divisor,
+       armv7_jit_loop_large_frame_weight_divisor,
+       "Scale of the large-frame weighting. 0 disables it.");
   bind("run_on_input", run_on_input, run_on_input);
   bind("run_on_input_ignore_access", run_on_input_ignore_access,
        run_on_input_ignore_access);
