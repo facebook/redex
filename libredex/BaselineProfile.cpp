@@ -8,6 +8,7 @@
 #include "BaselineProfile.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <fstream>
 #include <tuple>
@@ -113,13 +114,15 @@ TopOffSelection select_smallest_topoff_methods(
     const Scope& candidate_scope,
     const BaselineProfile& baseline_profile,
     size_t count,
-    uint32_t huge_method_max) {
+    uint32_t huge_method_max,
+    const UnorderedSet<const DexMethod*>* excluded) {
   TopOffSelection selection;
   if (count == 0) {
     return selection;
   }
 
   InsertOnlyConcurrentMap<DexMethod*, TopOffRank> eligible;
+  std::atomic<size_t> excluded_candidates{0};
   walk::parallel::classes(candidate_scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       if (baseline_profile.methods.count(method) != 0) {
@@ -129,10 +132,15 @@ TopOffSelection select_smallest_topoff_methods(
           UncompilableReason::kNone) {
         continue;
       }
+      if (excluded != nullptr && excluded->count(method) != 0) {
+        excluded_candidates.fetch_add(1, std::memory_order_relaxed);
+        continue;
+      }
       eligible.emplace(method, topoff_rank(method));
     }
   });
   selection.candidates = eligible.size();
+  selection.excluded_candidates = excluded_candidates.load();
 
   auto take = [&selection](DexMethod* method) {
     selection.methods.push_back(method);

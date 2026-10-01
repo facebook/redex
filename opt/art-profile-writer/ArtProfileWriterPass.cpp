@@ -507,7 +507,8 @@ void never_compile_impl(
     const baseline_profiles::BaselineProfileConfig& baseline_profile_config,
     const method_profiles::MethodProfiles& method_profiles,
     PassManager& mgr,
-    baseline_profiles::BaselineProfile* baseline_profile) {
+    baseline_profiles::BaselineProfile* baseline_profile,
+    UnorderedSet<const DexMethod*>* never_compiled) {
   UnorderedSet<std::string> excluded_interaction_ids;
   const auto& harvest_config = baseline_profile_config.harvest_config;
   if (!harvest_config.never_compile_excluded_interaction_pattern.empty()) {
@@ -609,6 +610,13 @@ void never_compile_impl(
   });
   for (auto&& [method, _0] : UnorderedIterable(never_compile_methods)) {
     baseline_profile->methods.erase(method);
+    // Dropping the entry is the whole decision -- nothing attaches
+    // @NeverCompile here -- so the verdict is invisible to anything that later
+    // looks at the method. Hand it to the caller so top-off does not pad the
+    // method straight back in.
+    if (never_compiled != nullptr) {
+      never_compiled->insert(method);
+    }
   }
   mgr.incr_metric(baseline_profile_name + "_never_compile_methods",
                   never_compile_methods.size());
@@ -650,7 +658,8 @@ void never_compile(
     const method_profiles::MethodProfiles& method_profiles,
     PassManager& mgr,
     UnorderedMap<std::string, baseline_profiles::BaselineProfile>&
-        baseline_profiles) {
+        baseline_profiles,
+    UnorderedSet<const DexMethod*>* never_compiled) {
   for (auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& cur_bp_config = baseline_profile_configs.at(bp_name);
@@ -658,8 +667,8 @@ void never_compile(
       continue;
     }
     auto& bp = entry.second;
-    never_compile_impl(scope, bp_name, cur_bp_config, method_profiles, mgr,
-                       &bp);
+    never_compile_impl(scope, bp_name, cur_bp_config, method_profiles, mgr, &bp,
+                       never_compiled);
   }
 }
 
@@ -694,6 +703,7 @@ struct MethodWriteStats {
   size_t topoff_target{0};
   size_t topoff_candidates{0};
   size_t topoff_candidates_return_void{0};
+  size_t topoff_excluded_never_compile{0};
   size_t topoff_added{0};
   size_t topoff_added_return_void{0};
   size_t topoff_added_code_units{0};
@@ -715,6 +725,10 @@ struct WriteMethodsConfig {
   // Every type in the root store. Required: used to report what the profile
   // carried that this pass will not write.
   const UnorderedSet<const DexType*>* root_types{nullptr};
+  // Methods some config's never-compile analysis removed from its profile.
+  // Padding with one of them would reinstate what that analysis just decided
+  // against, so they are barred from the candidate pool.
+  const UnorderedSet<const DexMethod*>* never_compiled{nullptr};
 };
 
 // What write_classes() actually emitted, so the caller can report it.
@@ -995,9 +1009,10 @@ MethodWriteStats write_methods(
   if (config.topoff_target_entries > union_size) {
     auto selection = baseline_profiles::select_smallest_topoff_methods(
         root_scope, baseline_profile, config.topoff_target_entries - union_size,
-        config.huge_method_max);
+        config.huge_method_max, config.never_compiled);
     stats.topoff_candidates = selection.candidates;
     stats.topoff_candidates_return_void = selection.candidates_returning_void;
+    stats.topoff_excluded_never_compile = selection.excluded_candidates;
     stats.topoff_added = selection.methods.size();
     stats.topoff_added_return_void = selection.methods_returning_void;
     baseline_profiles::MethodFlags hot_only;
@@ -1141,8 +1156,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     }
   }
 
+  UnorderedSet<const DexMethod*> never_compiled;
   never_compile(scope, conf.get_baseline_profile_configs(), method_profiles,
-                mgr, baseline_profiles);
+                mgr, baseline_profiles, &never_compiled);
+  mgr.set_metric("never_compiled_methods", never_compiled.size());
 
   std::optional<baseline_profiles::BaselineProfile> never_inline_profile;
   if (m_never_inline_estimate || m_never_inline_attach_annotations) {
@@ -1203,7 +1220,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   UnorderedMap<std::string, ClassWriteStats> class_write_stats;
 
   WriteMethodsConfig write_config{.huge_method_max = m_huge_method_max,
-                                  .root_types = &root_types};
+                                  .root_types = &root_types,
+                                  .never_compiled = &never_compiled};
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
@@ -1460,6 +1478,11 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       // on the pool, not the size of the one-code-unit pool padding comes from.
       mgr.set_metric(prefix + "topoff_candidates_return_void",
                      s.topoff_candidates_return_void);
+      // Candidates barred because a never-compile analysis had already
+      // rejected them. Non-zero means top-off would otherwise have reinstated
+      // a method Redex decided not to compile.
+      mgr.set_metric(prefix + "topoff_excluded_never_compile",
+                     s.topoff_excluded_never_compile);
       mgr.set_metric(prefix + "topoff_added", s.topoff_added);
       mgr.set_metric(prefix + "topoff_added_return_void",
                      s.topoff_added_return_void);
