@@ -121,7 +121,6 @@ COMMON_INCLUDES = \
 	-I$(top_srcdir)/service/init-classes \
 	-I$(top_srcdir)/service/init-deps \
 	-I$(top_srcdir)/service/local-dce \
-	-I$(top_srcdir)/service/loop-info \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-outliner \
