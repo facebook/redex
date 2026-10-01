@@ -693,7 +693,9 @@ struct MethodWriteStats {
 
   size_t topoff_target{0};
   size_t topoff_candidates{0};
+  size_t topoff_candidates_return_void{0};
   size_t topoff_added{0};
+  size_t topoff_added_return_void{0};
   size_t topoff_added_code_units{0};
   size_t topoff_shortfall{0};
 
@@ -995,7 +997,9 @@ MethodWriteStats write_methods(
         root_scope, baseline_profile, config.topoff_target_entries - union_size,
         config.huge_method_max);
     stats.topoff_candidates = selection.candidates;
+    stats.topoff_candidates_return_void = selection.candidates_returning_void;
     stats.topoff_added = selection.methods.size();
+    stats.topoff_added_return_void = selection.methods_returning_void;
     baseline_profiles::MethodFlags hot_only;
     hot_only.hot = true;
     for (auto* method : selection.methods) {
@@ -1449,7 +1453,16 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       // `topoff_candidates` distinguishes from a selection bug.
       mgr.set_metric(prefix + "topoff_target", s.topoff_target);
       mgr.set_metric(prefix + "topoff_candidates", s.topoff_candidates);
+      // Padding that returns void folds into one compiled body, so it is the
+      // cheapest kind. `topoff_added_return_void` below `topoff_added` means
+      // the ranking fell back to value returns. `topoff_candidates_return_void`
+      // counts candidates by return TYPE at any size, so it is an upper bound
+      // on the pool, not the size of the one-code-unit pool padding comes from.
+      mgr.set_metric(prefix + "topoff_candidates_return_void",
+                     s.topoff_candidates_return_void);
       mgr.set_metric(prefix + "topoff_added", s.topoff_added);
+      mgr.set_metric(prefix + "topoff_added_return_void",
+                     s.topoff_added_return_void);
       mgr.set_metric(prefix + "topoff_added_code_units",
                      s.topoff_added_code_units);
       mgr.set_metric(prefix + "topoff_shortfall", s.topoff_shortfall);
