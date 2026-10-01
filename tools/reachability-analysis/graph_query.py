@@ -23,9 +23,11 @@ from lib.sqlite_query import (
     new_nodes as query_new_nodes,
     open_database,
     resolve_node,
+    retained_count as query_retained_count,
     roots as query_roots,
     semantic_roots as query_semantic_roots,
     shortest_path,
+    top_retained as query_top_retained,
 )
 
 
@@ -90,6 +92,21 @@ def _dominators(
 ) -> Iterable[Mapping[str, object]]:
     node = resolve_node(connection, args.name, args.kind)
     return query_dominators(connection, node)
+
+
+def _retained_count(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    node = resolve_node(connection, args.name, args.kind)
+    return [query_retained_count(connection, node)]
+
+
+def _top_retained(
+    connection: sqlite3.Connection,
+    args,
+) -> Iterable[Mapping[str, object]]:
+    return query_top_retained(connection, args.kind, args.top)
 
 
 def _new_nodes(
@@ -194,11 +211,11 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
 
     dominated = subparsers.add_parser(
         "dominated",
-        help="List nodes unreachable from roots while blocking one node",
+        help="List a node's dominance cut-set",
         description=(
-            "List the selected node and every node that cannot be reached from any "
-            "zero-predecessor root while traversal is blocked at the selected "
-            "node. This is the dominated set, not the node's dominator chain."
+            "List the selected node and every root-reachable node that becomes "
+            "unreachable when the selected node is cut. Permanently rootless nodes "
+            "are excluded. This is the dominated set, not the dominator chain."
         ),
     )
     dominated.add_argument("name")
@@ -214,6 +231,29 @@ def _add_subcommands(parser: argparse.ArgumentParser) -> None:
     )
     dominators.add_argument("name")
     dominators.add_argument("--kind", type=str.upper, choices=KINDS)
+
+    retained_count = subparsers.add_parser(
+        "retained-count",
+        help="Count nodes in a node's dominance cut-set",
+        description=(
+            "Report the number of nodes that become unreachable from roots when "
+            "the selected node is cut. This is a node count, not a byte or size "
+            "estimate; the graph contains no size data."
+        ),
+    )
+    retained_count.add_argument("name")
+    retained_count.add_argument("--kind", type=str.upper, choices=KINDS)
+
+    top_retained = subparsers.add_parser(
+        "top-retained",
+        help="List nodes with the largest dominance cut-sets",
+        description=(
+            "List nodes by descending dominator-tree subtree node count. "
+            "Counts are nodes, not byte or size estimates."
+        ),
+    )
+    top_retained.add_argument("--top", type=_nonnegative_int, default=20)
+    top_retained.add_argument("--kind", type=str.upper, choices=KINDS)
 
     new_nodes = subparsers.add_parser(
         "new-nodes",
@@ -254,6 +294,10 @@ def _run_query(connection: sqlite3.Connection, args):
         return ("type", "name"), _dominated(connection, args)
     if args.command == "dominators":
         return ("type", "name"), _dominators(connection, args)
+    if args.command == "retained-count":
+        return ("type", "name", "retained_count"), _retained_count(connection, args)
+    if args.command == "top-retained":
+        return ("type", "name", "retained_count"), _top_retained(connection, args)
     if args.command == "new-nodes":
         return ("type", "name"), _new_nodes(connection, args)
     raise ValueError(f"Unknown command {args.command!r}")
