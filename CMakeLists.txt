@@ -91,6 +91,11 @@ file(GLOB_RECURSE redex_srcs
         "liblocator/locator.h"
         )
 
+# Protobuf support is wired through the Autotools and Buck builds, but not
+# CMake. BundleResources.cpp compiles to an empty translation unit in CMake.
+list(REMOVE_ITEM redex_srcs
+        "${CMAKE_CURRENT_SOURCE_DIR}/libredex/ProtoReflection.cpp")
+
 add_library(redex STATIC ${redex_srcs})
 
 install(TARGETS redex ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
