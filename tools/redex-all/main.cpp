@@ -2171,22 +2171,8 @@ int main(int argc, char* argv[]) {
     keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
-    constant_propagation_transform_internal::
-        enable_object_domain_null_check_elim =
-            args.config.get("enable_object_domain_null_check_elim", true)
-                .asBool();
-
     constant_propagation_transform_internal::enable_replacing_areequal =
         args.config.get("enable_replacing_areequal", false).asBool();
-    always_assert_log(
-        !constant_propagation_transform_internal::enable_replacing_areequal ||
-            constant_propagation_transform_internal::
-                enable_object_domain_null_check_elim,
-        "enable_object_domain_null_check_elim must be turned on if "
-        "enable_replacing_areequal is turned on.");
-    // TODO(T257927964): Remove this.
-    constant_propagation::known_non_null_returns_enable =
-        args.config.get("enable_known_non_null_returns", true).asBool();
 
     constant_propagation::enable_check_cast_value_preservation =
         args.config.get("enable_check_cast_value_preservation", false).asBool();

@@ -11,12 +11,6 @@
 #include "DexClass.h"
 #include "MethodUtil.h"
 
-// Forward declaration; defined in KnownNonNullReturnsAnalyzer.cpp.
-// TODO(T257927964): Remove this.
-namespace constant_propagation {
-extern bool known_non_null_returns_enable;
-} // namespace constant_propagation
-
 namespace kotlin_nullcheck_wrapper {
 enum NullErrSrc {
   UNKNOWN_SRC = 0,
@@ -208,9 +202,7 @@ inline UnorderedSet<DexMethodRef*> get_kotlin_null_assertions() {
   UnorderedSet<DexMethodRef*> methods;
   get_kotlin_param_null_assertions(methods);
   get_kotlin_expr_null_assertions(methods);
-  if (constant_propagation::known_non_null_returns_enable) {
-    get_kotlin_notnull_assertions(methods);
-  }
+  get_kotlin_notnull_assertions(methods);
   return methods;
 }
 

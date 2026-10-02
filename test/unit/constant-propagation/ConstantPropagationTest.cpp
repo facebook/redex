@@ -2003,8 +2003,6 @@ TEST_F(ConstantPropagationTest, NewInstanceNullCheckElimination) {
 
 // Verify that checkNotNull teaches constant propagation that the value is
 // non-null, enabling elimination of a subsequent null check branch.
-// RedexTest sets known_non_null_returns_enable = true, so checkNotNull is
-// included in get_kotlin_null_assertions().
 TEST_F(ConstantPropagationTest, CheckNotNullEnablesNullCheckElimination) {
   auto* check_not_null = DexMethod::make_method(
       "Lkotlin/jvm/internal/Intrinsics;.checkNotNull:"

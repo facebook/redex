@@ -27,7 +27,6 @@
 #include "TypeUtil.h"
 
 namespace constant_propagation_transform_internal {
-bool enable_object_domain_null_check_elim = true;
 // TODO(T263034329): Remove this.
 bool enable_replacing_areequal = false;
 } // namespace constant_propagation_transform_internal
@@ -205,12 +204,7 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
 }
 
 bool is_known_non_null(const ConstantValue& val) {
-  if (constant_propagation_transform_internal::
-          enable_object_domain_null_check_elim) {
-    return val.is_object() || val.is_nez();
-  }
-  auto scd = val.maybe_get<SignedConstantDomain>();
-  return scd && scd->interval() == sign_domain::Interval::NEZ;
+  return val.is_object() || val.is_nez();
 }
 
 bool Transform::eliminate_redundant_null_check(

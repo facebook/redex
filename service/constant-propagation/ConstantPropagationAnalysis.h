@@ -486,15 +486,6 @@ class ConstantClassObjectAnalyzer
   }
 };
 
-/*
- * Marks return values of well-known external methods as non-null (NEZ).
- * This enables elimination of redundant Kotlin null-check intrinsics
- * (e.g. checkNotNullExpressionValue) after calls to these methods.
- * Gated by enable_known_non_null_returns.
- */
-// TODO(T257927964): Remove this.
-extern bool known_non_null_returns_enable;
-
 // TODO(T275196808): Remove this once the per-parameter exit-value summary is
 // fully rolled out.
 extern bool enable_param_exit_value_summary;
@@ -502,6 +493,11 @@ extern bool enable_param_exit_value_summary;
 // TODO(T279417132): Remove this once the behavior is fully rolled out.
 extern bool enable_check_cast_value_preservation;
 
+/*
+ * Marks return values of well-known external methods as non-null (NEZ).
+ * This enables elimination of redundant Kotlin null-check intrinsics
+ * (e.g. checkNotNullExpressionValue) after calls to these methods.
+ */
 class KnownNonNullReturnsAnalyzer
     : public InstructionAnalyzerBase<KnownNonNullReturnsAnalyzer,
                                      ConstantEnvironment> {

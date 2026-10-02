@@ -13,9 +13,6 @@
 
 namespace constant_propagation {
 
-// TODO(T257927964): Remove this.
-bool known_non_null_returns_enable = true;
-
 namespace {
 
 const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
@@ -310,9 +307,6 @@ const std::unordered_set<const DexMethodRef*>& known_non_null_return_methods() {
 
 bool KnownNonNullReturnsAnalyzer::analyze_invoke(const IRInstruction* insn,
                                                  ConstantEnvironment* env) {
-  if (!known_non_null_returns_enable) {
-    return false;
-  }
   auto* method = insn->get_method();
   if (method != nullptr && known_non_null_return_methods().contains(method)) {
     // NEZ (not-equal-to-zero) is the right abstraction here: we only know the

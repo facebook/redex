@@ -366,16 +366,9 @@ void GlobalConfig::bind_config() {
   bind("force_single_dex", false, bool_param);
   bind("emit_incoming_hashes", false, bool_param);
   bind("emit_outgoing_hashes", false, bool_param);
-  bind("enable_object_domain_null_check_elim", true, bool_param,
-       "When true, enable null check elimination for object domains "
-       "(NewObjectDomain, SingletonObjectDomain, ObjectWithImmutAttrDomain)");
   bind("enable_check_cast_value_preservation", false, bool_param,
        "When true, constant propagation keeps a `check-cast` operand's value "
        "across the cast, instead of carrying only null");
-  bind("enable_known_non_null_returns", true, bool_param,
-       "When true, mark return values of well-known external methods as "
-       "non-null in constant propagation, enabling removal of redundant "
-       "Kotlin null-check intrinsics");
   bind("enable_param_exit_value_summary", false, bool_param,
        "When true, infer a per-parameter exit-value summary via IPCP and use "
        "it to refine no-throw facts on statically-dispatched invoke edges");

@@ -21,7 +21,6 @@
 class ScopedMetrics;
 
 namespace constant_propagation_transform_internal {
-extern bool enable_object_domain_null_check_elim;
 // TODO(T263034329): Remove this.
 extern bool enable_replacing_areequal;
 } // namespace constant_propagation_transform_internal

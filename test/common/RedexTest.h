@@ -56,14 +56,11 @@ inline std::string get_env(const char* name) {
 }
 
 namespace constant_propagation_transform_internal {
-extern bool enable_object_domain_null_check_elim;
 // TODO(T263034329): Remove this.
 extern bool enable_replacing_areequal;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
-// TODO(T257927964): Remove this.
-extern bool known_non_null_returns_enable;
 // TODO(T275196808): Remove this.
 extern bool enable_param_exit_value_summary;
 // TODO(T279417132): Remove this.
@@ -74,12 +71,8 @@ struct RedexTest : public testing::Test {
  public:
   RedexTest() {
     g_redex = new RedexContext();
-    constant_propagation_transform_internal::
-        enable_object_domain_null_check_elim = true;
     // TODO(T263034329): Remove this.
     constant_propagation_transform_internal::enable_replacing_areequal = true;
-    // TODO(T257927964): Remove this.
-    constant_propagation::known_non_null_returns_enable = true;
     // TODO(T275196808): Remove this.
     constant_propagation::enable_param_exit_value_summary = true;
     // TODO(T279417132): Remove this.
