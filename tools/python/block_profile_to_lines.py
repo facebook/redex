@@ -244,7 +244,6 @@ class OutputWriter:
         self, file_lines: dict[str, set[int]], output_path: str | None
     ) -> None:
         """Write output in CSV format: filename,executed_lines"""
-        # pyre-ignore[9]: nullcontext yields the provided value
         cm: AbstractContextManager[TextIO, None] = (
             nullcontext(sys.stdout) if output_path is None else open(output_path, "w")
         )
@@ -261,7 +260,6 @@ class OutputWriter:
         self, file_lines: dict[str, set[int]], output_path: str | None
     ) -> None:
         """Write output in JSONL format: one JSON object per line."""
-        # pyre-ignore[9]: nullcontext yields the provided value
         cm: AbstractContextManager[TextIO, None] = (
             nullcontext(sys.stdout) if output_path is None else open(output_path, "w")
         )

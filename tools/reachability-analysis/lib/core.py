@@ -339,6 +339,7 @@ class MethodOverrideGraph(AbstractGraph):
                 print(('"%s"' % key))
 
     @staticmethod
+    # pyrefly: ignore [bad-override]
     def add_edge(method, child):
         method.children.append(child)
         child.parents.append(method)

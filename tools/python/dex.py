@@ -847,6 +847,7 @@ class code_item(AutoParser):
             data.pop_offset_and_seek()
         return self.debug_info
 
+    # pyrefly: ignore [bad-override]
     def dump(self, f, prefix, verbose=False):
         if verbose:
             AutoParser.dump(self, f=f, prefix=prefix)
