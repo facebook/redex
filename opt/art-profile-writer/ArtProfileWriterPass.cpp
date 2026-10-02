@@ -25,6 +25,7 @@
 #include "Debug.h"
 #include "DeterministicContainers.h"
 #include "DexAssessments.h"
+#include "DexStore.h"
 #include "DexStructure.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
@@ -676,6 +677,8 @@ struct MethodWriteStats {
   size_t classes_written_to{0};
   size_t classes_left_without_entry{0};
 
+  size_t non_root_dropped{0};
+
   size_t topoff_target{0};
   size_t topoff_candidates{0};
   size_t topoff_added{0};
@@ -695,20 +698,22 @@ struct WriteMethodsConfig {
   uint32_t huge_method_max{baseline_profiles::DEFAULT_ART_HUGE_METHOD_MAX};
   // 0 disables top-off.
   size_t topoff_target_entries{0};
-  // Classes top-off may pad from; see select_smallest_topoff_methods. Required
-  // whenever top-off is enabled.
-  const Scope* topoff_scope{nullptr};
+  // Every type in the root store. Required: used to report what the profile
+  // carried that this pass will not write.
+  const UnorderedSet<const DexType*>* root_types{nullptr};
 };
 
 // What write_classes() actually emitted, so the caller can report it.
 struct ClassWriteStats {
   size_t written{0};
   size_t external_skipped{0};
+  size_t non_root_skipped{0};
   size_t deobfuscation_failures{0};
   size_t unmatched{0};
 };
 
 ClassWriteStats write_classes(const baseline_profiles::BaselineProfile& bp,
+                              const UnorderedSet<const DexType*>& root_types,
                               std::ostream& os) {
   ClassWriteStats stats;
   std::vector<std::string_view> class_names;
@@ -717,6 +722,13 @@ ClassWriteStats write_classes(const baseline_profiles::BaselineProfile& bp,
   unordered_for_each(bp.classes, [&](auto* cls) {
     if (cls->is_external()) {
       ++stats.external_skipped;
+      return;
+    }
+    // Same reason as the method side: a module class in the profile is dropped
+    // by the binary converter, so do not write it in the first place.
+    if (root_types.count(cls->get_type()) == 0) {
+      ++stats.non_root_skipped;
+      TRACE(APW, 1, "Not writing non-root-store profile class %s", SHOW(cls));
       return;
     }
     auto* deobf_str = cls->get_deobfuscated_name_or_null();
@@ -842,11 +854,29 @@ void ArtProfileWriterPass::eval_pass(DexStoresVector& /*stores*/,
 }
 
 MethodWriteStats write_methods(
-    const Scope& scope,
+    const Scope& root_scope,
     const baseline_profiles::BaselineProfile& baseline_profile,
     const WriteMethodsConfig& config,
     std::ofstream& ofs) {
   MethodWriteStats stats;
+  always_assert(config.root_types != nullptr);
+  const auto& root_types = *config.root_types;
+
+  // Walking the root store rather than the whole scope is what keeps module
+  // entries out of the file: the binary converter resolves the profile against
+  // the base APK, so an entry naming a module class is dropped there anyway,
+  // silently, and the written count stops matching what reaches the device.
+  // Expected to be zero -- a non-zero value means some upstream source started
+  // admitting module methods.
+  for (auto&& entry : UnorderedIterable(baseline_profile.methods)) {
+    const auto* method = entry.first;
+    if (root_types.count(method->get_class()) != 0) {
+      continue;
+    }
+    ++stats.non_root_dropped;
+    TRACE(APW, 1, "Not writing non-root-store profile entry %s", SHOW(method));
+  }
+
   // We order H before not-H. In each category, we order SP -> S -> P -> none.
   struct MethodFlagsLess {
     bool operator()(const baseline_profiles::MethodFlags& lhs,
@@ -867,7 +897,7 @@ MethodWriteStats write_methods(
   UnorderedSet<const DexType*> classes_with_written_method;
   UnorderedSet<const DexType*> classes_only_uncompilable;
 
-  walk::classes(scope, [&](DexClass* cls) {
+  walk::classes(root_scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       auto it = baseline_profile.methods.find(method);
       if (it == baseline_profile.methods.end()) {
@@ -948,10 +978,9 @@ MethodWriteStats write_methods(
     union_size += p.second.size();
   }
   if (config.topoff_target_entries > union_size) {
-    always_assert(config.topoff_scope != nullptr);
     auto selection = baseline_profiles::select_smallest_topoff_methods(
-        *config.topoff_scope, baseline_profile,
-        config.topoff_target_entries - union_size, config.huge_method_max);
+        root_scope, baseline_profile, config.topoff_target_entries - union_size,
+        config.huge_method_max);
     stats.topoff_candidates = selection.candidates;
     stats.topoff_added = selection.methods.size();
     baseline_profiles::MethodFlags hot_only;
@@ -1005,11 +1034,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   const auto& method_profiles = conf.get_method_profiles();
 
   auto scope = build_class_scope(stores);
-  // The profile ships with the root store, so that is the only store top-off
-  // may pad from. `stores[0]` is the root store, as `get_root_store_types`
-  // relies on too.
+  // Only the root store ships alongside the profile, so it bounds everything
+  // this pass WRITES -- the entries emitted and the pool top-off pads from.
+  // Profile construction upstream stays store-agnostic on purpose: InterDexPass
+  // and ClinitOutlinePass consume the same profiles to drive optimizations,
+  // where a hot module method is still real information. `stores[0]` is the
+  // root store, as `get_root_store_types` relies on too.
   always_assert(!stores.empty());
   auto root_scope = build_class_scope(stores[0].get_dexen());
+  auto root_types = get_root_store_types(stores);
 
   auto baseline_profiles_tuple = baseline_profiles::get_baseline_profiles(
       scope,
@@ -1153,7 +1186,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   UnorderedMap<std::string, ClassWriteStats> class_write_stats;
 
   WriteMethodsConfig write_config{.huge_method_max = m_huge_method_max,
-                                  .topoff_scope = &root_scope};
+                                  .root_types = &root_types};
   for (const auto& entry : UnorderedIterable(baseline_profiles)) {
     const auto& bp_name = entry.first;
     const auto& bp = entry.second;
@@ -1162,7 +1195,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     auto output_name = conf.metafile(bp_name + "-baseline-profile.txt");
     std::ofstream ofs{output_name.c_str()};
     if (!strip_classes) {
-      class_write_stats[bp_name] = write_classes(bp, ofs);
+      class_write_stats[bp_name] = write_classes(bp, root_types, ofs);
     }
     // Only the default config becomes the shipped baseline.prof. The others
     // exist to measure deltas against it, and the manual profile lands in a
@@ -1174,14 +1207,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
             ? m_topoff_target_entries
             : 0;
     method_write_stats[bp_name] =
-        write_methods(scope, bp, bp_write_config, ofs);
+        write_methods(root_scope, bp, bp_write_config, ofs);
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
-    class_write_stats["manual"] = write_classes(manual_profile, ofs);
+    class_write_stats["manual"] =
+        write_classes(manual_profile, root_types, ofs);
   }
   method_write_stats["manual"] =
-      write_methods(scope, manual_profile, write_config, ofs);
+      write_methods(root_scope, manual_profile, write_config, ofs);
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
@@ -1392,6 +1426,10 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       // entry. Check this before trusting a size win.
       mgr.set_metric(prefix + "classes_left_without_entry",
                      s.classes_left_without_entry);
+      // Profile entries naming a class outside the root store. Drive this to
+      // zero: it is the alarm for an upstream source admitting module methods,
+      // which the binary converter would silently drop.
+      mgr.set_metric(prefix + "non_root_dropped", s.non_root_dropped);
 
       // Top-off. `entries_written` should land on `topoff_target` exactly;
       // a non-zero `topoff_shortfall` means the eligible pool ran out, which
@@ -1438,6 +1476,7 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       const auto& c = cws_it->second;
       mgr.set_metric(prefix + "classes_written", c.written);
       mgr.set_metric(prefix + "classes_external_skipped", c.external_skipped);
+      mgr.set_metric(prefix + "classes_non_root_skipped", c.non_root_skipped);
       mgr.set_metric(prefix + "classes_unmatched_written", c.unmatched);
       // Every one of these ships an obfuscated name that the converter cannot
       // resolve, i.e. a dead line.
