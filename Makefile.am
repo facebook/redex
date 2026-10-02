@@ -181,6 +181,7 @@ libredex_la_SOURCES = \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/KotlinLambdaAnalyzer.cpp \
+	libredex/LoopInfo.cpp \
 	libredex/Match.cpp \
 	libredex/MatchFlow.cpp \
 	libredex/MatchFlowDetail.cpp \
@@ -297,7 +298,6 @@ libredex_la_SOURCES = \
 	service/init-deps/InitDeps.cpp \
 	opt/kotlin-lambda/KotlinInstanceRewriter.cpp \
 	service/local-dce/LocalDce.cpp \
-	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
