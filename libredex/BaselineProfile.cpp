@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <fstream>
+#include <tuple>
 
 #include "ConcurrentContainers.h"
 #include "ConfigFiles.h"
@@ -65,6 +66,49 @@ bool flags_request_compilation(const MethodFlags& flags) {
   return flags.hot || flags.startup;
 }
 
+namespace {
+
+// How a padding candidate ranks, smallest-first. See the header for why the
+// keys after the first carry the selection rather than decorating it.
+struct TopOffRank {
+  uint32_t code_units{0};
+  // 0 for a void return, so void sorts first.
+  uint8_t non_void{0};
+  uint32_t registers{0};
+
+  bool operator<(const TopOffRank& other) const {
+    return std::tie(code_units, non_void, registers) <
+           std::tie(other.code_units, other.non_void, other.registers);
+  }
+  bool operator==(const TopOffRank& other) const {
+    return std::tie(code_units, non_void, registers) ==
+           std::tie(other.code_units, other.non_void, other.registers);
+  }
+};
+
+bool returns_void(const DexMethod* method) {
+  return type::is_void(method->get_proto()->get_rtype());
+}
+
+uint32_t registers_of(const DexMethod* method) {
+  const auto* code = method->get_code();
+  if (code == nullptr) {
+    return 0;
+  }
+  // IRCode::get_registers_size asserts the CFG is NOT built, and within a pass
+  // it always is, so the CFG owns the count there.
+  return code->cfg_built() ? code->cfg().get_registers_size()
+                           : code->get_registers_size();
+}
+
+TopOffRank topoff_rank(DexMethod* method) {
+  return TopOffRank{dex2oat_code_units(method),
+                    static_cast<uint8_t>(returns_void(method) ? 0 : 1),
+                    registers_of(method)};
+}
+
+} // namespace
+
 TopOffSelection select_smallest_topoff_methods(
     const Scope& candidate_scope,
     const BaselineProfile& baseline_profile,
@@ -75,7 +119,7 @@ TopOffSelection select_smallest_topoff_methods(
     return selection;
   }
 
-  InsertOnlyConcurrentMap<DexMethod*, uint32_t> eligible;
+  InsertOnlyConcurrentMap<DexMethod*, TopOffRank> eligible;
   walk::parallel::classes(candidate_scope, [&](DexClass* cls) {
     for (auto* method : cls->get_all_methods()) {
       if (baseline_profile.methods.count(method) != 0) {
@@ -85,41 +129,51 @@ TopOffSelection select_smallest_topoff_methods(
           UncompilableReason::kNone) {
         continue;
       }
-      eligible.emplace(method, dex2oat_code_units(method));
+      eligible.emplace(method, topoff_rank(method));
     }
   });
   selection.candidates = eligible.size();
 
-  std::vector<std::pair<uint32_t, DexMethod*>> candidates;
+  auto take = [&selection](DexMethod* method) {
+    selection.methods.push_back(method);
+    if (returns_void(method)) {
+      ++selection.methods_returning_void;
+    }
+  };
+
+  std::vector<std::pair<TopOffRank, DexMethod*>> candidates;
   candidates.reserve(eligible.size());
-  for (auto&& [method, code_units] : UnorderedIterable(eligible)) {
-    candidates.emplace_back(code_units, method);
+  for (auto&& [method, rank] : UnorderedIterable(eligible)) {
+    candidates.emplace_back(rank, method);
+    if (rank.non_void == 0) {
+      ++selection.candidates_returning_void;
+    }
   }
 
   if (candidates.size() <= count) {
     // The whole pool is taken, so nothing has to be ranked.
     selection.methods.reserve(candidates.size());
-    for (auto&& [code_units, method] : candidates) {
-      selection.methods.push_back(method);
+    for (auto&& [rank, method] : candidates) {
+      take(method);
     }
     return selection;
   }
 
-  auto by_size = [](const auto& a, const auto& b) { return a.first < b.first; };
+  auto by_rank = [](const auto& a, const auto& b) { return a.first < b.first; };
   std::nth_element(candidates.begin(),
                    candidates.begin() + static_cast<std::ptrdiff_t>(count - 1),
-                   candidates.end(), by_size);
-  uint32_t cutoff = candidates[count - 1].first;
+                   candidates.end(), by_rank);
+  auto cutoff = candidates[count - 1].first;
 
   // Everything strictly below the cutoff is in regardless of ordering; only
-  // the methods sitting exactly on it need a tie-break, and there are few
-  // enough of those to afford building their names.
+  // the methods sitting exactly on it need a tie-break, and the deobfuscated
+  // name is the one key expensive enough to be worth deferring this far.
   std::vector<std::pair<std::string, DexMethod*>> at_cutoff;
   selection.methods.reserve(count);
-  for (auto&& [code_units, method] : candidates) {
-    if (code_units < cutoff) {
-      selection.methods.push_back(method);
-    } else if (code_units == cutoff) {
+  for (auto&& [rank, method] : candidates) {
+    if (rank < cutoff) {
+      take(method);
+    } else if (rank == cutoff) {
       at_cutoff.emplace_back(show_deobfuscated(method), method);
     }
   }
@@ -133,7 +187,7 @@ TopOffSelection select_smallest_topoff_methods(
             [](const auto& a, const auto& b) { return a.first < b.first; });
   at_cutoff.resize(remaining);
   for (auto&& [name, method] : at_cutoff) {
-    selection.methods.push_back(method);
+    take(method);
   }
   return selection;
 }

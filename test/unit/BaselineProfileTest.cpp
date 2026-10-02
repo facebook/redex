@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "BaselineProfile.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAnnotation.h"
 #include "IRAssembler.h"
@@ -70,6 +71,25 @@ class BaselineProfileTest : public RedexTest {
           assembler::ircode_from_string(body_with_code_units(code_units)));
       method->get_code()->build_cfg();
     }
+    method->set_deobfuscated_name(show(method));
+
+    creator.add_method(method);
+    m_classes.push_back(creator.create());
+    return method;
+  }
+
+  // A one-code-unit method that hands back a reference instead of returning
+  // void, which is the shape the return-kind ranking key has to separate.
+  DexMethod* create_object_returning_method(const std::string& name) {
+    auto type_name = "LC" + std::to_string(m_classes.size()) + ";";
+    ClassCreator creator(DexType::make_type(type_name));
+    creator.set_super(type::java_lang_Object());
+
+    auto* method =
+        DexMethod::make_method(type_name + "." + name + ":()Ljava/lang/Object;")
+            ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string("((return-object v0))"));
+    method->get_code()->build_cfg();
     method->set_deobfuscated_name(show(method));
 
     creator.add_method(method);
@@ -313,6 +333,41 @@ TEST_F(BaselineProfileTest, topoff_breaks_size_ties_by_deobfuscated_name) {
   ASSERT_EQ(selection.methods.size(), 2u);
   EXPECT_EQ(names_of(selection.methods),
             (std::vector<std::string>{"LMulti;.a:()V", "LMulti;.b:()V"}));
+}
+
+// Every void one-code-unit body compiles to the same instruction, so void
+// padding collapses into a single shared body under identical code folding
+// where a value return needs its own. The non-void candidate is created first,
+// so it sorts ahead by deobfuscated name: only the return-kind key can pass it
+// over.
+TEST_F(BaselineProfileTest, topoff_prefers_void_returns_over_value_returns) {
+  create_object_returning_method("returns_object");
+  auto* returns_void = create_method("returns_void", ACC_PUBLIC, 1);
+
+  bp::BaselineProfile profile;
+  auto selection =
+      bp::select_smallest_topoff_methods(scope(), profile, /* count */ 1);
+
+  EXPECT_EQ(selection.candidates, 2u);
+  EXPECT_EQ(selection.candidates_returning_void, 1u);
+  EXPECT_EQ(names_of(selection.methods), names_of({returns_void}));
+  EXPECT_EQ(selection.methods_returning_void, 1u);
+}
+
+// Among candidates equal on size and return kind, the narrower frame wins. The
+// wide one is created first and so sorts ahead by name; only the register key
+// can pass it over.
+TEST_F(BaselineProfileTest, topoff_prefers_the_narrower_frame) {
+  auto* wide = create_method("wide", ACC_PUBLIC, 1);
+  auto* narrow = create_method("narrow", ACC_PUBLIC, 1);
+  wide->get_code()->cfg().set_registers_size(9);
+  narrow->get_code()->cfg().set_registers_size(1);
+
+  bp::BaselineProfile profile;
+  auto selection =
+      bp::select_smallest_topoff_methods(scope(), profile, /* count */ 1);
+
+  EXPECT_EQ(names_of(selection.methods), names_of({narrow}));
 }
 
 // Selection must not depend on hash or thread ordering. The pool here is large

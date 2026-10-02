@@ -112,13 +112,24 @@ struct TopOffSelection {
   // Eligible pool before truncation to the requested count, so a shortfall can
   // be told apart from an exhausted pool.
   size_t candidates{0};
+  // How many of `candidates` and of `methods` have a void return TYPE, at any
+  // body size -- not only the one-code-unit bodies the padding is drawn from.
+  // `methods_returning_void` below `methods.size()` means the ranking ran out
+  // of void candidates and fell back to value-returning padding.
+  size_t candidates_returning_void{0};
+  size_t methods_returning_void{0};
 };
 
 // Pick up to `count` methods to pad a baseline profile with, smallest first.
 //
-// Ties are broken on the deobfuscated name rather than on DexMethod order,
-// because this may run after renaming and obfuscated names are sequential ids
-// that move whenever unrelated code changes.
+// Candidates are ranked on, in order: code units, then a void return ahead of
+// a value return, then the narrower frame. This is simply a cheap approximation
+// for choosing methods that are likely identical (or a few buckets of many
+// methods that are identical).
+//
+// What is left is broken on the deobfuscated name rather than on DexMethod
+// order, because this may run after renaming and obfuscated names are
+// sequential ids that move whenever unrelated code changes.
 //
 // `candidate_scope` bounds what may be picked, and the caller must restrict it
 // to classes that ship alongside the profile -- for an app bundle, the root
