@@ -370,6 +370,27 @@ TEST_F(BaselineProfileTest, topoff_prefers_the_narrower_frame) {
   EXPECT_EQ(names_of(selection.methods), names_of({narrow}));
 }
 
+// A never-compile analysis drops a method from a profile without marking it,
+// so afterwards the method looks like a perfectly good padding candidate.
+// Padding it back in would silently reinstate what that analysis just decided
+// against, so the caller's exclusion set has to outrank eligibility.
+TEST_F(BaselineProfileTest, topoff_honors_the_exclusion_set) {
+  auto* rejected = create_method("rejected", ACC_PUBLIC, 1);
+  auto* ok = create_method("ok", ACC_PUBLIC, 1);
+
+  UnorderedSet<const DexMethod*> excluded;
+  excluded.insert(rejected);
+
+  bp::BaselineProfile profile;
+  auto selection = bp::select_smallest_topoff_methods(
+      scope(), profile, /* count */ 10, bp::DEFAULT_ART_HUGE_METHOD_MAX,
+      &excluded);
+
+  EXPECT_EQ(selection.candidates, 1u);
+  EXPECT_EQ(selection.excluded_candidates, 1u);
+  EXPECT_EQ(names_of(selection.methods), names_of({ok}));
+}
+
 // Selection must not depend on hash or thread ordering. The pool here is large
 // enough that the tie-break decides most of the answer.
 TEST_F(BaselineProfileTest, topoff_selection_is_stable_across_runs) {

@@ -118,6 +118,8 @@ struct TopOffSelection {
   // of void candidates and fell back to value-returning padding.
   size_t candidates_returning_void{0};
   size_t methods_returning_void{0};
+  // Methods the caller's exclusion set kept out of the candidate pool.
+  size_t excluded_candidates{0};
 };
 
 // Pick up to `count` methods to pad a baseline profile with, smallest first.
@@ -135,11 +137,17 @@ struct TopOffSelection {
 // to classes that ship alongside the profile -- for an app bundle, the root
 // store. A padding entry naming a module class cannot be resolved when the
 // profile is converted to its binary form, so those classes are not considered.
+//
+// `excluded`, when given, names methods that must never be padded with even
+// though they pass every gate above. Redex can decide a method is not worth
+// compiling and drop it from a profile without marking it -- padding it back
+// in would silently undo that decision.
 TopOffSelection select_smallest_topoff_methods(
     const Scope& candidate_scope,
     const BaselineProfile& baseline_profile,
     size_t count,
-    uint32_t huge_method_max = DEFAULT_ART_HUGE_METHOD_MAX);
+    uint32_t huge_method_max = DEFAULT_ART_HUGE_METHOD_MAX,
+    const UnorderedSet<const DexMethod*>* excluded = nullptr);
 
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,
 // BaselineProfile> The first is the default profile that will be fed into the
