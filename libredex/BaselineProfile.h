@@ -53,6 +53,83 @@ bool is_compiled(const BaselineProfile& baseline_profile,
 // changed.
 size_t apply_forced_method_flags(const Scope& scope, BaselineProfile* profile);
 
+// ART's default huge_method_threshold_ (art/compiler/driver/compiler_options.h,
+// kDefaultHugeMethodThreshold). dex2oat refuses a method STRICTLY larger than
+// this. Overridable on the dex2oat command line with --huge-method-max, which
+// no Android build of ours passes, so the default is what runs.
+constexpr uint32_t DEFAULT_ART_HUGE_METHOD_MAX = 10000;
+
+// Why dex2oat can never turn a profile entry into compiled code.
+//
+// Mirrors the gates in the `quick_fn` lambda of `CompileMethodQuick`,
+// art/dex2oat/driver/compiler_driver.cc (android17-release), plus the one size
+// gate inside the optimizing compiler. All but kHugeMethod are evaluated
+// BEFORE the profile is consulted:
+//   :455 IsUncompilableMethod -- NOT modelled, see below
+//   :459 native    -> dex2oat emits a JNI stub for this unconditionally,
+//                     whether or not the profile mentions it, so the entry buys
+//                     nothing
+//   :482 abstract  -> "Abstract methods don't have code."
+//   :484 @NeverCompile
+//   :490 <clinit>  -> compiled only under kEverything; app builds use
+//                     speed-profile
+// and then HGraphBuilder::SkipCompilation
+// (art/compiler/optimizing/builder.cc) drops a method larger than
+// huge_method_threshold_.
+//
+// Deliberately NOT modelled: VerificationResults::IsUncompilableMethod, which
+// fires when ART's verifier reported VERIFY_ERROR_RUNTIME_THROW or
+// VERIFY_ERROR_LOCKING, and class-wide for any class left at
+// kRetryVerificationAtRuntime. Reproducing it would mean reproducing ART's
+// verifier. It has not been observed to reject any entry of a real profile.
+enum class UncompilableReason {
+  kNone,
+  kNoCode, // abstract or native
+  kClinit,
+  kNeverCompile,
+  kHugeMethod,
+};
+
+// Code units in the sense of ART's `InsnsSizeInCodeUnits()`, i.e. what the
+// size gates compare against. The CFG contributes branch widening, so a caller
+// outside a pass that has not built it gets the unadjusted estimate.
+uint32_t dex2oat_code_units(DexMethod* method);
+
+UncompilableReason uncompilable_reason(
+    DexMethod* method, uint32_t huge_method_max = DEFAULT_ART_HUGE_METHOD_MAX);
+
+// Whether the profile flags ask dex2oat to compile this entry:
+//   IsHotMethod() || (!IsLowMemoryMode() && IsStartupMethod())
+// (compiler_driver.cc ShouldCompileBasedOnProfile, android17-release). We model
+// the non-low-memory device, which is what these profiles target; on a low-RAM
+// device the startup term drops out and the true count is lower.
+bool flags_request_compilation(const MethodFlags& flags);
+
+struct TopOffSelection {
+  // Which methods to add. The SET is deterministic; the order within it is
+  // not, so a caller that writes these out has to sort them itself.
+  std::vector<DexMethod*> methods;
+  // Eligible pool before truncation to the requested count, so a shortfall can
+  // be told apart from an exhausted pool.
+  size_t candidates{0};
+};
+
+// Pick up to `count` methods to pad a baseline profile with, smallest first.
+//
+// Ties are broken on the deobfuscated name rather than on DexMethod order,
+// because this may run after renaming and obfuscated names are sequential ids
+// that move whenever unrelated code changes.
+//
+// `candidate_scope` bounds what may be picked, and the caller must restrict it
+// to classes that ship alongside the profile -- for an app bundle, the root
+// store. A padding entry naming a module class cannot be resolved when the
+// profile is converted to its binary form, so those classes are not considered.
+TopOffSelection select_smallest_topoff_methods(
+    const Scope& candidate_scope,
+    const BaselineProfile& baseline_profile,
+    size_t count,
+    uint32_t huge_method_max = DEFAULT_ART_HUGE_METHOD_MAX);
+
 // Returns a tuple of BaselineProfile and UnorderedMap<std::string,
 // BaselineProfile> The first is the default profile that will be fed into the
 // baseline profile driver as a manual input. The second is a mapping of config
