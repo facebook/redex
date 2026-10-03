@@ -156,6 +156,7 @@ class _TarXzCompressor(_Compressor):
         compression_level: CompressionLevel,
     ) -> None:
         super().__init__(checksum_name)
+        # pyrefly: ignore [no-matching-overload]
         self.tarfile: tarfile.TarFile = tarfile.open(
             name=targz_path,
             mode="w:xz",

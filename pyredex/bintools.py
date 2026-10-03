@@ -233,7 +233,7 @@ def find_abort_error(lines: typing.Iterable[str]) -> typing.Optional[str]:
     return "\n".join(" " + line for line in terminate_lines)
 
 
-# pyre-fixme[24] # Cannot express the generics required pre-3.9
+# Cannot express the generics required pre-3.9
 PopenType = subprocess.Popen
 
 
@@ -252,6 +252,7 @@ def run_and_stream_stderr(
         # Windows does not support `pass_fds` parameter.
         proc: PopenType = subprocess.Popen(args, env=env, stderr=subprocess.PIPE)
     else:
+        # pyrefly: ignore [no-matching-overload]
         proc: PopenType = subprocess.Popen(
             args,
             env=env,

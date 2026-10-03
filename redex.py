@@ -1384,7 +1384,10 @@ def prepare_redex(args: argparse.Namespace) -> State:
         # redex.
         preserve_input_dexes = config_dict.get("preserve_input_dexes")
         dexen = relocate_dexen_to_directories(
-            dex_dir, dex_glob(dex_dir), preserve_input_dexes
+            dex_dir,
+            dex_glob(dex_dir),
+            # pyrefly: ignore [bad-argument-type]
+            preserve_input_dexes,
         )
         dexen_initial_state = DexenSnapshot(dex_dir) if preserve_input_dexes else None
 
