@@ -48,6 +48,11 @@ struct IRTypeCheckerConfig : public Configurable {
   UnorderedSet<std::string> definition_check_allowlist;
   UnorderedSet<std::string> external_check_allowlist_prefixes;
   UnorderedSet<std::string> definition_check_allowlist_prefixes;
+  // Android 10/11 ARMv7 JIT loop checker; a max score of 0 disables it. The
+  // default is the lowest score observed to abort on a device.
+  uint64_t armv7_jit_loop_max_score{115000};
+  uint32_t armv7_jit_loop_large_frame_carried_values{380};
+  uint32_t armv7_jit_loop_large_frame_weight_divisor{210};
 };
 
 struct HasherConfig : public Configurable {

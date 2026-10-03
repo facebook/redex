@@ -9,6 +9,7 @@
 #include "Debug.h"
 #include "DexAssessments.h"
 
+#include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -23,6 +24,7 @@
 
 #include "AnalysisUsage.h"
 #include "ApiLevelChecker.h"
+#include "Armv7JitLoopChecker.h"
 #include "AssetManager.h"
 #include "ClassChecker.h"
 #include "CommandProfiling.h"
@@ -102,8 +104,10 @@ std::string get_apk_dir(const ConfigFiles& config) {
 
 class CheckerConfig {
  public:
-  explicit CheckerConfig(const ConfigFiles& conf, bool disabled = false)
-      : m_disabled(disabled) {
+  CheckerConfig(const ConfigFiles& conf,
+                Architecture arch,
+                bool disabled = false)
+      : m_arch(arch), m_disabled(disabled) {
     const auto& global_config = conf.get_global_config();
     always_assert(global_config.has_config_by_name("ir_type_checker"));
     m_config = *global_config.get_config_by_name<IRTypeCheckerConfig>(
@@ -119,9 +123,10 @@ class CheckerConfig {
       return;
     }
 
-    auto res =
-        check_no_overwrite_this(false).validate_access(true).run_verifier(
-            scope, /* exit_on_fail= */ false);
+    auto res = check_no_overwrite_this(false)
+                   .validate_access(true)
+                   .check_armv7_jit_loops(JitLoopCheck::REPORT)
+                   .run_verifier(scope, /* exit_on_fail= */ false);
     if (!res) {
       return; // No issues.
     }
@@ -136,8 +141,10 @@ class CheckerConfig {
       fail_error(std::move(msg));
     }
 
-    res = check_no_overwrite_this(false).validate_access(false).run_verifier(
-        scope, /* exit_on_fail= */ false);
+    res = check_no_overwrite_this(false)
+              .validate_access(false)
+              .check_armv7_jit_loops(JitLoopCheck::REPORT)
+              .run_verifier(scope, /* exit_on_fail= */ false);
     if (!res) {
       std::cerr << "Warning: input has accessibility issues. Continuing."
                 << '\n';
@@ -164,6 +171,15 @@ class CheckerConfig {
   CheckerConfig validate_access(bool val) const {
     CheckerConfig ret = *this;
     ret.m_validate_access = val;
+    return ret;
+  }
+
+  // The ARMv7 JIT loop check is whole-program and its offenders are expected
+  // to persist across passes, so it runs on the input and at the end only.
+  enum class JitLoopCheck { SKIP, REPORT, ENFORCE };
+  CheckerConfig check_armv7_jit_loops(JitLoopCheck val) const {
+    CheckerConfig ret = *this;
+    ret.m_jit_loop_check = val;
     return ret;
   }
 
@@ -277,7 +293,38 @@ class CheckerConfig {
       return oss.str();
     }
 
-    return std::nullopt;
+    return run_armv7_jit_loop_checker(scope, exit_on_fail);
+  }
+
+  std::optional<std::string> run_armv7_jit_loop_checker(const Scope& scope,
+                                                        bool exit_on_fail) {
+    if (m_jit_loop_check == JitLoopCheck::SKIP ||
+        !Armv7JitLoopChecker::can_crash(m_arch)) {
+      return std::nullopt;
+    }
+    TRACE(PM, 1, "Running Armv7JitLoopChecker...");
+    Timer t("Armv7JitLoopChecker");
+
+    Armv7JitLoopChecker checker(
+        m_config.armv7_jit_loop_max_score,
+        {m_config.armv7_jit_loop_large_frame_carried_values,
+         m_config.armv7_jit_loop_large_frame_weight_divisor});
+    checker.run(scope);
+    bool enforce = m_jit_loop_check == JitLoopCheck::ENFORCE;
+    TRACE(PM, 1, "Armv7JitLoopChecker on %s: highest score %" PRIu64,
+          enforce ? "output" : "input", checker.highest_score());
+    if (!checker.fail()) {
+      return std::nullopt;
+    }
+    auto msg = checker.print_offenders();
+    // Failing on the input would blame Redex for code it was given; the input
+    // report is there to tell such offenders apart from ones a pass created.
+    if (!enforce) {
+      std::cerr << "Warning: on input, " << msg << '\n';
+      return std::nullopt;
+    }
+    always_assert_log(!exit_on_fail, "%s", msg.c_str());
+    return msg;
   }
 
   [[noreturn]] static void fail_error(std::string error_msg,
@@ -294,6 +341,8 @@ class CheckerConfig {
  private:
   // TODO(fengliu): Kill the `validate_access` flag.
   bool m_validate_access{true};
+  JitLoopCheck m_jit_loop_check{JitLoopCheck::SKIP};
+  Architecture m_arch;
   bool m_disabled;
   IRTypeCheckerConfig m_config;
 };
@@ -1267,7 +1316,8 @@ class PassManager::RunPassesContext {
             conf.get_global_config().get_config_by_name<AssessorConfig>(
                 "assessor")),
         // Retrieve the type checker's settings.
-        checker_conf(conf, mgr.m_checker_disabled),
+        checker_conf(
+            conf, mgr.get_redex_options().arch, mgr.m_checker_disabled),
         check_unique_deobfuscated(conf),
         violations_tracking(*get_violations_tracking_config(conf)),
         mem_pass_stats(traceEnabled(STATS, 1) ||
@@ -1364,6 +1414,7 @@ class PassManager::RunPassesContext {
     checker_conf
         .check_no_overwrite_this(mgr.get_redex_options().no_overwrite_this())
         .validate_access(true)
+        .check_armv7_jit_loops(CheckerConfig::JitLoopCheck::ENFORCE)
         .run_verifier(scope);
 
     jni_native_context_helper->post_passes(scope, conf);
