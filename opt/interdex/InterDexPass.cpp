@@ -367,13 +367,21 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   ReserveRefsInfo refs_info = m_reserve_refs;
   refs_info += mgr.get_reserved_refs();
 
+  // Plugins only run on the root store, so their reservations would be dead
+  // weight in every other store's dexes.
+  ReserveRefsInfo root_refs_info = refs_info;
+  for (const auto& plugin : plugins) {
+    root_refs_info += plugin->get_reserve_refs();
+  }
+
   ClassReferencesCache cache(original_scope);
 
   std::vector<DexStore*> parallel_stores;
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(original_scope, xstore_refs, init_classes_with_side_effects,
-               stores, store.get_dexen(), plugins, conf, mgr, refs_info, cache);
+               stores, store.get_dexen(), plugins, conf, mgr, root_refs_info,
+               cache);
     } else if (!store.is_generated()) {
       parallel_stores.push_back(&store);
     }

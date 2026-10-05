@@ -11,6 +11,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "PassManager.h"
 #include "PluginRegistry.h"
 
@@ -47,6 +48,11 @@ class InterDexPassPlugin {
     DexClasses empty;
     return empty;
   }
+
+  // Return the number of refs that this plugin's cleanup() will add to dexes
+  // after emission. These are reserved as headroom during class packing so
+  // that cleanup-time additions don't push past the dex ref limits.
+  virtual ReserveRefsInfo get_reserve_refs() const { return {}; }
 
   // Run plugin cleanup and finalization here. InterDex Pass should run
   // this after running its implementation
