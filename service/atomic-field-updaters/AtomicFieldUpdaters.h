@@ -99,20 +99,10 @@ const DexString* new_updater_name();
 
 // Every operation the family exposes, the functional forms included. Sizing
 // the opportunity means counting operations a lowering does not yet handle, so
-// this is deliberately wider than `is_modeled_operation`. What it excludes is
-// the methods every object inherits -- `toString`, `hashCode`, `equals` -- and
-// counting one of those as an updater operation would be noise.
+// this is deliberately wide. What it excludes is the methods every object
+// inherits -- `toString`, `hashCode`, `equals` -- and counting one of those as
+// an updater operation would be noise.
 bool is_operation_name(std::string_view name);
-
-// The subset a lowering can model. The functional forms are out: their trailing
-// argument is a `UnaryOperator`/`BinaryOperator` rather than a value, so the
-// value written is only known at runtime.
-//
-// Matched by name rather than by argument shape: for the reference flavor the
-// value type is `Object`, so a shape test cannot tell `set(T, V)` from
-// `equals(Object)`, and a zero-argument inherited method would pass vacuously
-// and then be read as though its absent first argument were the holder.
-bool is_modeled_operation(std::string_view name);
 
 // Index of the field-name argument to `newUpdater`. The reference flavor's
 // signature is (Class tclass, Class vclass, String fieldName); the Integer and

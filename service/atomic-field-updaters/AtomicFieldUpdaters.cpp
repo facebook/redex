@@ -47,7 +47,7 @@ const DexString* new_updater_name() {
 }
 
 namespace {
-// The operations a lowering can express directly.
+// Every operation except the functional forms below.
 const UnorderedSet<std::string_view> kModeled{"get",
                                               "set",
                                               "lazySet",
@@ -107,10 +107,6 @@ std::optional<HiddenApiStatus> hidden_api_status(
 
 bool is_operation_name(std::string_view name) {
   return kModeled.count(name) != 0u || kFunctional.count(name) != 0u;
-}
-
-bool is_modeled_operation(std::string_view name) {
-  return kModeled.count(name) != 0u;
 }
 
 uint16_t field_name_arg_index(Kind kind) {
