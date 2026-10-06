@@ -525,13 +525,111 @@ TEST_F(AtomicFieldUpdaterLoweringTest, updaterInitInTryRegionIsNotCleanedUp) {
       << "an updater built under a catch handler must survive cleanup";
 }
 
-// -- Strong reference compareAndSet below the reliable API -------------------
+// -- The reference compareAndSet and d8's Android 12 forwarder -------------
 //
 // On Android 12 a reference compare-and-set can fail spuriously (b/211646483),
-// the raw Unsafe primitive included. These pin that a strong reference CAS
-// keeps retrying there, and that nothing else pays for it.
+// the raw Unsafe primitive included. Below API 32 d8 never emits
+// `AtomicReferenceFieldUpdater.compareAndSet`; it calls a synthetic forwarder
+// that retries while the field still holds `expect`. These pin that only the
+// genuine forwarder is recognized, that a strong reference CAS keeps retrying,
+// and that nothing else pays for it.
 
 namespace {
+
+// d8's forwarder, as it emits it.
+constexpr const char* kForwarder = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (load-param-object v3)
+  (:loop)
+  (invoke-virtual (v0 v1 v2 v3) "$UPD.compareAndSet:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (if-eqz v4 :recheck)
+  (const v5 1)
+  (return v5)
+  (:recheck)
+  (invoke-virtual (v0 v1) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+  (move-result-object v6)
+  (if-eq v6 v2 :loop)
+  (const v5 0)
+  (return v5)
+))";
+
+// The same loop with both tests inverted: another compiler's way of writing it.
+constexpr const char* kForwarderInverted = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (load-param-object v3)
+  (:loop)
+  (invoke-virtual (v0 v1 v2 v3) "$UPD.compareAndSet:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (if-nez v4 :done)
+  (invoke-virtual (v0 v1) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+  (move-result-object v6)
+  (if-ne v6 v2 :lost)
+  (goto :loop)
+  (:done)
+  (const v5 1)
+  (return v5)
+  (:lost)
+  (const v5 0)
+  (return v5)
+))";
+
+// Retries while the field equals `update` rather than `expect`: not the
+// operation, however close it looks.
+constexpr const char* kForwarderWrongComparand = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (load-param-object v3)
+  (:loop)
+  (invoke-virtual (v0 v1 v2 v3) "$UPD.compareAndSet:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (if-eqz v4 :recheck)
+  (const v5 1)
+  (return v5)
+  (:recheck)
+  (invoke-virtual (v0 v1) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+  (move-result-object v6)
+  (if-eq v6 v3 :loop)
+  (const v5 0)
+  (return v5)
+))";
+
+// Reports the outcome inverted.
+constexpr const char* kForwarderInvertedResult = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (load-param-object v3)
+  (:loop)
+  (invoke-virtual (v0 v1 v2 v3) "$UPD.compareAndSet:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (if-eqz v4 :recheck)
+  (const v5 0)
+  (return v5)
+  (:recheck)
+  (invoke-virtual (v0 v1) "$UPD.get:(Ljava/lang/Object;)Ljava/lang/Object;")
+  (move-result-object v6)
+  (if-eq v6 v2 :loop)
+  (const v5 1)
+  (return v5)
+))";
+
+// A caller handing the forwarder a recognized updater.
+constexpr const char* kCallForwarder = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (sget-object "$CLS.U:$UPD")
+  (move-result-pseudo-object v3)
+  (invoke-static (v3 v0 v1 v2) "$FWD.m:($UPDLjava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (return v4)
+))";
 
 // A caller invoking the updater directly, as code dexed for API 32+ would.
 constexpr const char* kCallDirect = R"((
@@ -550,6 +648,30 @@ const std::string kRetryHelper =
     atomic_field_updaters::CAS_RETRY_METHOD_NAME;
 const std::string kRawCas = "Lsun/misc/Unsafe;.compareAndSwapObject";
 
+// The class d8 would have put the forwarder `m` in.
+DexClass* make_forwarder(const std::string& cls_name,
+                         const char* body,
+                         bool with_clinit = false) {
+  ClassCreator cc(DexType::make_type(cls_name));
+  cc.set_super(type::java_lang_Object());
+  cc.set_access(ACC_PUBLIC | ACC_FINAL | ACC_SYNTHETIC);
+  auto* m = DexMethod::make_method(
+                cls_name + ".m:(" + REFERENCE_DESC +
+                "Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, false);
+  m->set_code(
+      assembler::ircode_from_string(ir(body, {{"$UPD", REFERENCE_DESC}})));
+  cc.add_method(m);
+  if (with_clinit) {
+    auto* clinit =
+        DexMethod::make_method(cls_name + ".<clinit>:()V")
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
+    clinit->set_code(assembler::ircode_from_string("((return-void))"));
+    cc.add_method(clinit);
+  }
+  return cc.create();
+}
+
 // `cls_name.cas(cls_name, Object, Object) -> boolean` with `body`.
 DexMethod* make_caller(
     const std::string& cls_name,
@@ -563,6 +685,68 @@ DexMethod* make_caller(
 }
 
 } // namespace
+
+// d8's shape is recognized, and the calls to it are counted: they are where the
+// reference compareAndSet went.
+TEST_F(AtomicFieldUpdaterLoweringTest, forwarderCallIsRecognizedAndCounted) {
+  auto* fwd = make_forwarder("LFwdA;", kForwarder);
+  auto* caller = make_caller(
+      "LCasA;", kCallForwarder,
+      {{"$CLS", "LCasA;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdA;"}});
+
+  run("LCasA;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 1);
+  EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 0);
+  EXPECT_EQ(metric("ops_backport_cas_calls"), 1);
+}
+
+// Recognition rests on what the body does, not on how a compiler laid it out.
+TEST_F(AtomicFieldUpdaterLoweringTest, invertedForwarderIsRecognized) {
+  auto* fwd = make_forwarder("LFwdC;", kForwarderInverted);
+  auto* caller = make_caller(
+      "LCasC;", kCallForwarder,
+      {{"$CLS", "LCasC;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdC;"}});
+
+  run("LCasC;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 1);
+}
+
+// A method shaped like the forwarder that retries on the wrong value is not
+// the operation. Treating it as one would change what the call returns.
+TEST_F(AtomicFieldUpdaterLoweringTest, forwarderWithWrongComparandIsRejected) {
+  auto* fwd = make_forwarder("LFwdD;", kForwarderWrongComparand);
+  auto* caller = make_caller(
+      "LCasD;", kCallForwarder,
+      {{"$CLS", "LCasD;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdD;"}});
+
+  run("LCasD;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 0);
+  EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+}
+
+// Likewise one that reports the outcome inverted.
+TEST_F(AtomicFieldUpdaterLoweringTest, forwarderWithInvertedResultIsRejected) {
+  auto* fwd = make_forwarder("LFwdE;", kForwarderInvertedResult);
+  auto* caller = make_caller(
+      "LCasE;", kCallForwarder,
+      {{"$CLS", "LCasE;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdE;"}});
+
+  run("LCasE;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+}
+
+// Replacing the call drops the initialization of the forwarder's class, so a
+// class with an initializer to run is not a forwarder however exact its body.
+TEST_F(AtomicFieldUpdaterLoweringTest,
+       forwarderWithClassInitializerIsRejected) {
+  auto* fwd = make_forwarder("LFwdF;", kForwarder, /*with_clinit=*/true);
+  auto* caller = make_caller(
+      "LCasF;", kCallForwarder,
+      {{"$CLS", "LCasF;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdF;"}});
+
+  run("LCasF;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+}
 
 // A direct strong reference CAS has to keep retrying where the primitive can
 // fail spuriously: below the reliable API it must not lower to the raw

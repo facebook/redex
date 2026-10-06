@@ -83,8 +83,14 @@ TEST_F(AtomicFieldUpdaterLoweringIntegTest, recognizesEveryFlavor) {
   EXPECT_EQ(metric("updaters_recognized_long"), 1);
 
   // The census counts every call against an updater type, including the two
-  // inside the forwarder D8 synthesizes for the reference compareAndSet.
+  // inside the forwarder d8 synthesizes for the reference compareAndSet.
   EXPECT_EQ(metric("ops_total"), 11);
+
+  // That forwarder is d8's real output, the one shape the unit tests can only
+  // imitate: recognizing it here is what shows the matcher fits the toolchain.
+  EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 1);
+  EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 0);
+  EXPECT_EQ(metric("ops_backport_cas_calls"), 1);
 }
 
 // An updater passed in as a parameter has no field to resolve to, so the call
