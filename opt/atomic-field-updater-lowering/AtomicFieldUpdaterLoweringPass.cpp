@@ -25,6 +25,7 @@
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "Deleter.h"
+#include "DexAsm.h"
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "GlobalConfig.h"
@@ -48,6 +49,7 @@
 #include "Walkers.h"
 
 namespace {
+using namespace dex_asm;
 using atomic_field_updaters::Kind;
 using atomic_field_updaters::kind_name;
 using atomic_field_updaters::SYNTH_HOLDER_DESC;
@@ -557,53 +559,21 @@ void add_offsets_to_holders(std::vector<UpdaterInfo>& updaters,
     reg_t field_reg = cfg.allocate_temp();
     reg_t off_reg = cfg.allocate_wide_temp();
 
-    std::vector<IRInstruction*> init;
-    auto* load_unsafe = new IRInstruction(OPCODE_SGET_OBJECT);
-    load_unsafe->set_field(s_unsafe);
-    auto* load_unsafe_res =
-        new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-    load_unsafe_res->set_dest(u_reg);
-    init.push_back(load_unsafe);
-    init.push_back(load_unsafe_res);
-
-    auto* const_cls = new IRInstruction(OPCODE_CONST_CLASS);
-    const_cls->set_type(info.holder);
-    auto* const_cls_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-    const_cls_res->set_dest(cls_reg);
-    init.push_back(const_cls);
-    init.push_back(const_cls_res);
-
-    auto* const_str = new IRInstruction(OPCODE_CONST_STRING);
-    const_str->set_string(info.field_name);
-    auto* const_str_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-    const_str_res->set_dest(name_reg);
-    init.push_back(const_str);
-    init.push_back(const_str_res);
-
-    auto* get_field = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-    get_field->set_method(get_declared_field);
-    get_field->set_srcs_size(2);
-    get_field->set_src(0, cls_reg);
-    get_field->set_src(1, name_reg);
-    auto* get_field_res = new IRInstruction(OPCODE_MOVE_RESULT_OBJECT);
-    get_field_res->set_dest(field_reg);
-    init.push_back(get_field);
-    init.push_back(get_field_res);
-
-    auto* to_offset = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-    to_offset->set_method(object_field_offset);
-    to_offset->set_srcs_size(2);
-    to_offset->set_src(0, u_reg);
-    to_offset->set_src(1, field_reg);
-    auto* to_offset_res = new IRInstruction(OPCODE_MOVE_RESULT_WIDE);
-    to_offset_res->set_dest(off_reg);
-    init.push_back(to_offset);
-    init.push_back(to_offset_res);
-
-    auto* store = new IRInstruction(OPCODE_SPUT_WIDE);
-    store->set_field(offset);
-    store->set_src(0, off_reg);
-    init.push_back(store);
+    std::vector<IRInstruction*> init{
+        dasm(OPCODE_SGET_OBJECT, s_unsafe),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, u_reg}}),
+        dasm(OPCODE_CONST_CLASS, info.holder),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, cls_reg}}),
+        dasm(OPCODE_CONST_STRING, info.field_name),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {{VREG, name_reg}}),
+        dasm(OPCODE_INVOKE_VIRTUAL, get_declared_field,
+             {{VREG, cls_reg}, {VREG, name_reg}}),
+        dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, field_reg}}),
+        dasm(OPCODE_INVOKE_VIRTUAL, object_field_offset,
+             {{VREG, u_reg}, {VREG, field_reg}}),
+        dasm(OPCODE_MOVE_RESULT_WIDE, {{VREG, off_reg}}),
+        dasm(OPCODE_SPUT_WIDE, offset, {{VREG, off_reg}}),
+    };
 
     cfg::CFGMutation mutation(cfg);
     mutation.insert_before(entry->to_cfg_instruction_iterator(first), init);
@@ -980,12 +950,8 @@ void emit_sget(std::vector<IRInstruction*>* out,
                IROpcode pseudo_op,
                DexField* field,
                reg_t dst) {
-  auto* g = new IRInstruction(sget_op);
-  g->set_field(field);
-  auto* p = new IRInstruction(pseudo_op);
-  p->set_dest(dst);
-  out->push_back(g);
-  out->push_back(p);
+  out->push_back(dasm(sget_op, field));
+  out->push_back(dasm(pseudo_op, {{VREG, dst}}));
 }
 
 // Every updater operation call site is measured against the obligations that
@@ -1379,11 +1345,8 @@ std::vector<IRInstruction*> build_replacement(
   std::vector<IRInstruction*> repl;
   if (rewrite.needs_guard) {
     // Preserve the ClassCastException `accessCheck` would have thrown.
-    auto* chk = new IRInstruction(OPCODE_INVOKE_STATIC);
-    chk->set_method(helpers.check_holder);
-    chk->set_srcs_size(1);
-    chk->set_src(0, insn->src(1));
-    repl.push_back(chk);
+    repl.push_back(dasm(OPCODE_INVOKE_STATIC, helpers.check_holder,
+                        {{VREG, insn->src(1)}}));
   }
 
   reg_t unsafe_reg = cfg.allocate_temp();
@@ -1397,28 +1360,23 @@ std::vector<IRInstruction*> build_replacement(
   reg_t lit_reg = 0;
   if (plan.literal.has_value()) {
     lit_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
-    auto* c = new IRInstruction(wide ? OPCODE_CONST_WIDE : OPCODE_CONST);
-    c->set_literal(*plan.literal);
-    c->set_dest(lit_reg);
-    repl.push_back(c);
+    repl.push_back(dasm(wide ? OPCODE_CONST_WIDE : OPCODE_CONST,
+                        {{VREG, lit_reg}, {LITERAL, *plan.literal}}));
   }
 
   auto* unsafe_method = unsafe_ref(plan);
-  auto* inv = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  inv->set_method(unsafe_method);
-  const size_t n_values = plan.value_srcs + (plan.literal.has_value() ? 1 : 0);
-  inv->set_srcs_size(3 + n_values);
-  inv->set_src(0, unsafe_reg);
-  inv->set_src(1, insn->src(1)); // holder
-  inv->set_src(2, offset_reg);
+  std::vector<Operand> srcs{{VREG, unsafe_reg},
+                            {VREG, insn->src(1)}, // holder
+                            {VREG, offset_reg}};
   for (int i = 0; i < plan.value_srcs; ++i) {
     // Value arguments follow the holder at the original call site.
-    inv->set_src(3 + i, insn->src(2 + i));
+    srcs.push_back({VREG, insn->src(2 + i)});
   }
   if (plan.literal.has_value()) {
-    inv->set_src(3 + plan.value_srcs, lit_reg);
+    srcs.push_back({VREG, lit_reg});
   }
-  repl.push_back(inv);
+  repl.push_back(
+      dasm(OPCODE_INVOKE_VIRTUAL, unsafe_method, srcs.begin(), srcs.end()));
 
   // Propagate the result. `CFGMutation::replace` drops the replaced invoke's
   // move-result, so it is re-emitted here. Unsafe's getAndAdd returns the *old*
@@ -1437,21 +1395,14 @@ std::vector<IRInstruction*> build_replacement(
       mr_op = OPCODE_MOVE_RESULT;
     }
     if (!plan.add_result) {
-      auto* mr = new IRInstruction(mr_op);
-      mr->set_dest(final_dest);
-      repl.push_back(mr);
+      repl.push_back(dasm(mr_op, {{VREG, final_dest}}));
     } else {
       reg_t old_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
-      auto* mr = new IRInstruction(mr_op);
-      mr->set_dest(old_reg);
-      repl.push_back(mr);
+      repl.push_back(dasm(mr_op, {{VREG, old_reg}}));
       reg_t addend = plan.literal.has_value() ? lit_reg : insn->src(2);
-      auto* add = new IRInstruction(wide ? OPCODE_ADD_LONG : OPCODE_ADD_INT);
-      add->set_srcs_size(2);
-      add->set_src(0, old_reg);
-      add->set_src(1, addend);
-      add->set_dest(final_dest);
-      repl.push_back(add);
+      repl.push_back(
+          dasm(wide ? OPCODE_ADD_LONG : OPCODE_ADD_INT,
+               {{VREG, final_dest}, {VREG, old_reg}, {VREG, addend}}));
     }
   }
   return repl;
