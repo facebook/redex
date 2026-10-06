@@ -36,9 +36,17 @@ constexpr const char* METRIC_CURRENT_CLASSES_WHEN_EMITTING_REMAINING =
     "num_current_classes_when_emitting_remaining";
 
 constexpr const char* METRIC_LINEAR_ALLOC_LIMIT = "linear_alloc_limit";
+// Headroom later passes must still leave free in every dex. Plugin
+// reservations are excluded; see METRIC_PLUGIN_RESERVED_*.
 constexpr const char* METRIC_RESERVED_FREFS = "reserved_frefs";
 constexpr const char* METRIC_RESERVED_TREFS = "reserved_trefs";
 constexpr const char* METRIC_RESERVED_MREFS = "reserved_mrefs";
+// Headroom InterDexPassPlugin::get_reserve_refs() held back in the root
+// store's dexes and the plugins' cleanup() then spent. Reported for
+// observability only -- it is gone by the time InterDex returns.
+constexpr const char* METRIC_PLUGIN_RESERVED_FREFS = "plugin_reserved_frefs";
+constexpr const char* METRIC_PLUGIN_RESERVED_TREFS = "plugin_reserved_trefs";
+constexpr const char* METRIC_PLUGIN_RESERVED_MREFS = "plugin_reserved_mrefs";
 constexpr const char* METRIC_EMIT_CANARIES = "emit_canaries";
 constexpr const char* METRIC_ORDER_INTERDEX = "order_interdex";
 
