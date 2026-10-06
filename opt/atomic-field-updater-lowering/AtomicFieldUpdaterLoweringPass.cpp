@@ -1429,15 +1429,8 @@ struct EmitStats {
 // allocation and method ref interning off the parallel path entirely.
 EmitStats emit_rewrites(const Scope& scope,
                         const RewritePlan& rewrites,
-                        const std::function<const Helpers&()>& ensure_helpers) {
+                        const Helpers& helpers) {
   EmitStats emitted;
-  // Nothing is synthesized until here: with no site planned, the app is left
-  // without the holder class rather than carrying an unreachable one.
-  if (rewrites.empty()) {
-    return emitted;
-  }
-  const Helpers& helpers = ensure_helpers();
-
   walk::methods(scope, [&](DexMethod* method) {
     const auto* planned = rewrites.get(method);
     if (planned == nullptr) {
@@ -1544,32 +1537,21 @@ void report(PassManager& mgr,
         totals.blocked_hidden_api);
 }
 
-// `ensure_helpers` synthesizes the shared `Unsafe` holder, the null-check
-// method and the per-field offsets, and is called only if the analysis finds a
-// site to emit. An app with updaters it cannot lower should not be given an
-// unreachable class whose <clinit> reflects over `sun.misc.Unsafe`.
-void lower_calls(const Scope& scope,
-                 const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
-                 const UpdaterOperations& ops,
-                 const std::function<const Helpers&()>& ensure_helpers,
-                 ConfigFiles& conf,
-                 int min_sdk,
-                 PassManager& mgr) {
-  RewritePlan rewrites;
-  const Stats totals = analyze_calls(scope, by_field, ops, min_sdk, &rewrites);
-  const EmitStats emitted = emit_rewrites(scope, rewrites, ensure_helpers);
-  if (!rewrites.empty()) {
-    auto method_override_graph = method_override_graph::build_graph(scope);
-    init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
-        scope, conf.create_init_class_insns(), method_override_graph.get());
-    const UnorderedSet<DexMethodRef*> pure_methods;
-    LocalDce local_dce(&init_classes_with_side_effects, pure_methods,
-                       method_override_graph.get());
-    for (auto&& [method, ignored] : UnorderedIterable(rewrites)) {
-      local_dce.dce(method->get_code(), true, method->get_class());
-    }
+// A rewritten call no longer reads its updater, so the load that fed it is
+// dead. Removing it here is what lets cleanup find the updater field
+// unreferenced.
+void dce_rewritten_methods(const Scope& scope,
+                           ConfigFiles& conf,
+                           const RewritePlan& rewrites) {
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
+      scope, conf.create_init_class_insns(), method_override_graph.get());
+  const UnorderedSet<DexMethodRef*> pure_methods;
+  LocalDce local_dce(&init_classes_with_side_effects, pure_methods,
+                     method_override_graph.get());
+  for (auto&& [method, ignored] : UnorderedIterable(rewrites)) {
+    local_dce.dce(method->get_code(), true, method->get_class());
   }
-  report(mgr, totals, emitted, ops.kinds());
 }
 
 struct CleanupStats {
@@ -1856,18 +1838,20 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   auto accessors = find_receiver_chain_accessors(scope, ops, by_field, mgr);
   inline_updater_accessors(stores, scope, conf, mgr, accessors);
 
-  // Deferred: synthesized on first use, from inside `lower_calls`, once the
-  // analysis has found a site worth emitting.
-  std::optional<Helpers> helpers;
-  auto ensure_helpers = [&]() -> const Helpers& {
-    if (!helpers) {
-      helpers = synthesize_unsafe_holder(stores);
-      add_offsets_to_holders(updaters, helpers->s_unsafe, mgr);
-    }
-    return *helpers;
-  };
-  lower_calls(scope, by_field, ops, ensure_helpers, conf,
-              mgr.get_redex_options().min_sdk, mgr);
+  const int min_sdk = mgr.get_redex_options().min_sdk;
+  RewritePlan rewrites;
+  const Stats totals = analyze_calls(scope, by_field, ops, min_sdk, &rewrites);
+  EmitStats emitted;
+  // Nothing is synthesized unless a site is planned: an app with updaters it
+  // cannot lower should not be given an unreachable class whose <clinit>
+  // reflects over `sun.misc.Unsafe`.
+  if (!rewrites.empty()) {
+    const Helpers helpers = synthesize_unsafe_holder(stores);
+    add_offsets_to_holders(updaters, helpers.s_unsafe, mgr);
+    emitted = emit_rewrites(scope, rewrites, helpers);
+    dce_rewritten_methods(scope, conf, rewrites);
+  }
+  report(mgr, totals, emitted, ops.kinds());
   cleanup_redundant_fields(scope, &updaters, mgr);
 }
 
