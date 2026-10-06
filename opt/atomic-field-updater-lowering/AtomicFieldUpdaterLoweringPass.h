@@ -63,6 +63,12 @@
  * into app code is what forfeits the exemption, so every member this pass emits
  * must be classified in `atomic_field_updaters::hidden_api_status` first.
  *
+ * On Android 12 a reference compare-and-set can fail spuriously, the raw
+ * `Unsafe.compareAndSwapObject` included (b/211646483). So below API 32 a
+ * strong reference CAS lowers to a synthesized helper that retries while the
+ * field still holds `expect`; the weak form, which may fail spuriously by
+ * contract, lowers to the primitive.
+ *
  * Each field offset lives on the class that declares the field and is computed
  * in that class's own `<clinit>`; only the `Unsafe` instance is shared. A
  * holder whose non-nullness cannot be proven gets an explicit check that throws

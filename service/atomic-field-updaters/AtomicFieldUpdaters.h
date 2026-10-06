@@ -62,6 +62,21 @@ extern const char* const LONG_DESC;
 extern const char* const UNSAFE_DESC;
 extern const char* const SYNTH_HOLDER_DESC;
 
+// The first API level on which a reference compare-and-set cannot fail
+// spuriously. On Android 12 both `AtomicReferenceFieldUpdater.compareAndSet`
+// and `Unsafe.compareAndSwapObject` can report failure while the field holds
+// the expected value (b/211646483), so below this level d8 wraps every such
+// call in a retry loop (R8's `initializeAndroidSv2MethodProviders`), and a
+// lowering emitting a raw reference CAS has to retry the same way.
+//
+// A constant rather than a config knob: lowering it can only produce wrong
+// code.
+constexpr int kReferenceCasReliableMinSdk = 32;
+
+// The retry helper, declared on `SYNTH_HOLDER_DESC`, that a strong reference
+// compare-and-set lowers to below `kReferenceCasReliableMinSdk`.
+extern const char* const CAS_RETRY_METHOD_NAME;
+
 // May app code link a given `sun.misc.Unsafe` member?
 //
 // Android's non-SDK interface policy classifies every bootclasspath member.
