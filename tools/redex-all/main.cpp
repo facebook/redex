@@ -2284,7 +2284,11 @@ int main(int argc, char* argv[]) {
     // is not thread-safe.
     if (constant_propagation_transform_internal::enable_replacing_areequal) {
       auto err = constant_propagation::verify_areequal_semantics();
-      always_assert_log(!err.has_value(), "%s", err->c_str());
+      always_assert_log(!err.has_value(),
+                        "If the app has no Kotlin code, set "
+                        "enable_replacing_areequal to false in its Redex "
+                        "config. Intrinsics.areEqual check failed: %s",
+                        err->c_str());
     }
 
     auto const& passes = PassRegistry::get().get_passes();
