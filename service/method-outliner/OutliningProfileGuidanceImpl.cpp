@@ -7,9 +7,7 @@
 
 #include "OutliningProfileGuidanceImpl.h"
 
-#include <boost/regex/v5/regex.hpp>
-#include <boost/regex/v5/regex_fwd.hpp>
-#include <boost/regex/v5/regex_match.hpp>
+#include <boost/regex.hpp> // NOLINT(facebook-unused-include-check)
 
 #include "CallGraph.h"
 #include "ConfigFiles.h"
