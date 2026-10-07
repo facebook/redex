@@ -2183,7 +2183,7 @@ int main(int argc, char* argv[]) {
                 .asBool();
 
     constant_propagation_transform_internal::enable_replacing_areequal =
-        args.config.get("enable_replacing_areequal", false).asBool();
+        args.config.get("enable_replacing_areequal", true).asBool();
     always_assert_log(
         !constant_propagation_transform_internal::enable_replacing_areequal ||
             constant_propagation_transform_internal::

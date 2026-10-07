@@ -29,7 +29,7 @@
 namespace constant_propagation_transform_internal {
 bool enable_object_domain_null_check_elim = true;
 // TODO(T263034329): Remove this.
-bool enable_replacing_areequal = false;
+bool enable_replacing_areequal = true;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {
