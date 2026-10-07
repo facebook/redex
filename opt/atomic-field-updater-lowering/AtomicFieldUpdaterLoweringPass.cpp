@@ -638,9 +638,10 @@ bool uses_updater(cfg::ControlFlowGraph& cfg,
 // Not a safety condition -- inlining preserves semantics whatever the body
 // does, class initialization included -- but scope discipline: "log, then
 // return NEXT" would be copied into every caller for no reason.
-bool is_accessor_chain(DexMethod* m,
-                       const UnorderedSet<DexField*>& recognized_fields,
-                       UnorderedSet<DexMethod*>* chain) {
+bool is_accessor_chain(
+    DexMethod* m,
+    const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
+    UnorderedSet<DexMethod*>* chain) {
   UnorderedSet<DexMethod*> walked;
   while (m != nullptr && m->get_code() != nullptr &&
          !m->rstate.no_optimizations() && walked.insert(m).second) {
@@ -669,7 +670,7 @@ bool is_accessor_chain(DexMethod* m,
       continue;
     }
     if (field == nullptr || field->get_class() != m->get_class() ||
-        !recognized_fields.contains(field)) {
+        by_field.count(field) == 0u) {
       return false;
     }
     insert_unordered_iterable(*chain, walked);
@@ -688,7 +689,7 @@ bool is_accessor_chain(DexMethod* m,
 UnorderedSet<DexMethod*> find_receiver_chain_accessors(
     const Scope& scope,
     const UnorderedMap<const DexType*, Kind>& updater_kinds,
-    const UnorderedSet<DexField*>& recognized_fields,
+    const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
     PassManager& mgr) {
   InsertOnlyConcurrentSet<DexMethod*> selected;
   // Callees a receiver came from that could not be followed. Recorded per
@@ -727,7 +728,7 @@ UnorderedSet<DexMethod*> find_receiver_chain_accessors(
         }
         auto* callee = resolve_method(def->get_method(), MethodSearch::Static);
         UnorderedSet<DexMethod*> chain;
-        if (is_accessor_chain(callee, recognized_fields, &chain)) {
+        if (is_accessor_chain(callee, by_field, &chain)) {
           for (auto* on_chain : UnorderedIterable(chain)) {
             selected.insert(on_chain);
           }
@@ -751,18 +752,18 @@ UnorderedSet<DexMethod*> find_receiver_chain_accessors(
 // already models init-class side effects, which matters because a bridge in one
 // class delegating to a getter in another would otherwise silently drop the
 // bridge class's static initializer.
-size_t inline_updater_accessors(DexStoresVector& stores,
-                                Scope& scope,
-                                ConfigFiles& conf,
-                                PassManager& mgr,
-                                const UnorderedSet<DexMethod*>& candidates) {
+void inline_updater_accessors(DexStoresVector& stores,
+                              Scope& scope,
+                              ConfigFiles& conf,
+                              PassManager& mgr,
+                              const UnorderedSet<DexMethod*>& candidates) {
   mgr.set_metric("accessors_selected", candidates.size());
   if (candidates.empty()) {
     // Record it anyway: a metric that vanishes when the count is zero is
     // indistinguishable from the pass not having run.
     mgr.set_metric("accessors_inlined", 0);
     mgr.set_metric("accessors_deleted", 0);
-    return 0;
+    return;
   }
   auto method_override_graph = method_override_graph::build_graph(scope);
   init_classes::InitClassesWithSideEffects init_classes_with_side_effects(
@@ -806,7 +807,6 @@ size_t inline_updater_accessors(DexStoresVector& stores,
         "SUMMARY accessors selected=%zu inlined=%zu deleted=%zu "
         "(rejected_impure counted separately)",
         candidates.size(), inlined, deleted.size());
-  return inlined;
 }
 
 // How one updater operation lowers to sun.misc.Unsafe.
@@ -844,6 +844,11 @@ const char* unsafe_suffix(Kind kind) {
 }
 
 // The plan for an updater method, or nullopt if this pass does not lower it.
+//
+// Keyed by name rather than by argument shape: for the reference flavor the
+// value type is `Object`, so a shape test could not tell `set(T, V)` from
+// `equals(Object)`. The functional forms have no plan: their trailing argument
+// is an operator, so the value written is only known at runtime.
 std::optional<UnsafePlan> plan_for(Kind kind, std::string_view op) {
   const bool numeric = kind != Kind::REFERENCE;
   if (op == "get") {
@@ -1157,25 +1162,21 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
   // modeled at all rather than being judged against a value obligation
   // that does not describe them.
   //
-  // Arity is checked alongside the name, not implied by it. The allow-list
-  // says what the API calls an operation; it does not say that *this*
+  // Arity is checked alongside the name, not implied by it. The plan table
+  // says which operations the pass models; it does not say that *this*
   // invoke has the API's signature. A method named `get` taking no holder
   // is not `get(T)`, and reading a holder out of it would index a source
   // that is not there.
-  if (!atomic_field_updaters::is_modeled_operation(name->str()) ||
-      insn->srcs_size() < 2 || !writes_only_values(insn->get_method(), kind)) {
+  auto plan = plan_for(kind, name->str());
+  if (!plan.has_value() || insn->srcs_size() < 2 ||
+      !writes_only_values(insn->get_method(), kind)) {
     stats->blocked_unmodeled_op++;
     return std::nullopt;
   }
-
-  auto plan = plan_for(kind, name->str());
-  // Whether this pass knows how to express the operation at all.
-  const bool emittable = plan.has_value();
   // Whether the platform provides the Unsafe method: getAndAdd*/getAndSet*
   // only exist on sun.misc.Unsafe from Android N. Checked below, after the
   // obligations, so the buckets stay disjoint.
-  const bool platform_supports =
-      !plan.has_value() || !plan->needs_api24 || ma.min_sdk >= 24;
+  const bool platform_supports = !plan->needs_api24 || ma.min_sdk >= 24;
 
   const UpdaterInfo* info = resolve_updater(insn, ma, stats);
   if (info == nullptr) {
@@ -1241,7 +1242,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
   // naming an unclassified member aborts the run only once the site is one the
   // pass would otherwise have emitted -- and so that the member name is not
   // built for sites the checks above already rejected.
-  if (plan.has_value() && !plan_is_linkable(*plan)) {
+  if (!plan_is_linkable(*plan)) {
     stats->blocked_hidden_api++;
     // TODO(T287844992): the four restricted members are all expressible as a
     // compareAndSwap{Int,Long} retry loop, which is unrestricted, so these
@@ -1261,10 +1262,6 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
   }
 
   stats->feasible[{insn->get_method(), holder_null_proven}]++;
-
-  if (!emittable) {
-    return std::nullopt;
-  }
   return Rewrite{insn, info, *plan, !holder_null_proven};
 }
 
@@ -1663,16 +1660,6 @@ CleanupStats cleanup_redundant_fields(const Scope& scope,
                                       std::vector<UpdaterInfo>* updaters,
                                       PassManager& mgr) {
   CleanupStats stats;
-  if (updaters->empty()) {
-    mgr.set_metric("updater_fields_removed", 0);
-    mgr.set_metric("updater_inits_removed", 0);
-    mgr.set_metric("cleanup_skipped_undeletable", 0);
-    mgr.set_metric("cleanup_skipped_try_region", 0);
-    mgr.set_metric("offset_fields_removed", 0);
-    mgr.set_metric("offset_inits_removed", 0);
-    return stats;
-  }
-
   struct Counts {
     std::atomic<size_t> updater_refs{0};
     std::atomic<size_t> offset_refs{0};
@@ -1692,9 +1679,6 @@ CleanupStats cleanup_redundant_fields(const Scope& scope,
     auto* code = method->get_code();
     if (code == nullptr) {
       return;
-    }
-    if (!code->cfg_built()) {
-      code->build_cfg();
     }
     for (auto& mie : cfg::InstructionIterable(code->cfg())) {
       auto* insn = mie.insn;
@@ -1860,13 +1844,9 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   // Flatten the synthetic accessors Kotlin puts between a call site
   // and a recognized updater field, so resolution below sees a plain field
   // read rather than a call.
-  UnorderedSet<DexField*> recognized_fields;
-  for (const auto& info : updaters) {
-    recognized_fields.insert(info.updater);
-  }
   const auto updater_kinds = atomic_field_updaters::present_kinds();
-  auto accessors = find_receiver_chain_accessors(scope, updater_kinds,
-                                                 recognized_fields, mgr);
+  auto accessors =
+      find_receiver_chain_accessors(scope, updater_kinds, by_field, mgr);
   inline_updater_accessors(stores, scope, conf, mgr, accessors);
 
   // Deferred: synthesized on first use, from inside `lower_calls`, once the
