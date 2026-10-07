@@ -96,6 +96,18 @@ struct ConfigFiles {
     m_coldstart_classes = std::move(new_coldstart_classes);
   }
 
+  // Classes a pass synthesized after profile collection that must still land
+  // in the baseline profile's class section. MethodProfiles-derived entries
+  // can never name these classes, so producers record them here and
+  // ArtProfileWriterPass drains the list.
+  void add_extra_baseline_profile_class(std::string class_name) {
+    m_extra_baseline_profile_classes.push_back(std::move(class_name));
+  }
+
+  const std::vector<std::string>& get_extra_baseline_profile_classes() const {
+    return m_extra_baseline_profile_classes;
+  }
+
   void ensure_class_lists_loaded() {
     if (!m_load_class_lists_attempted) {
       m_load_class_lists_attempted = true;
@@ -296,6 +308,7 @@ struct ConfigFiles {
   UnorderedMap<const DexString*, std::vector<uint8_t>> m_class_freq_map;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
+  std::vector<std::string> m_extra_baseline_profile_classes;
   std::vector<std::string> m_halfnosis_block_list;
   UnorderedMap<std::string, std::vector<std::string>> m_class_lists;
   bool m_dead_class_list_attempted{false};
