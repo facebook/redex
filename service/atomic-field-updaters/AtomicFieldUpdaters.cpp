@@ -23,6 +23,7 @@ const char* const LONG_DESC =
 
 const char* const UNSAFE_DESC = "Lsun/misc/Unsafe;";
 const char* const SYNTH_HOLDER_DESC = "Lredex/AtomicFieldUpdaterUnsafe;";
+const char* const CAS_RETRY_METHOD_NAME = "compareAndSwapObjectRetrying";
 
 std::array<Kind, 3> all_kinds() {
   return {Kind::REFERENCE, Kind::INTEGER, Kind::LONG};

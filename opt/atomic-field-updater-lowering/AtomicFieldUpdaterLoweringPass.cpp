@@ -351,11 +351,13 @@ void census_ops(const Scope& scope,
 }
 
 // The members synthesized for lowering: the shared `Unsafe` instance every
-// rewritten call site loads from, and the holder check called where
-// non-nullness could not be proven.
+// rewritten call site loads from, the holder check called where non-nullness
+// could not be proven, and -- only when a planned site calls it -- the
+// retrying reference compare-and-set.
 struct Helpers {
   DexField* s_unsafe{nullptr};
   DexMethod* check_holder{nullptr};
+  DexMethod* cas_object_retry{nullptr};
 };
 
 // The JDK symbols the synthesized `<clinit>`s reach for. Interned in one place
@@ -399,32 +401,120 @@ DexMethodRef* field_get_value() {
           DexTypeList::make_type_list({type::java_lang_Object()})));
 }
 
-// Unsafe.objectFieldOffset(Field) -> long
-//
-// The helper synthesis emits this rather than a lowering plan, so it does not
-// pass through `plan_is_linkable`. Classified here instead, so that "every
-// Unsafe member this pass emits is vetted" holds for every emission path and
-// not merely the planned ones. Unlike a plan there is no call site to decline,
-// so anything but ALLOWED is a programming error rather than a refusal.
-DexMethodRef* unsafe_object_field_offset() {
-  static constexpr std::string_view kMember = "objectFieldOffset";
-  const auto status = atomic_field_updaters::hidden_api_status(kMember);
+// The helper synthesis emits these Unsafe members rather than a lowering plan,
+// so they do not pass through `plan_is_linkable`. Classified here instead, so
+// that "every Unsafe member this pass emits is vetted" holds for every emission
+// path and not merely the planned ones. Unlike a plan there is no call site to
+// decline, so anything but ALLOWED is a programming error rather than a
+// refusal.
+void assert_synthesis_may_emit(std::string_view member) {
+  const auto status = atomic_field_updaters::hidden_api_status(member);
   always_assert_log(
       status.has_value() &&
           *status == atomic_field_updaters::HiddenApiStatus::ALLOWED,
-      "sun.misc.Unsafe.objectFieldOffset is not classified as permitted in "
-      "atomic_field_updaters::hidden_api_status, but the offset synthesis has "
-      "no way to skip it.");
+      "sun.misc.Unsafe.%s is not classified as permitted in "
+      "atomic_field_updaters::hidden_api_status, but the helper synthesis has "
+      "no way to skip it.",
+      std::string(member).c_str());
+}
+
+// Unsafe.objectFieldOffset(Field) -> long
+DexMethodRef* unsafe_object_field_offset() {
+  assert_synthesis_may_emit("objectFieldOffset");
   return DexMethod::make_method(
       unsafe_type(), DexString::make_string("objectFieldOffset"),
       DexProto::make_proto(
           type::_long(), DexTypeList::make_type_list({reflect_field_type()})));
 }
 
+// Unsafe.compareAndSwapObject(Object, long, Object, Object) -> boolean
+DexMethodRef* unsafe_compare_and_swap_object() {
+  assert_synthesis_may_emit("compareAndSwapObject");
+  auto* object_type = type::java_lang_Object();
+  return DexMethod::make_method(
+      unsafe_type(), DexString::make_string("compareAndSwapObject"),
+      DexProto::make_proto(
+          type::_boolean(),
+          DexTypeList::make_type_list(
+              {object_type, type::_long(), object_type, object_type})));
+}
+
+// Unsafe.getObjectVolatile(Object, long) -> Object
+DexMethodRef* unsafe_get_object_volatile() {
+  assert_synthesis_may_emit("getObjectVolatile");
+  auto* object_type = type::java_lang_Object();
+  return DexMethod::make_method(
+      unsafe_type(), DexString::make_string("getObjectVolatile"),
+      DexProto::make_proto(object_type, DexTypeList::make_type_list(
+                                            {object_type, type::_long()})));
+}
+
+// `static boolean compareAndSwapObjectRetrying(Object o, long offset,
+// Object expect, Object update)`, which a strong reference compare-and-set
+// lowers to below `kReferenceCasReliableMinSdk`:
+//
+//   loop:
+//     if (sUnsafe.compareAndSwapObject(o, offset, expect, update)) return true;
+//     if (sUnsafe.getObjectVolatile(o, offset) == expect) goto loop;
+//     return false;
+//
+// The retry d8 puts around `AtomicReferenceFieldUpdater.compareAndSet`, and R8
+// around `Unsafe.compareAndSwapObject`, for b/211646483. One shared method
+// rather than a loop at every site, as both of them do. Built on the CFG
+// because `MethodCreator` cannot express a back edge.
+DexMethod* synthesize_cas_object_retry(DexType* synth_type,
+                                       DexField* s_unsafe) {
+  auto* object_type = type::java_lang_Object();
+  auto* method =
+      DexMethod::make_method(
+          synth_type,
+          DexString::make_string(atomic_field_updaters::CAS_RETRY_METHOD_NAME),
+          DexProto::make_proto(
+              type::_boolean(),
+              DexTypeList::make_type_list(
+                  {object_type, type::_long(), object_type, object_type})))
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  // The parameters load into v0 (o), v1:v2 (offset), v3 (expect), v4 (update).
+  method->set_code(std::make_unique<IRCode>(method, 0));
+  method->get_code()->build_cfg();
+  auto& cfg = method->get_code()->cfg();
+  auto* entry = cfg.entry_block();
+  auto* loop = cfg.create_block();
+  auto* swapped = cfg.create_block();
+  auto* recheck = cfg.create_block();
+  auto* lost = cfg.create_block();
+
+  entry->push_back({dasm(OPCODE_SGET_OBJECT, s_unsafe),
+                    dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v})});
+  cfg.add_edge(entry, loop, cfg::EDGE_GOTO);
+
+  loop->push_back({dasm(OPCODE_INVOKE_VIRTUAL, unsafe_compare_and_swap_object(),
+                        {5_v, 0_v, 1_v, 3_v, 4_v}),
+                   dasm(OPCODE_MOVE_RESULT, {6_v})});
+  cfg.create_branch(loop, dasm(OPCODE_IF_EQZ, {6_v}), swapped, recheck);
+
+  swapped->push_back(
+      {dasm(OPCODE_CONST, {7_v, 1_L}), dasm(OPCODE_RETURN, {7_v})});
+
+  recheck->push_back({dasm(OPCODE_INVOKE_VIRTUAL, unsafe_get_object_volatile(),
+                           {5_v, 0_v, 1_v}),
+                      dasm(OPCODE_MOVE_RESULT_OBJECT, {8_v})});
+  cfg.create_branch(recheck, dasm(OPCODE_IF_EQ, {8_v, 3_v}), lost, loop);
+
+  lost->push_back({dasm(OPCODE_CONST, {7_v, 0_L}), dasm(OPCODE_RETURN, {7_v})});
+  cfg.recompute_registers_size();
+
+  method->set_deobfuscated_name(show(method));
+  method->rstate.set_generated();
+  return method;
+}
+
 // Synthesizes the class holding the shared `Unsafe` instance,
 // obtained reflectively in its <clinit>. The per-field offsets deliberately do
 // not live here -- see add_offsets_to_holders.
-Helpers synthesize_unsafe_holder(DexStoresVector& stores) {
+//
+// `with_cas_retry` adds `synthesize_cas_object_retry`'s method.
+Helpers synthesize_unsafe_holder(DexStoresVector& stores, bool with_cas_retry) {
   auto* synth_type = DexType::make_type(SYNTH_HOLDER_DESC);
   auto* object_type = type::java_lang_Object();
 
@@ -512,6 +602,12 @@ Helpers synthesize_unsafe_holder(DexStoresVector& stores) {
   check_holder->get_code()->build_cfg();
   cc.add_method(check_holder);
 
+  DexMethod* cas_object_retry = nullptr;
+  if (with_cas_retry) {
+    cas_object_retry = synthesize_cas_object_retry(synth_type, s_unsafe);
+    cc.add_method(cas_object_retry);
+  }
+
   auto* cls = cc.create();
   cls->set_deobfuscated_name(show(cls));
   // Nothing here has a source counterpart: no stable name to preserve, and no
@@ -525,7 +621,7 @@ Helpers synthesize_unsafe_holder(DexStoresVector& stores) {
   auto& dexen = stores.at(0).get_dexen();
   redex_assert(!dexen.empty());
   dexen.at(0).push_back(cls);
-  return Helpers{s_unsafe, check_holder};
+  return Helpers{s_unsafe, check_holder, cas_object_retry};
 }
 
 // Give each recognized updater a `static final long` offset *in its own holder
@@ -846,6 +942,9 @@ struct UnsafePlan {
   std::optional<int64_t> literal;
   bool add_result{false};
   bool needs_api24{false}; // getAndAdd*/getAndSet* arrived in Android N
+  // Emit a call to the synthesized retrying compare-and-set instead of the raw
+  // primitive.
+  bool retry_spurious_failure{false};
 };
 
 // Suffix of the Unsafe method name for a flavor: getObjectVolatile /
@@ -868,7 +967,9 @@ const char* unsafe_suffix(Kind kind) {
 // value type is `Object`, so a shape test could not tell `set(T, V)` from
 // `equals(Object)`. The functional forms have no plan: their trailing argument
 // is an operator, so the value written is only known at runtime.
-std::optional<UnsafePlan> plan_for(Kind kind, std::string_view op) {
+std::optional<UnsafePlan> plan_for(Kind kind,
+                                   std::string_view op,
+                                   int min_sdk) {
   const bool numeric = kind != Kind::REFERENCE;
   if (op == "get") {
     return UnsafePlan{kind, "get%sVolatile", 0, std::nullopt, false, false};
@@ -880,8 +981,15 @@ std::optional<UnsafePlan> plan_for(Kind kind, std::string_view op) {
     return UnsafePlan{kind, "putOrdered%s", 1, std::nullopt, false, false};
   }
   if (op == "compareAndSet" || op == "weakCompareAndSet") {
-    // libcore implements the weak form identically to the strong one.
-    return UnsafePlan{kind, "compareAndSwap%s", 2, std::nullopt, false, false};
+    // libcore implements the weak form identically to the strong one, so both
+    // map to the same primitive. The weak form may fail spuriously by
+    // contract; the strong one may not, so where a reference CAS can, it goes
+    // through the retry helper instead. See `kReferenceCasReliableMinSdk`.
+    UnsafePlan plan{kind, "compareAndSwap%s", 2, std::nullopt, false, false};
+    plan.retry_spurious_failure =
+        kind == Kind::REFERENCE && op == "compareAndSet" &&
+        min_sdk < atomic_field_updaters::kReferenceCasReliableMinSdk;
+    return plan;
   }
   if (op == "getAndSet") {
     return UnsafePlan{kind, "getAndSet%s", 1, std::nullopt, false, true};
@@ -1187,7 +1295,7 @@ std::optional<Rewrite> classify_site(const OperationSite& site,
   // invoke has the API's signature. A method named `get` taking no holder
   // is not `get(T)`, and reading a holder out of it would index a source
   // that is not there.
-  auto plan = plan_for(kind, name->str());
+  auto plan = plan_for(kind, name->str(), ma.min_sdk);
   if (!plan.has_value() || insn->srcs_size() < 2 ||
       !writes_only_values(site.api, kind)) {
     stats->blocked_unmodeled_op++;
@@ -1358,41 +1466,56 @@ std::vector<IRInstruction*> build_replacement(
                         {{VREG, insn->src(1)}}));
   }
 
-  reg_t unsafe_reg = cfg.allocate_temp();
   reg_t offset_reg = cfg.allocate_wide_temp();
-  emit_sget(&repl, OPCODE_SGET_OBJECT, IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
-            helpers.s_unsafe, unsafe_reg);
-  emit_sget(&repl, OPCODE_SGET_WIDE, IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
-            rewrite.info->offset_field, offset_reg);
-
-  // A literal value argument, for the increment/decrement forms.
   reg_t lit_reg = 0;
-  if (plan.literal.has_value()) {
-    lit_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
-    repl.push_back(dasm(wide ? OPCODE_CONST_WIDE : OPCODE_CONST,
-                        {{VREG, lit_reg}, {LITERAL, *plan.literal}}));
-  }
+  DexMethodRef* callee = nullptr;
+  if (plan.retry_spurious_failure) {
+    // The helper loads `Unsafe` itself: (holder, offset, expect, update).
+    always_assert(helpers.cas_object_retry != nullptr);
+    always_assert(plan.value_srcs == 2 && !plan.literal.has_value());
+    emit_sget(&repl, OPCODE_SGET_WIDE, IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
+              rewrite.info->offset_field, offset_reg);
+    callee = helpers.cas_object_retry;
+    repl.push_back(dasm(OPCODE_INVOKE_STATIC, callee,
+                        {{VREG, insn->src(1)}, // holder
+                         {VREG, offset_reg},
+                         {VREG, insn->src(2)}, // expect
+                         {VREG, insn->src(3)}})); // update
+  } else {
+    reg_t unsafe_reg = cfg.allocate_temp();
+    emit_sget(&repl, OPCODE_SGET_OBJECT, IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
+              helpers.s_unsafe, unsafe_reg);
+    emit_sget(&repl, OPCODE_SGET_WIDE, IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
+              rewrite.info->offset_field, offset_reg);
 
-  auto* unsafe_method = unsafe_ref(plan);
-  std::vector<Operand> srcs{{VREG, unsafe_reg},
-                            {VREG, insn->src(1)}, // holder
-                            {VREG, offset_reg}};
-  for (int i = 0; i < plan.value_srcs; ++i) {
-    // Value arguments follow the holder at the original call site.
-    srcs.push_back({VREG, insn->src(2 + i)});
+    // A literal value argument, for the increment/decrement forms.
+    if (plan.literal.has_value()) {
+      lit_reg = wide ? cfg.allocate_wide_temp() : cfg.allocate_temp();
+      repl.push_back(dasm(wide ? OPCODE_CONST_WIDE : OPCODE_CONST,
+                          {{VREG, lit_reg}, {LITERAL, *plan.literal}}));
+    }
+
+    callee = unsafe_ref(plan);
+    std::vector<Operand> srcs{{VREG, unsafe_reg},
+                              {VREG, insn->src(1)}, // holder
+                              {VREG, offset_reg}};
+    for (int i = 0; i < plan.value_srcs; ++i) {
+      // Value arguments follow the holder at the original call site.
+      srcs.push_back({VREG, insn->src(2 + i)});
+    }
+    if (plan.literal.has_value()) {
+      srcs.push_back({VREG, lit_reg});
+    }
+    repl.push_back(
+        dasm(OPCODE_INVOKE_VIRTUAL, callee, srcs.begin(), srcs.end()));
   }
-  if (plan.literal.has_value()) {
-    srcs.push_back({VREG, lit_reg});
-  }
-  repl.push_back(
-      dasm(OPCODE_INVOKE_VIRTUAL, unsafe_method, srcs.begin(), srcs.end()));
 
   // Propagate the result. `CFGMutation::replace` drops the replaced invoke's
   // move-result, so it is re-emitted here. Unsafe's getAndAdd returns the *old*
   // value, so the addAndGet/incrementAndGet family needs the addend applied
   // after.
   auto mr_it = cfg.move_result_of(it);
-  auto* unsafe_rtype = unsafe_method->get_proto()->get_rtype();
+  auto* unsafe_rtype = callee->get_proto()->get_rtype();
   const bool returns_void = unsafe_rtype == type::_void();
   if (!returns_void && !mr_it.is_end()) {
     const reg_t final_dest = mr_it->insn->dest();
@@ -1421,6 +1544,8 @@ std::vector<IRInstruction*> build_replacement(
 struct EmitStats {
   size_t rewritten{0};
   size_t null_checks{0};
+  // Subset of `rewritten`.
+  size_t cas_retry_calls{0};
 };
 
 // Applies the plan. Single threaded and in scope order: emission is
@@ -1462,6 +1587,9 @@ EmitStats emit_rewrites(const Scope& scope,
       if (rewrite.needs_guard) {
         emitted.null_checks++;
       }
+      if (rewrite.plan.retry_spurious_failure) {
+        emitted.cas_retry_calls++;
+      }
     }
     mutation.flush();
   });
@@ -1474,6 +1602,7 @@ void report(PassManager& mgr,
             const UnorderedMap<const DexType*, Kind>& updater_kinds) {
   mgr.set_metric("calls_rewritten", emitted.rewritten);
   mgr.set_metric("null_checks_emitted", emitted.null_checks);
+  mgr.set_metric("cas_retry_calls_emitted", emitted.cas_retry_calls);
   mgr.set_metric("blocked_min_sdk", totals.blocked_min_sdk);
   mgr.set_metric("blocked_hidden_api", totals.blocked_hidden_api);
   mgr.set_metric("calls_skipped_unresolved_updater", totals.skipped_unresolved);
@@ -1846,7 +1975,16 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   // cannot lower should not be given an unreachable class whose <clinit>
   // reflects over `sun.misc.Unsafe`.
   if (!rewrites.empty()) {
-    const Helpers helpers = synthesize_unsafe_holder(stores);
+    // The retry helper exists only if a planned site calls it, so whether to
+    // synthesize it is read from the plan rather than decided a second time.
+    const bool needs_cas_retry =
+        unordered_any_of(rewrites, [](const auto& entry) {
+          const auto& planned = entry.second;
+          return std::any_of(
+              planned.begin(), planned.end(),
+              [](const Rewrite& r) { return r.plan.retry_spurious_failure; });
+        });
+    const Helpers helpers = synthesize_unsafe_holder(stores, needs_cas_retry);
     add_offsets_to_holders(updaters, helpers.s_unsafe, mgr);
     emitted = emit_rewrites(scope, rewrites, helpers);
     dce_rewritten_methods(scope, conf, rewrites);

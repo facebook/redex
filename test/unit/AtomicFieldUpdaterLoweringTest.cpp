@@ -5,19 +5,24 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
 #include <gtest/gtest.h>
+#include <optional>
 #include <string>
 
 #include "AtomicFieldUpdaterLoweringPass.h"
 #include "AtomicFieldUpdaters.h"
 #include "ConfigFiles.h"
+#include "ControlFlow.h"
 #include "Creators.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRTemplate.h"
+#include "IRTypeChecker.h"
 #include "PassManager.h"
 #include "RedexTest.h"
+#include "ScopedCFG.h"
 #include "TypeUtil.h"
 
 namespace {
@@ -68,6 +73,28 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
  public:
   // Metrics recorded by the last `run()`.
   UnorderedMap<std::string, int64_t> metrics;
+  // What `run()` passes as the app's min_sdk.
+  int min_sdk{24};
+
+  // `Class.name` of every method `method` invokes, one entry per call. The
+  // pass manager tears the CFGs down after the last pass, hence the rebuild.
+  static std::vector<std::string> invoked(DexMethod* method) {
+    std::vector<std::string> out;
+    cfg::ScopedCFG cfg(method->get_code());
+    for (auto& mie : cfg::InstructionIterable(*cfg)) {
+      if (mie.insn->has_method()) {
+        const auto* mref = mie.insn->get_method();
+        out.push_back(mref->get_class()->str_copy() + "." +
+                      mref->get_name()->str_copy());
+      }
+    }
+    return out;
+  }
+
+  static size_t count(const std::vector<std::string>& calls,
+                      const std::string& target) {
+    return std::count(calls.begin(), calls.end(), target);
+  }
 
   // Builds a class holding a volatile field and a `static final` updater over
   // it, initialized in <clinit>, plus any extra methods, then runs the pass.
@@ -76,11 +103,12 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
   // takes (Class, Class, String); the Integer and Long flavors take
   // (Class, String) -- the field name therefore sits at a different argument
   // index, which is the recognizer's main flavor-specific concern.
-  // Runs at min_sdk 24 unconditionally: that is where `getAndSet` and
+  // Runs at `min_sdk`, 24 unless a test sets it: that is where `getAndSet` and
   // `getAndAdd` become expressible at all, so any lower value would have the
   // API gate answer first and no test here would reach the behaviour it means
   // to pin. The sub-24 side of that gate belongs to the integ test
   // (AtomicFieldUpdaterApiGateTest), which drives both sides of the boundary.
+  // Tests raise it to cross `kReferenceCasReliableMinSdk`.
   // `extra_classes` join the same store, for tests whose shape needs a second
   // class in the pass's scope rather than merely in the global type registry.
   // `configure` runs on the assembled holder just before the pass does, for
@@ -129,7 +157,7 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
     ConfigFiles config(Json::nullValue);
     config.parse_global_config();
     RedexOptions options;
-    options.min_sdk = 24;
+    options.min_sdk = min_sdk;
     PassManager manager({&pass}, config, options);
     DexStore store("classes");
     std::vector<DexClass*> in_store{cls};
@@ -495,4 +523,153 @@ TEST_F(AtomicFieldUpdaterLoweringTest, updaterInitInTryRegionIsNotCleanedUp) {
   }
   EXPECT_EQ(updater_fields, 1u)
       << "an updater built under a catch handler must survive cleanup";
+}
+
+// -- Strong reference compareAndSet below the reliable API -------------------
+//
+// On Android 12 a reference compare-and-set can fail spuriously (b/211646483),
+// the raw Unsafe primitive included. These pin that a strong reference CAS
+// keeps retrying there, and that nothing else pays for it.
+
+namespace {
+
+// A caller invoking the updater directly, as code dexed for API 32+ would.
+constexpr const char* kCallDirect = R"((
+  (load-param-object v0)
+  (load-param-object v1)
+  (load-param-object v2)
+  (sget-object "$CLS.U:$UPD")
+  (move-result-pseudo-object v3)
+  (invoke-virtual (v3 v0 v1 v2) "$UPD.$OP:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")
+  (move-result v4)
+  (return v4)
+))";
+
+const std::string kRetryHelper =
+    std::string(atomic_field_updaters::SYNTH_HOLDER_DESC) + "." +
+    atomic_field_updaters::CAS_RETRY_METHOD_NAME;
+const std::string kRawCas = "Lsun/misc/Unsafe;.compareAndSwapObject";
+
+// `cls_name.cas(cls_name, Object, Object) -> boolean` with `body`.
+DexMethod* make_caller(
+    const std::string& cls_name,
+    const char* body,
+    const std::vector<std::pair<std::string_view, std::string>>& subs) {
+  auto* m = DexMethod::make_method(cls_name + ".cas:(" + cls_name +
+                                   "Ljava/lang/Object;Ljava/lang/Object;)Z")
+                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  m->set_code(assembler::ircode_from_string(ir(body, subs)));
+  return m;
+}
+
+} // namespace
+
+// A direct strong reference CAS has to keep retrying where the primitive can
+// fail spuriously: below the reliable API it must not lower to the raw
+// primitive.
+TEST_F(AtomicFieldUpdaterLoweringTest, directCasRetriesBelowReliableMinSdk) {
+  auto* caller = make_caller(
+      "LCasG;", kCallDirect,
+      {{"$CLS", "LCasG;"}, {"$UPD", REFERENCE_DESC}, {"$OP", "compareAndSet"}});
+
+  run("LCasG;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller});
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 1);
+  auto calls = invoked(caller);
+  EXPECT_EQ(count(calls, kRetryHelper), 1u);
+  EXPECT_EQ(count(calls, kRawCas), 0u);
+}
+
+TEST_F(AtomicFieldUpdaterLoweringTest, directCasIsRawAtReliableMinSdk) {
+  min_sdk = atomic_field_updaters::kReferenceCasReliableMinSdk;
+  auto* caller = make_caller(
+      "LCasH;", kCallDirect,
+      {{"$CLS", "LCasH;"}, {"$UPD", REFERENCE_DESC}, {"$OP", "compareAndSet"}});
+
+  run("LCasH;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller});
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 0);
+  EXPECT_EQ(count(invoked(caller), kRawCas), 1u);
+}
+
+// The weak form may fail spuriously by contract, so it never needs the retry.
+TEST_F(AtomicFieldUpdaterLoweringTest, weakCasStaysRawBelowReliableMinSdk) {
+  auto* caller = make_caller("LCasI;", kCallDirect,
+                             {{"$CLS", "LCasI;"},
+                              {"$UPD", REFERENCE_DESC},
+                              {"$OP", "weakCompareAndSet"}});
+
+  run("LCasI;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller});
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 0);
+  auto calls = invoked(caller);
+  EXPECT_EQ(count(calls, kRawCas), 1u);
+  EXPECT_EQ(count(calls, kRetryHelper), 0u);
+}
+
+// The helper is the retry: one swap, one re-read, and the re-read loops back to
+// the swap. Type-checked, since nothing else verifies a synthesized body before
+// it reaches a device.
+TEST_F(AtomicFieldUpdaterLoweringTest, retryHelperIsALoopAroundTheSwap) {
+  auto* caller = make_caller(
+      "LCasJ;", kCallDirect,
+      {{"$CLS", "LCasJ;"}, {"$UPD", REFERENCE_DESC}, {"$OP", "compareAndSet"}});
+  run("LCasJ;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller});
+
+  auto* helper_ref = DexMethod::get_method(
+      kRetryHelper +
+      ":(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z");
+  ASSERT_NE(helper_ref, nullptr);
+  ASSERT_TRUE(helper_ref->is_def());
+  auto* helper = helper_ref->as_def();
+
+  IRTypeChecker checker(helper);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+
+  auto calls = invoked(helper);
+  EXPECT_EQ(count(calls, kRawCas), 1u);
+  EXPECT_EQ(count(calls, "Lsun/misc/Unsafe;.getObjectVolatile"), 1u);
+
+  cfg::ScopedCFG scoped(helper->get_code());
+  auto& cfg = *scoped;
+  auto block_calling = [&](const std::string& target) -> cfg::Block* {
+    for (auto* block : cfg.blocks()) {
+      for (auto& mie : ir_list::InstructionIterable(block)) {
+        if (mie.insn->has_method() &&
+            mie.insn->get_method()->get_name()->str() == target) {
+          return block;
+        }
+      }
+    }
+    return nullptr;
+  };
+  auto* swap = block_calling("compareAndSwapObject");
+  auto* reread = block_calling("getObjectVolatile");
+  ASSERT_NE(swap, nullptr);
+  ASSERT_NE(reread, nullptr);
+  const auto& succs = reread->succs();
+  EXPECT_TRUE(std::any_of(succs.begin(), succs.end(), [&](const cfg::Edge* e) {
+    return e->target() == swap;
+  })) << "an unchanged field must retry the swap";
+
+  // Which way each test goes: a failed swap re-reads, a successful one returns
+  // true; an unchanged field retries, a changed one returns false.
+  auto taken = [&](cfg::Block* b) {
+    auto* e = cfg.get_succ_edge_of_type(b, cfg::EDGE_BRANCH);
+    return e == nullptr ? nullptr : e->target();
+  };
+  auto returned = [&](cfg::Block* b) -> std::optional<int64_t> {
+    auto* e = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+    if (e == nullptr) {
+      return std::nullopt;
+    }
+    for (auto& mie : ir_list::InstructionIterable(e->target())) {
+      if (mie.insn->opcode() == OPCODE_CONST) {
+        return mie.insn->get_literal();
+      }
+    }
+    return std::nullopt;
+  };
+  EXPECT_EQ(taken(swap), reread);
+  EXPECT_EQ(returned(swap), 1);
+  EXPECT_EQ(taken(reread), swap);
+  EXPECT_EQ(returned(reread), 0);
 }
