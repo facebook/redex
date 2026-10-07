@@ -77,6 +77,17 @@ using KindCounts =
     std::array<size_t,
                std::tuple_size_v<decltype(atomic_field_updaters::all_kinds())>>;
 
+// Below API 32, d8 never emits `AtomicReferenceFieldUpdater.compareAndSet`
+// directly. It routes every call through a synthetic forwarder,
+// `<Ctx>$$ExternalSyntheticBackportWithForwardingN.m(u, o, e, n)`, whose body
+// retries while the field still holds `expect` -- its workaround for
+// b/211646483. Inside the forwarder the updater is a parameter, so nothing
+// there resolves; at the call site it is still the field load.
+//
+// Maps each recognized forwarder to the `compareAndSet` its body calls.
+using BackportForwarders =
+    UnorderedMap<const DexMethodRef*, const DexMethodRef*>;
+
 // A call that performs an updater operation, and which one.
 struct OperationSite {
   IRInstruction* insn;
@@ -289,11 +300,281 @@ std::vector<UpdaterInfo> find_updaters(
   return result;
 }
 
+bool has_signature(const DexMethodRef* mref,
+                   const DexType* rtype,
+                   std::initializer_list<const DexType*> args) {
+  const auto* proto = mref->get_proto();
+  const auto* actual = proto->get_args();
+  return proto->get_rtype() == rtype &&
+         std::equal(actual->begin(), actual->end(), args.begin(), args.end());
+}
+
+bool is_reference_cas(const DexMethodRef* mref, const DexType* updater_type) {
+  const auto* object_type = type::java_lang_Object();
+  return mref->get_class() == updater_type &&
+         mref->get_name()->str() == "compareAndSet" &&
+         has_signature(mref, type::_boolean(),
+                       {object_type, object_type, object_type});
+}
+
+bool is_reference_get(const DexMethodRef* mref, const DexType* updater_type) {
+  const auto* object_type = type::java_lang_Object();
+  return mref->get_class() == updater_type &&
+         mref->get_name()->str() == "get" &&
+         has_signature(mref, object_type, {object_type});
+}
+
+// The instructions of a forwarder that the match reasons about.
+struct ForwarderShape {
+  std::vector<IRInstruction*> params;
+  IRInstruction* cas{nullptr};
+  IRInstruction* get{nullptr};
+  IRInstruction* test_swapped{nullptr};
+  IRInstruction* test_unchanged{nullptr};
+  cfg::Block* cas_block{nullptr};
+  cfg::Block* get_block{nullptr};
+};
+
+// Four object parameters, and nothing in the body but one `compareAndSet`, one
+// `get`, a test of each, and the moves, constants and returns around them.
+// Nothing can throw to a handler.
+std::optional<ForwarderShape> find_forwarder_shape(
+    const cfg::ControlFlowGraph& cfg, const DexType* updater_type) {
+  ForwarderShape shape;
+  for (auto& mie : cfg.get_param_instructions()) {
+    shape.params.push_back(mie.insn);
+  }
+  if (shape.params.size() != 4 ||
+      !std::all_of(shape.params.begin(), shape.params.end(),
+                   [](const IRInstruction* p) {
+                     return opcode::is_load_param_object(p->opcode());
+                   })) {
+    return std::nullopt;
+  }
+  for (auto* block : cfg.blocks()) {
+    if (cfg.get_succ_edge_of_type(block, cfg::EDGE_THROW) != nullptr) {
+      return std::nullopt;
+    }
+    for (auto& mie : ir_list::InstructionIterable(block)) {
+      auto* insn = mie.insn;
+      const auto op = insn->opcode();
+      if (opcode::is_a_load_param(op) || opcode::is_a_move(op) ||
+          opcode::is_a_move_result(op) || op == OPCODE_RETURN) {
+        continue;
+      }
+      if (op == OPCODE_CONST &&
+          (insn->get_literal() == 0 || insn->get_literal() == 1)) {
+        continue;
+      }
+      if (opcode::is_invoke_virtual(op) && shape.cas == nullptr &&
+          is_reference_cas(insn->get_method(), updater_type)) {
+        shape.cas = insn;
+        shape.cas_block = block;
+      } else if (opcode::is_invoke_virtual(op) && shape.get == nullptr &&
+                 is_reference_get(insn->get_method(), updater_type)) {
+        shape.get = insn;
+        shape.get_block = block;
+      } else if ((op == OPCODE_IF_EQZ || op == OPCODE_IF_NEZ) &&
+                 shape.test_swapped == nullptr && block == shape.cas_block) {
+        shape.test_swapped = insn;
+      } else if ((op == OPCODE_IF_EQ || op == OPCODE_IF_NE) &&
+                 shape.test_unchanged == nullptr && block == shape.get_block) {
+        shape.test_unchanged = insn;
+      } else {
+        return std::nullopt;
+      }
+    }
+  }
+  if (shape.cas == nullptr || shape.get == nullptr ||
+      shape.test_swapped == nullptr || shape.test_unchanged == nullptr) {
+    return std::nullopt;
+  }
+  return shape;
+}
+
+// The `compareAndSet` takes the parameters in order, the `get` reads the same
+// field, and the tests examine the swap's result and compare the re-read field
+// with `expect`. Through use-def chains, so register allocation does not
+// matter.
+bool has_forwarder_dataflow(const cfg::ControlFlowGraph& cfg,
+                            const ForwarderShape& shape) {
+  live_range::MoveAwareChains chains(cfg);
+  auto use_defs = chains.get_use_def_chains();
+  auto def_of = [&](IRInstruction* insn, src_index_t i) -> IRInstruction* {
+    auto it = use_defs.find(live_range::Use{insn, i});
+    if (it == use_defs.end() || it->second.size() != 1) {
+      return nullptr;
+    }
+    return *it->second.begin();
+  };
+  const auto& params = shape.params;
+  for (src_index_t i = 0; i < 4; ++i) {
+    if (def_of(shape.cas, i) != params[i]) {
+      return false;
+    }
+  }
+  if (def_of(shape.get, 0) != params[0] || def_of(shape.get, 1) != params[1] ||
+      def_of(shape.test_swapped, 0) != shape.cas) {
+    return false;
+  }
+  auto* lhs = def_of(shape.test_unchanged, 0);
+  auto* rhs = def_of(shape.test_unchanged, 1);
+  return (lhs == shape.get && rhs == params[2]) ||
+         (lhs == params[2] && rhs == shape.get);
+}
+
+// A successful swap returns true, a failed one re-reads the field, an unchanged
+// field retries the swap, and a changed one returns false.
+bool has_forwarder_control_flow(const cfg::ControlFlowGraph& cfg,
+                                const ForwarderShape& shape) {
+  auto succ_of = [&](cfg::Block* b, cfg::EdgeType type) -> cfg::Block* {
+    auto* e = cfg.get_succ_edge_of_type(b, type);
+    return e == nullptr ? nullptr : e->target();
+  };
+  // Where a run of empty goto-only blocks starting at `b` ends.
+  auto past_empty = [&](cfg::Block* b) {
+    for (int steps = 0;
+         b != nullptr && steps < 4 && b->get_first_insn() == b->end() &&
+         succ_of(b, cfg::EDGE_BRANCH) == nullptr;
+         ++steps) {
+      b = succ_of(b, cfg::EDGE_GOTO);
+    }
+    return b;
+  };
+  // The literal a straight-line path from `b` returns.
+  auto returned_literal = [&](cfg::Block* b) -> std::optional<int64_t> {
+    UnorderedMap<reg_t, int64_t> literals;
+    for (int steps = 0; b != nullptr && steps < 4; ++steps) {
+      for (auto& mie : ir_list::InstructionIterable(b)) {
+        auto* insn = mie.insn;
+        if (insn->opcode() == OPCODE_CONST) {
+          literals[insn->dest()] = insn->get_literal();
+        } else if (opcode::is_a_move(insn->opcode())) {
+          auto it = literals.find(insn->src(0));
+          if (it == literals.end()) {
+            literals.erase(insn->dest());
+          } else {
+            literals[insn->dest()] = it->second;
+          }
+        } else if (insn->opcode() == OPCODE_RETURN) {
+          auto it = literals.find(insn->src(0));
+          return it == literals.end() ? std::nullopt
+                                      : std::optional<int64_t>(it->second);
+        } else {
+          return std::nullopt;
+        }
+      }
+      if (succ_of(b, cfg::EDGE_BRANCH) != nullptr) {
+        return std::nullopt;
+      }
+      b = succ_of(b, cfg::EDGE_GOTO);
+    }
+    return std::nullopt;
+  };
+  // if-eqz branches when the swap failed, if-nez when it succeeded; likewise
+  // if-eq branches when the field is unchanged.
+  const bool branches_on_swap = shape.test_swapped->opcode() == OPCODE_IF_NEZ;
+  auto* on_swapped = succ_of(
+      shape.cas_block, branches_on_swap ? cfg::EDGE_BRANCH : cfg::EDGE_GOTO);
+  auto* on_lost = succ_of(shape.cas_block,
+                          branches_on_swap ? cfg::EDGE_GOTO : cfg::EDGE_BRANCH);
+  const bool branches_on_unchanged =
+      shape.test_unchanged->opcode() == OPCODE_IF_EQ;
+  auto* on_unchanged =
+      succ_of(shape.get_block,
+              branches_on_unchanged ? cfg::EDGE_BRANCH : cfg::EDGE_GOTO);
+  auto* on_changed =
+      succ_of(shape.get_block,
+              branches_on_unchanged ? cfg::EDGE_GOTO : cfg::EDGE_BRANCH);
+  return returned_literal(on_swapped) == 1 &&
+         past_empty(on_lost) == shape.get_block &&
+         past_empty(on_unchanged) == shape.cas_block &&
+         returned_literal(on_changed) == 0;
+}
+
+// Is `method` d8's `compareAndSet` forwarder? Returns the `compareAndSet` it
+// calls, or null.
+//
+// Matched on what the body does, never on the name, which d8 takes from
+// whichever class happened to need the forwarder first. The match establishes
+// the two things a rewrite of the call relies on:
+//
+//   - the call is the operation: one strong `compareAndSet` on the parameters
+//     in order, retried while a `get` of the same field still equals `expect`,
+//     returning the outcome;
+//   - calling it does nothing else: no other effectful instruction, and no
+//     class initialization, because replacing `invoke-static Fwd.m` drops the
+//     initialization of `Fwd`.
+const DexMethodRef* match_backport_cas_forwarder(const DexMethod* method,
+                                                 const DexType* updater_type) {
+  const auto* cls = type_class(method->get_class());
+  if (cls == nullptr || is_interface(cls) || cls->get_clinit() != nullptr ||
+      cls->get_super_class() != type::java_lang_Object() ||
+      is_synchronized(method) || is_declared_synchronized(method) ||
+      method->rstate.no_optimizations() || method->get_code() == nullptr) {
+    return nullptr;
+  }
+  const auto& cfg = method->get_code()->cfg();
+  auto shape = find_forwarder_shape(cfg, updater_type);
+  if (!shape.has_value() || !has_forwarder_dataflow(cfg, *shape) ||
+      !has_forwarder_control_flow(cfg, *shape)) {
+    return nullptr;
+  }
+  return shape->cas->get_method();
+}
+
+// Recognizes every forwarder in the program. A method with the forwarder's
+// signature that fails the match is counted, because it means d8 changed the
+// shape and the pass has quietly stopped reaching those sites.
+BackportForwarders find_backport_cas_forwarders(const Scope& scope,
+                                                PassManager& mgr) {
+  BackportForwarders forwarders;
+  size_t rejected = 0;
+  auto* updater_type = DexType::get_type(atomic_field_updaters::REFERENCE_DESC);
+  const DexProto* proto = nullptr;
+  if (updater_type != nullptr) {
+    auto* object_type = type::java_lang_Object();
+    const auto* args = DexTypeList::get_type_list(
+        {updater_type, object_type, object_type, object_type});
+    proto =
+        args == nullptr ? nullptr : DexProto::get_proto(type::_boolean(), args);
+  }
+  // No interned proto means no method can have it.
+  if (proto != nullptr) {
+    InsertOnlyConcurrentMap<const DexMethodRef*, const DexMethodRef*> found;
+    rejected = walk::parallel::methods<size_t>(
+        scope, [&](DexMethod* method) -> size_t {
+          if (!is_static(method) || method->get_proto() != proto ||
+              method->get_code() == nullptr) {
+            return 0;
+          }
+          if (const auto* cas =
+                  match_backport_cas_forwarder(method, updater_type)) {
+            found.emplace(method, cas);
+            TRACE(ATOMUP, 2, "compareAndSet forwarder: %s", SHOW(method));
+            return 0;
+          }
+          TRACE(ATOMUP, 2, "forwarder-shaped but not matched: %s",
+                SHOW(method));
+          return 1;
+        });
+    insert_unordered_iterable(forwarders, found);
+  }
+  mgr.set_metric("backport_cas_forwarders_recognized", forwarders.size());
+  mgr.set_metric("backport_cas_forwarders_rejected", rejected);
+  return forwarders;
+}
+
 // Count operation call sites on the updater types, keyed by flavor and
 // operation name. Sizes the opportunity independently of how much of it the
 // recognition above can actually reach.
+//
+// `ops_total` keeps counting direct calls only, the two inside each forwarder
+// included, so it stays comparable across builds; calls to a forwarder are
+// counted on their own.
 void census_ops(const Scope& scope,
                 const UpdaterOperations& ops,
+                const BackportForwarders& forwarders,
                 PassManager& mgr) {
   const auto& kinds = ops.kinds();
   if (kinds.empty()) {
@@ -301,17 +582,29 @@ void census_ops(const Scope& scope,
     // which is not the same thing as the metric being missing -- absent, it is
     // indistinguishable from the pass not having run at all.
     mgr.set_metric("ops_total", 0);
+    mgr.set_metric("ops_backport_cas_calls", 0);
     return;
   }
   // Every method in the program is visited, so this walks in parallel, and the
   // counters are keyed by the method ref -- a pointer hash, with no string
   // built at any call site. `AtomicMap` accumulates them without a lock.
   AtomicMap<const DexMethodRef*, size_t> per_operation;
+  std::atomic<size_t> backport_calls{0};
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    for (const auto& site : ops.sites_in(code.cfg())) {
+    auto& cfg = code.cfg();
+    for (const auto& site : ops.sites_in(cfg)) {
       if (atomic_field_updaters::is_operation_name(
               site.api->get_name()->str())) {
         per_operation.fetch_add(site.api, 1);
+      }
+    }
+    if (forwarders.empty()) {
+      return;
+    }
+    for (auto& mie : cfg::InstructionIterable(cfg)) {
+      if (opcode::is_invoke_static(mie.insn->opcode()) &&
+          forwarders.count(mie.insn->get_method()) != 0u) {
+        backport_calls.fetch_add(1, std::memory_order_relaxed);
       }
     }
   });
@@ -328,6 +621,7 @@ void census_ops(const Scope& scope,
     total += n.load();
   }
   mgr.set_metric("ops_total", total);
+  mgr.set_metric("ops_backport_cas_calls", backport_calls.load());
 
   // Everything below is for the trace and nothing else. The per-operation
   // breakdown is not a metric: which rows exist depends on which operations the
@@ -1932,7 +2226,8 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
                                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
   const UpdaterOperations ops;
-  census_ops(scope, ops, mgr);
+  const auto forwarders = find_backport_cas_forwarders(scope, mgr);
+  census_ops(scope, ops, forwarders, mgr);
 
   // Recognition reads each holder's <clinit>, so it only needs the root store,
   // where the updaters this pass can act on are declared.
