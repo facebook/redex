@@ -1192,6 +1192,23 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
       }
     });
   }
+  // Classes synthesized after profile collection that earlier passes spliced
+  // into the coldstart list. MethodProfiles can never name them, so they
+  // arrive through ConfigFiles instead.
+  size_t extra_baseline_classes = 0;
+  for (const auto& name : conf.get_extra_baseline_profile_classes()) {
+    auto* type = DexType::get_type(name);
+    if (type == nullptr) {
+      continue;
+    }
+    auto* cls = type_class(type);
+    if (cls == nullptr || cls->is_external()) {
+      continue;
+    }
+    add_class(cls);
+    extra_baseline_classes++;
+  }
+  mgr.incr_metric("baseline_profile_extra_classes", extra_baseline_classes);
 
   auto resolve_strip_classes = [&](const auto& bp) {
     return m_override_strip_classes ? *m_override_strip_classes
