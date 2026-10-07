@@ -2173,7 +2173,7 @@ int main(int argc, char* argv[]) {
         args.config.get("record_keep_reasons", false).asBool());
 
     constant_propagation_transform_internal::enable_replacing_areequal =
-        args.config.get("enable_replacing_areequal", false).asBool();
+        args.config.get("enable_replacing_areequal", true).asBool();
 
     constant_propagation::enable_check_cast_value_preservation =
         args.config.get("enable_check_cast_value_preservation", false).asBool();

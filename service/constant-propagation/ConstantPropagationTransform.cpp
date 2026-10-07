@@ -28,7 +28,7 @@
 
 namespace constant_propagation_transform_internal {
 // TODO(T263034329): Remove this.
-bool enable_replacing_areequal = false;
+bool enable_replacing_areequal = true;
 } // namespace constant_propagation_transform_internal
 
 namespace constant_propagation {

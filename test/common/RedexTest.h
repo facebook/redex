@@ -55,11 +55,6 @@ inline std::string get_env(const char* name) {
   return env_file;
 }
 
-namespace constant_propagation_transform_internal {
-// TODO(T263034329): Remove this.
-extern bool enable_replacing_areequal;
-} // namespace constant_propagation_transform_internal
-
 namespace constant_propagation {
 // TODO(T275196808): Remove this.
 extern bool enable_param_exit_value_summary;
@@ -71,8 +66,6 @@ struct RedexTest : public testing::Test {
  public:
   RedexTest() {
     g_redex = new RedexContext();
-    // TODO(T263034329): Remove this.
-    constant_propagation_transform_internal::enable_replacing_areequal = true;
     // TODO(T275196808): Remove this.
     constant_propagation::enable_param_exit_value_summary = true;
     // TODO(T279417132): Remove this.

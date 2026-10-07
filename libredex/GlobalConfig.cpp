@@ -372,7 +372,7 @@ void GlobalConfig::bind_config() {
   bind("enable_param_exit_value_summary", false, bool_param,
        "When true, infer a per-parameter exit-value summary via IPCP and use "
        "it to refine no-throw facts on statically-dispatched invoke edges");
-  bind("enable_replacing_areequal", false, bool_param,
+  bind("enable_replacing_areequal", true, bool_param,
        "When true, replace Kotlin Intrinsics.areEqual with Object.equals "
        "when the receiver is proven non-null by constant propagation");
   bind("ignore_no_keep_rules", {}, bool_param);
