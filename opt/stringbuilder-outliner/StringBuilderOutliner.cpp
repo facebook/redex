@@ -245,6 +245,9 @@ void Outliner::transform(const DexMethod* source_method, IRCode* code) {
     if (m_outline_helpers.count(typelist) == 0) {
       continue;
     }
+    if (source_blocks::is_hot(cfg.find_insn(tostring_insn).block())) {
+      ++m_stats.tostring_outlined_hot;
+    }
     auto* outline_helper = m_outline_helpers.at(typelist);
     auto* invoke_outlined =
         new IRInstruction(invoke_for_method(outline_helper));
@@ -409,6 +412,8 @@ void StringBuilderOutlinerPass::run_pass(DexStoresVector& stores,
                   outliner.get_stats().operations_removed);
   mgr.incr_metric("helper_methods_created",
                   outliner.get_stats().helper_methods_created);
+  mgr.incr_metric("tostring_outlined_hot",
+                  outliner.get_stats().tostring_outlined_hot);
 }
 
 static StringBuilderOutlinerPass s_pass;
