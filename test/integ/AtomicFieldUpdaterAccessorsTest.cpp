@@ -41,15 +41,16 @@ class AtomicFieldUpdaterAccessorsTest : public RedexIntegrationTest {
 
 TEST_F(AtomicFieldUpdaterAccessorsTest, resolvesThroughKotlinAccessorChain) {
   run();
-  EXPECT_EQ(metric("updaters_recognized"), 1);
-  // kotlinc emits one accessor for this shape: `access$getU$cp()` on the class
-  // declaring the backing field. Pinned rather than asserted non-zero, so a
-  // codegen change that adds or removes a level is visible here.
-  EXPECT_EQ(metric("accessors_selected"), 1);
+  EXPECT_EQ(metric("updaters_recognized"), 2);
+  // kotlinc emits one accessor per holder for this shape: `access$getU$cp()` on
+  // the class declaring the backing field. Pinned rather than asserted
+  // non-zero, so a codegen change that adds or removes a level is visible here.
+  EXPECT_EQ(metric("accessors_selected"), 2);
   EXPECT_EQ(metric("accessors_inlined"), metric("accessors_selected"));
   EXPECT_EQ(metric("accessors_rejected_impure"), 0);
-  // Both call sites resolve once the chain is flattened.
-  EXPECT_EQ(metric("rewritable_total"), 2);
+  // Every call site resolves once the chains are flattened: two on the first
+  // holder, one compareAndSet on the second.
+  EXPECT_EQ(metric("rewritable_total"), 3);
 }
 
 // Inlining copies an accessor's body without removing the original, whose
@@ -59,6 +60,18 @@ TEST_F(AtomicFieldUpdaterAccessorsTest, resolvesThroughKotlinAccessorChain) {
 // hand-written Java, there is no accessor in the way.
 TEST_F(AtomicFieldUpdaterAccessorsTest, inlinedAccessorsAreDeleted) {
   run();
-  EXPECT_EQ(metric("accessors_deleted"), 1);
-  EXPECT_EQ(metric("updater_fields_removed"), 1);
+  EXPECT_EQ(metric("accessors_deleted"), 2);
+  EXPECT_EQ(metric("updater_fields_removed"), 2);
+}
+
+// The coroutines shape: a Kotlin accessor chain in front of the updater, and
+// d8's forwarder in front of the compareAndSet. The second holder's updater is
+// used only through compareAndSet, so its accessor is reachable only from the
+// forwarder call -- an accessor search that starts from updater calls alone
+// would never find it, and the site would stay behind both wrappers.
+TEST_F(AtomicFieldUpdaterAccessorsTest, lowersCompareAndSetBehindBothWrappers) {
+  run();
+  EXPECT_EQ(metric("ops_backport_cas_calls"), 1);
+  EXPECT_EQ(metric("backport_cas_calls_rewritten"), 1);
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 1);
 }

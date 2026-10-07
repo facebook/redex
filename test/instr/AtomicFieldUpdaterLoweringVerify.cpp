@@ -82,6 +82,37 @@ size_t count_invokes_to_unsafe_member(DexClass* cls,
   return count_invokes_to(cls, atomic_field_updaters::UNSAFE_DESC, member_name);
 }
 
+// Counts calls to d8's `compareAndSet` forwarder across every method of `cls`.
+// d8 names the forwarder's class after whichever class first needed it, so it
+// is identified by its name and signature instead.
+size_t count_forwarder_calls(DexClass* cls) {
+  const std::string signature = std::string("(") +
+                                atomic_field_updaters::REFERENCE_DESC +
+                                "Ljava/lang/Object;Ljava/lang/Object;Ljava/"
+                                "lang/Object;)Z";
+  size_t n = 0;
+  auto count = [&](DexMethod* m) {
+    auto* code = m->get_dex_code();
+    if (code == nullptr) {
+      return;
+    }
+    for (auto* insn : code->get_instructions()) {
+      const auto* mop = dynamic_cast<const DexOpcodeMethod*>(insn);
+      if (mop != nullptr && show(mop->get_method()->get_name()) == "m" &&
+          show(mop->get_method()->get_proto()) == signature) {
+        n++;
+      }
+    }
+  };
+  for (auto* m : cls->get_dmethods()) {
+    count(m);
+  }
+  for (auto* m : cls->get_vmethods()) {
+    count(m);
+  }
+  return n;
+}
+
 size_t count_invokes_to_methods_named_like(
     DexClass* cls,
     const std::string& method_name_fragment,
@@ -117,6 +148,10 @@ TEST_F(PreVerify, AtomicFieldUpdaterLowering) {
   EXPECT_GT(count_invokes_to(test, atomic_field_updaters::LONG_DESC), 0u);
   // No Unsafe anywhere yet.
   EXPECT_EQ(count_invokes_to(test, atomic_field_updaters::UNSAFE_DESC), 0u);
+  // d8 has put every reference compareAndSet behind its forwarder. Asserted so
+  // that a toolchain change dropping the forwarder cannot leave the checks on
+  // it below passing vacuously.
+  EXPECT_GT(count_forwarder_calls(test), 0u);
 }
 
 /*
@@ -196,6 +231,19 @@ TEST_F(PostVerify, AtomicFieldUpdaterLowering) {
   EXPECT_GT(count_invokes_to_unsafe_member(test, "getLongVolatile"), 0u);
   // And the reference flavor keeps its getAndSet, which is unrestricted.
   EXPECT_GT(count_invokes_to_unsafe_member(test, "getAndSetObject"), 0u);
+  EXPECT_GT(count_invokes_to_unsafe_member(test, "getObjectVolatile"), 0u);
+
+  // The reference compareAndSet, which d8 hides behind its forwarder. Every
+  // forwarder call is lowered except the one in the wrong-holder-type test,
+  // which is blocked on the holder type like its direct counterpart. This test
+  // targets API 24, below the API where a reference CAS is reliable, so they
+  // lower to the retrying helper and never to the raw primitive.
+  EXPECT_EQ(count_forwarder_calls(test), 1u);
+  EXPECT_GT(count_invokes_to(test, atomic_field_updaters::SYNTH_HOLDER_DESC,
+                             atomic_field_updaters::CAS_RETRY_METHOD_NAME),
+            0u);
+  EXPECT_EQ(count_invokes_to_unsafe_member(test, "compareAndSwapObject"), 0u)
+      << "a raw reference CAS can fail spuriously on Android 12";
 
   // `lazySet` lowers to the ordered stores. These three are the members with
   // the least coverage elsewhere: an ordered write is not observable by
@@ -212,6 +260,10 @@ TEST_F(PostVerify, AtomicFieldUpdaterLowering) {
   auto* synth =
       find_class_named(classes, atomic_field_updaters::SYNTH_HOLDER_DESC);
   ASSERT_NE(nullptr, synth) << "the Unsafe holder class was not synthesized";
+  // The retrying helper is the only place the raw reference CAS appears: one
+  // swap and the re-read that decides whether to retry it.
+  EXPECT_EQ(count_invokes_to_unsafe_member(synth, "compareAndSwapObject"), 1u);
+  EXPECT_EQ(count_invokes_to_unsafe_member(synth, "getObjectVolatile"), 1u);
   for (auto* f : synth->get_sfields()) {
     EXPECT_NE(show(f->get_type()), "J")
         << "offset " << show(f)

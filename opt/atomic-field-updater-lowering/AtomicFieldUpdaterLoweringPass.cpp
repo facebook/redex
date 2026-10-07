@@ -82,25 +82,35 @@ using KindCounts =
 // `<Ctx>$$ExternalSyntheticBackportWithForwardingN.m(u, o, e, n)`, whose body
 // retries while the field still holds `expect` -- its workaround for
 // b/211646483. Inside the forwarder the updater is a parameter, so nothing
-// there resolves; at the call site it is still the field load.
+// there resolves; at the call site it is still the field load. So the call to
+// the forwarder is treated as the operation itself.
 //
 // Maps each recognized forwarder to the `compareAndSet` its body calls.
 using BackportForwarders =
     UnorderedMap<const DexMethodRef*, const DexMethodRef*>;
 
-// A call that performs an updater operation, and which one.
+// A call that performs an updater operation, and which one: an updater method
+// invoked directly, or a recognized forwarder. The srcs line up in both shapes
+// -- src0 the updater, src1 the holder, then the values -- so the analysis
+// indexes them the same way.
 struct OperationSite {
   IRInstruction* insn;
   Kind kind;
-  // The updater method performed.
+  // The updater method performed. For a forwarder, the `compareAndSet` it
+  // calls: names, signatures and statistics keys are read from this, never
+  // from the forwarder itself.
   const DexMethodRef* api;
+  bool via_backport{false};
 };
 
 // Which calls are updater operations. Every walker asks the same question, so
-// it is answered in one place, from the updater types the program references.
+// it is answered in one place, from the updater types the program references
+// and the forwarders recognized in it.
 class UpdaterOperations {
  public:
-  UpdaterOperations() : m_kinds(atomic_field_updaters::present_kinds()) {}
+  explicit UpdaterOperations(BackportForwarders forwarders)
+      : m_kinds(atomic_field_updaters::present_kinds()),
+        m_forwarders(std::move(forwarders)) {}
 
   // The updater types present, mapped to their flavor. Empty when the program
   // references none.
@@ -113,19 +123,32 @@ class UpdaterOperations {
     std::vector<OperationSite> sites;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
       auto* insn = mie.insn;
-      if (!opcode::is_invoke_virtual(insn->opcode())) {
-        continue;
-      }
-      auto it = m_kinds.find(insn->get_method()->get_class());
-      if (it != m_kinds.end()) {
-        sites.push_back(OperationSite{insn, it->second, insn->get_method()});
+      const auto op = insn->opcode();
+      if (opcode::is_invoke_virtual(op)) {
+        auto it = m_kinds.find(insn->get_method()->get_class());
+        if (it != m_kinds.end()) {
+          sites.push_back(OperationSite{insn, it->second, insn->get_method()});
+        }
+      } else if (opcode::is_invoke_static(op)) {
+        auto it = m_forwarders.find(insn->get_method());
+        if (it != m_forwarders.end()) {
+          sites.push_back(OperationSite{insn, Kind::REFERENCE, it->second,
+                                        /*via_backport=*/true});
+        }
       }
     }
     return sites;
   }
 
+  // A forwarder's own calls take the updater as a parameter, so they can never
+  // resolve; its call sites are where the operation is lowered.
+  bool is_forwarder(const DexMethod* method) const {
+    return m_forwarders.count(method) != 0u;
+  }
+
  private:
   UnorderedMap<const DexType*, Kind> m_kinds;
+  BackportForwarders m_forwarders;
 };
 
 // Recognition is confined to a single <clinit>: an updater is accepted only
@@ -574,7 +597,6 @@ BackportForwarders find_backport_cas_forwarders(const Scope& scope,
 // counted on their own.
 void census_ops(const Scope& scope,
                 const UpdaterOperations& ops,
-                const BackportForwarders& forwarders,
                 PassManager& mgr) {
   const auto& kinds = ops.kinds();
   if (kinds.empty()) {
@@ -591,20 +613,12 @@ void census_ops(const Scope& scope,
   AtomicMap<const DexMethodRef*, size_t> per_operation;
   std::atomic<size_t> backport_calls{0};
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    auto& cfg = code.cfg();
-    for (const auto& site : ops.sites_in(cfg)) {
-      if (atomic_field_updaters::is_operation_name(
-              site.api->get_name()->str())) {
-        per_operation.fetch_add(site.api, 1);
-      }
-    }
-    if (forwarders.empty()) {
-      return;
-    }
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
-      if (opcode::is_invoke_static(mie.insn->opcode()) &&
-          forwarders.count(mie.insn->get_method()) != 0u) {
+    for (const auto& site : ops.sites_in(code.cfg())) {
+      if (site.via_backport) {
         backport_calls.fetch_add(1, std::memory_order_relaxed);
+      } else if (atomic_field_updaters::is_operation_name(
+                     site.api->get_name()->str())) {
+        per_operation.fetch_add(site.api, 1);
       }
     }
   });
@@ -1111,7 +1125,8 @@ UnorderedSet<DexMethod*> find_receiver_chain_accessors(
 
   walk::parallel::methods(scope, [&](DexMethod* method) {
     auto* code = method->get_code();
-    if (code == nullptr || method->rstate.no_optimizations()) {
+    if (code == nullptr || method->rstate.no_optimizations() ||
+        ops.is_forwarder(method)) {
       return;
     }
     always_assert(code->cfg_built());
@@ -1430,6 +1445,8 @@ struct Rewrite {
   // The holder could not be proven non-null, so emission precedes the rewrite
   // with a check that throws what `accessCheck` would have.
   bool needs_guard;
+  // The site was a call to d8's `compareAndSet` forwarder.
+  bool via_backport;
 };
 
 // Filled from many threads, read from one. Keyed by method, so the serial
@@ -1683,7 +1700,7 @@ std::optional<Rewrite> classify_site(const OperationSite& site,
   }
 
   stats->feasible[{site.api, holder_null_proven}]++;
-  return Rewrite{insn, info, *plan, !holder_null_proven};
+  return Rewrite{insn, info, *plan, !holder_null_proven, site.via_backport};
 }
 
 // Reads the whole program for lowerable sites and records them in `rewrites`.
@@ -1697,7 +1714,8 @@ Stats analyze_calls(const Scope& scope,
   return walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
     Stats stats;
     auto* code = method->get_code();
-    if (code == nullptr || method->rstate.no_optimizations()) {
+    if (code == nullptr || method->rstate.no_optimizations() ||
+        ops.is_forwarder(method)) {
       return stats;
     }
     always_assert(code->cfg_built());
@@ -1838,7 +1856,8 @@ std::vector<IRInstruction*> build_replacement(
 struct EmitStats {
   size_t rewritten{0};
   size_t null_checks{0};
-  // Subset of `rewritten`.
+  // Subsets of `rewritten`.
+  size_t backport_calls_rewritten{0};
   size_t cas_retry_calls{0};
 };
 
@@ -1881,6 +1900,9 @@ EmitStats emit_rewrites(const Scope& scope,
       if (rewrite.needs_guard) {
         emitted.null_checks++;
       }
+      if (rewrite.via_backport) {
+        emitted.backport_calls_rewritten++;
+      }
       if (rewrite.plan.retry_spurious_failure) {
         emitted.cas_retry_calls++;
       }
@@ -1896,6 +1918,8 @@ void report(PassManager& mgr,
             const UnorderedMap<const DexType*, Kind>& updater_kinds) {
   mgr.set_metric("calls_rewritten", emitted.rewritten);
   mgr.set_metric("null_checks_emitted", emitted.null_checks);
+  mgr.set_metric("backport_cas_calls_rewritten",
+                 emitted.backport_calls_rewritten);
   mgr.set_metric("cas_retry_calls_emitted", emitted.cas_retry_calls);
   mgr.set_metric("blocked_min_sdk", totals.blocked_min_sdk);
   mgr.set_metric("blocked_hidden_api", totals.blocked_hidden_api);
@@ -2225,9 +2249,8 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
                                               ConfigFiles& conf,
                                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  const UpdaterOperations ops;
-  const auto forwarders = find_backport_cas_forwarders(scope, mgr);
-  census_ops(scope, ops, forwarders, mgr);
+  const UpdaterOperations ops(find_backport_cas_forwarders(scope, mgr));
+  census_ops(scope, ops, mgr);
 
   // Recognition reads each holder's <clinit>, so it only needs the root store,
   // where the updaters this pass can act on are declared.
