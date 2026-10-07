@@ -1244,15 +1244,14 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
   // built for sites the checks above already rejected.
   if (!plan_is_linkable(*plan)) {
     stats->blocked_hidden_api++;
-    // TODO(T287844992): the four restricted members are all expressible as a
-    // compareAndSwap{Int,Long} retry loop, which is unrestricted, so these
-    // sites are recoverable rather than fundamentally out of reach. Measured on
-    // b4a they are 37 of 295, and disproportionately hot: they are the
-    // coroutine counters. The loop belongs in one shared static helper called
-    // per site, not inlined at each -- that is how R8 backports `getAndSet`
-    // below API 24, and it costs an invoke rather than a loop per site. What it
-    // gives up is the intrinsic: load-CAS-branch, retried under contention, in
-    // place of a single atomic.
+    // The four restricted members are expressible as a compareAndSwap{Int,Long}
+    // retry loop over unrestricted members, but that loop is not a lowering
+    // worth having. libcore's path ends in a single atomic add that cannot
+    // fail; the loop reads, then swaps, and retries whenever another thread
+    // wrote in between. On a Galaxy S23 it was faster on one thread and slower
+    // as soon as threads shared the field -- 0.45x to 0.64x at eight -- and
+    // these sites are the coroutine counters every dispatcher thread updates.
+    // R8 leaves them alone too.
     return std::nullopt;
   }
   // `getAndAdd`/`getAndSet` arrived in Android N.
