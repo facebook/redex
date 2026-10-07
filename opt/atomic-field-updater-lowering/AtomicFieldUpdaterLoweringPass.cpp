@@ -77,6 +77,46 @@ using KindCounts =
     std::array<size_t,
                std::tuple_size_v<decltype(atomic_field_updaters::all_kinds())>>;
 
+// A call that performs an updater operation, and which one.
+struct OperationSite {
+  IRInstruction* insn;
+  Kind kind;
+  // The updater method performed.
+  const DexMethodRef* api;
+};
+
+// Which calls are updater operations. Every walker asks the same question, so
+// it is answered in one place, from the updater types the program references.
+class UpdaterOperations {
+ public:
+  UpdaterOperations() : m_kinds(atomic_field_updaters::present_kinds()) {}
+
+  // The updater types present, mapped to their flavor. Empty when the program
+  // references none.
+  const UnorderedMap<const DexType*, Kind>& kinds() const { return m_kinds; }
+
+  // The operation sites in `cfg`, in instruction order. Empty for the great
+  // majority of methods, which touch no updater -- worth knowing before any
+  // dataflow is built, because `MoveAwareChains` is not free.
+  std::vector<OperationSite> sites_in(cfg::ControlFlowGraph& cfg) const {
+    std::vector<OperationSite> sites;
+    for (auto& mie : cfg::InstructionIterable(cfg)) {
+      auto* insn = mie.insn;
+      if (!opcode::is_invoke_virtual(insn->opcode())) {
+        continue;
+      }
+      auto it = m_kinds.find(insn->get_method()->get_class());
+      if (it != m_kinds.end()) {
+        sites.push_back(OperationSite{insn, it->second, insn->get_method()});
+      }
+    }
+    return sites;
+  }
+
+ private:
+  UnorderedMap<const DexType*, Kind> m_kinds;
+};
+
 // Recognition is confined to a single <clinit>: an updater is accepted only
 // when the class that declares it also declares the volatile field it targets.
 // A cross-class updater would need the writing and target classes analyzed
@@ -87,12 +127,13 @@ using KindCounts =
 // declaring both an Integer and a Long updater -- the common shape, since
 // atomicfu emits one per volatile field -- would otherwise rebuild both for
 // each flavor in turn.
-std::vector<UpdaterInfo> find_updaters(const Scope& scope,
-                                       KindCounts& per_kind) {
+std::vector<UpdaterInfo> find_updaters(
+    const Scope& scope,
+    const UnorderedMap<const DexType*, Kind>& kinds,
+    KindCounts& per_kind) {
   std::vector<UpdaterInfo> result;
   per_kind.fill(0);
   const auto* new_updater = atomic_field_updaters::new_updater_name();
-  const auto kinds = atomic_field_updaters::present_kinds();
   if (new_updater == nullptr || kinds.empty()) {
     return result;
   }
@@ -251,8 +292,10 @@ std::vector<UpdaterInfo> find_updaters(const Scope& scope,
 // Count operation call sites on the updater types, keyed by flavor and
 // operation name. Sizes the opportunity independently of how much of it the
 // recognition above can actually reach.
-void census_ops(const Scope& scope, PassManager& mgr) {
-  const auto kinds = atomic_field_updaters::present_kinds();
+void census_ops(const Scope& scope,
+                const UpdaterOperations& ops,
+                PassManager& mgr) {
+  const auto& kinds = ops.kinds();
   if (kinds.empty()) {
     // Still report the total. A program with no updaters has zero operations,
     // which is not the same thing as the metric being missing -- absent, it is
@@ -265,17 +308,11 @@ void census_ops(const Scope& scope, PassManager& mgr) {
   // built at any call site. `AtomicMap` accumulates them without a lock.
   AtomicMap<const DexMethodRef*, size_t> per_operation;
   walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
-    for (auto& mie : cfg::InstructionIterable(code.cfg())) {
-      auto* insn = mie.insn;
-      if (!opcode::is_invoke_virtual(insn->opcode())) {
-        continue;
+    for (const auto& site : ops.sites_in(code.cfg())) {
+      if (atomic_field_updaters::is_operation_name(
+              site.api->get_name()->str())) {
+        per_operation.fetch_add(site.api, 1);
       }
-      const auto* mref = insn->get_method();
-      if (kinds.count(mref->get_class()) == 0u ||
-          !atomic_field_updaters::is_operation_name(mref->get_name()->str())) {
-        continue;
-      }
-      per_operation.fetch_add(mref, 1);
     }
   });
   // One label per distinct operation rather than per call site, sorted so the
@@ -594,21 +631,6 @@ void add_offsets_to_holders(std::vector<UpdaterInfo>& updaters,
 // by construction, so there is no shape to guess at and nothing to decide about
 // which methods are worth considering.
 
-// Does this method invoke an updater operation at all? Asked before any
-// dataflow machinery is built, because the great majority of methods touch no
-// updater and `MoveAwareChains` is not free.
-bool uses_updater(cfg::ControlFlowGraph& cfg,
-                  const UnorderedMap<const DexType*, Kind>& updater_kinds) {
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto* insn = mie.insn;
-    if (opcode::is_invoke_virtual(insn->opcode()) &&
-        updater_kinds.count(insn->get_method()->get_class()) != 0u) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Is `m` an accessor for a recognized updater? On success `chain` gets every
 // method on the path, which is what has to be inlined: flattening a bridge
 // alone would leave the getter it calls still standing between the call site
@@ -688,7 +710,7 @@ bool is_accessor_chain(
 // the chain rather than by iterating selection to a fixed point.
 UnorderedSet<DexMethod*> find_receiver_chain_accessors(
     const Scope& scope,
-    const UnorderedMap<const DexType*, Kind>& updater_kinds,
+    const UpdaterOperations& ops,
     const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
     PassManager& mgr) {
   InsertOnlyConcurrentSet<DexMethod*> selected;
@@ -704,18 +726,15 @@ UnorderedSet<DexMethod*> find_receiver_chain_accessors(
     }
     always_assert(code->cfg_built());
     auto& cfg = code->cfg();
-    if (!uses_updater(cfg, updater_kinds)) {
+    const auto sites = ops.sites_in(cfg);
+    if (sites.empty()) {
       return;
     }
     live_range::MoveAwareChains chains(cfg);
     auto use_defs = chains.get_use_def_chains();
 
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
-      auto* insn = mie.insn;
-      if (!opcode::is_invoke_virtual(insn->opcode()) ||
-          updater_kinds.count(insn->get_method()->get_class()) == 0u) {
-        continue;
-      }
+    for (const auto& site : sites) {
+      auto* insn = site.insn;
       auto it = use_defs.find(live_range::Use{insn, 0});
       if (it == use_defs.end()) {
         continue;
@@ -1147,12 +1166,13 @@ bool holder_is_non_null(IRInstruction* insn,
 // discharges at runtime, recording why it was turned away. Returns nothing for
 // a site that is not rewritten -- which includes feasible sites whose operation
 // this pass cannot yet express.
-std::optional<Rewrite> classify_site(IRInstruction* insn,
-                                     Kind kind,
+std::optional<Rewrite> classify_site(const OperationSite& site,
                                      const MethodAnalysis& ma,
                                      Stats* stats) {
   always_assert(stats != nullptr);
-  const auto* name = insn->get_method()->get_name();
+  IRInstruction* insn = site.insn;
+  const Kind kind = site.kind;
+  const auto* name = site.api->get_name();
 
   // Every argument after the holder must be a value of the flavor's type.
   // The functional-style operations -- getAndUpdate, updateAndGet,
@@ -1169,7 +1189,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
   // that is not there.
   auto plan = plan_for(kind, name->str());
   if (!plan.has_value() || insn->srcs_size() < 2 ||
-      !writes_only_values(insn->get_method(), kind)) {
+      !writes_only_values(site.api, kind)) {
     stats->blocked_unmodeled_op++;
     return std::nullopt;
   }
@@ -1260,7 +1280,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
     return std::nullopt;
   }
 
-  stats->feasible[{insn->get_method(), holder_null_proven}]++;
+  stats->feasible[{site.api, holder_null_proven}]++;
   return Rewrite{insn, info, *plan, !holder_null_proven};
 }
 
@@ -1269,7 +1289,7 @@ std::optional<Rewrite> classify_site(IRInstruction* insn,
 // does not depend on which thread reached a method first.
 Stats analyze_calls(const Scope& scope,
                     const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
-                    const UnorderedMap<const DexType*, Kind>& updater_kinds,
+                    const UpdaterOperations& ops,
                     int min_sdk,
                     RewritePlan* rewrites) {
   return walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
@@ -1280,7 +1300,8 @@ Stats analyze_calls(const Scope& scope,
     }
     always_assert(code->cfg_built());
     auto& cfg = code->cfg();
-    if (!uses_updater(cfg, updater_kinds)) {
+    const auto sites = ops.sites_in(cfg);
+    if (sites.empty()) {
       return stats;
     }
 
@@ -1306,16 +1327,8 @@ Stats analyze_calls(const Scope& scope,
                       use_defs, receiver_insn, min_sdk};
 
     std::vector<Rewrite> planned;
-    for (auto& mie : cfg::InstructionIterable(cfg)) {
-      auto* insn = mie.insn;
-      if (!opcode::is_invoke_virtual(insn->opcode())) {
-        continue;
-      }
-      auto kind_it = updater_kinds.find(insn->get_method()->get_class());
-      if (kind_it == updater_kinds.end()) {
-        continue;
-      }
-      auto rewrite = classify_site(insn, kind_it->second, ma, &stats);
+    for (const auto& site : sites) {
+      auto rewrite = classify_site(site, ma, &stats);
       if (rewrite.has_value()) {
         planned.push_back(*rewrite);
       }
@@ -1537,17 +1550,13 @@ void report(PassManager& mgr,
 // unreachable class whose <clinit> reflects over `sun.misc.Unsafe`.
 void lower_calls(const Scope& scope,
                  const UnorderedMap<DexField*, const UpdaterInfo*>& by_field,
+                 const UpdaterOperations& ops,
                  const std::function<const Helpers&()>& ensure_helpers,
                  ConfigFiles& conf,
                  int min_sdk,
                  PassManager& mgr) {
-  const auto updater_kinds = atomic_field_updaters::present_kinds();
-  if (updater_kinds.empty()) {
-    return;
-  }
   RewritePlan rewrites;
-  const Stats totals =
-      analyze_calls(scope, by_field, updater_kinds, min_sdk, &rewrites);
+  const Stats totals = analyze_calls(scope, by_field, ops, min_sdk, &rewrites);
   const EmitStats emitted = emit_rewrites(scope, rewrites, ensure_helpers);
   if (!rewrites.empty()) {
     auto method_override_graph = method_override_graph::build_graph(scope);
@@ -1560,7 +1569,7 @@ void lower_calls(const Scope& scope,
       local_dce.dce(method->get_code(), true, method->get_class());
     }
   }
-  report(mgr, totals, emitted, updater_kinds);
+  report(mgr, totals, emitted, ops.kinds());
 }
 
 struct CleanupStats {
@@ -1811,7 +1820,8 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
                                               ConfigFiles& conf,
                                               PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  census_ops(scope, mgr);
+  const UpdaterOperations ops;
+  census_ops(scope, ops, mgr);
 
   // Recognition reads each holder's <clinit>, so it only needs the root store,
   // where the updaters this pass can act on are declared.
@@ -1824,7 +1834,7 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   }
 
   KindCounts per_kind{};
-  auto updaters = find_updaters(root_scope, per_kind);
+  auto updaters = find_updaters(root_scope, ops.kinds(), per_kind);
   // Report every flavor, including any absent from the program: a metric that
   // vanishes at zero is indistinguishable from the pass not running.
   for (auto kind : atomic_field_updaters::all_kinds()) {
@@ -1843,9 +1853,7 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
   // Flatten the synthetic accessors Kotlin puts between a call site
   // and a recognized updater field, so resolution below sees a plain field
   // read rather than a call.
-  const auto updater_kinds = atomic_field_updaters::present_kinds();
-  auto accessors =
-      find_receiver_chain_accessors(scope, updater_kinds, by_field, mgr);
+  auto accessors = find_receiver_chain_accessors(scope, ops, by_field, mgr);
   inline_updater_accessors(stores, scope, conf, mgr, accessors);
 
   // Deferred: synthesized on first use, from inside `lower_calls`, once the
@@ -1858,7 +1866,7 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
     }
     return *helpers;
   };
-  lower_calls(scope, by_field, ensure_helpers, conf,
+  lower_calls(scope, by_field, ops, ensure_helpers, conf,
               mgr.get_redex_options().min_sdk, mgr);
   cleanup_redundant_fields(scope, &updaters, mgr);
 }
