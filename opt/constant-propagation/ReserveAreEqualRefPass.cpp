@@ -9,16 +9,19 @@
 
 #include "ConstantPropagationTransform.h"
 #include "DexStructure.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 
 void ReserveAreEqualRefPass::eval_pass(DexStoresVector&,
                                        ConfigFiles&,
                                        PassManager& mgr) {
-  // Only reserve when the areEqual -> Object.equals rewrite is enabled.
-  // Otherwise the rewrite never introduces the `Object.equals` ref, and
-  // reserving would needlessly lower every dex's method ref capacity. The flag
-  // is set from config before any pass runs, so it is stable here.
-  if (constant_propagation_transform_internal::enable_replacing_areequal) {
+  // Only reserve when the `areEqual -> Object.equals` rewrite is enabled and
+  // `Intrinsics.areEqual` exists, whether defined or referenced. Otherwise, the
+  // rewrite never introduces the `Object.equals` ref, and reserving would
+  // needlessly reduce every dex's method ref capacity. Because the flag is set
+  // from configuration before any pass runs, it is stable here.
+  if (constant_propagation_transform_internal::enable_replacing_areequal &&
+      method::kotlin_jvm_internal_Intrinsics_areEqual() != nullptr) {
     m_reserved_refs_handle = mgr.reserve_refs(name(),
                                               ReserveRefsInfo(/* frefs */ 0,
                                                               /* trefs */ 0,
