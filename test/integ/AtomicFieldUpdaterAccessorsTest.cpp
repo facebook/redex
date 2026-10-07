@@ -51,3 +51,14 @@ TEST_F(AtomicFieldUpdaterAccessorsTest, resolvesThroughKotlinAccessorChain) {
   // Both call sites resolve once the chain is flattened.
   EXPECT_EQ(metric("rewritable_total"), 2);
 }
+
+// Inlining copies an accessor's body without removing the original, whose
+// leftover `sget-object` would go on referencing the updater and keep cleanup
+// from ever removing the field. Deleting the accessors is what lets this holder
+// shed its updater, and only the Kotlin shape needs it: read directly, as in
+// hand-written Java, there is no accessor in the way.
+TEST_F(AtomicFieldUpdaterAccessorsTest, inlinedAccessorsAreDeleted) {
+  run();
+  EXPECT_EQ(metric("accessors_deleted"), 1);
+  EXPECT_EQ(metric("updater_fields_removed"), 1);
+}
