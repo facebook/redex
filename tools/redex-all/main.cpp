@@ -63,6 +63,7 @@
 #include "Macros.h"
 #include "MallocDebug.h"
 #include "MethodProfiles.h"
+#include "MethodUtil.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
@@ -2281,13 +2282,14 @@ int main(int argc, char* argv[]) {
     // first.equals(second)) before allowing the swap optimization. This must
     // happen after redex_frontend (which loads dex files and creates method
     // refs) and before any parallel walk, because reading areEqual's IRCode
-    // is not thread-safe.
-    if (constant_propagation_transform_internal::enable_replacing_areequal) {
+    // is not thread-safe. An input in which areEqual is neither defined nor
+    // referenced has nothing to rewrite, so there is nothing to verify.
+    if (constant_propagation_transform_internal::enable_replacing_areequal &&
+        method::kotlin_jvm_internal_Intrinsics_areEqual() != nullptr) {
       auto err = constant_propagation::verify_areequal_semantics();
       always_assert_log(!err.has_value(),
-                        "If the app has no Kotlin code, set "
-                        "enable_replacing_areequal to false in its Redex "
-                        "config. Intrinsics.areEqual check failed: %s",
+                        "Intrinsics.areEqual does not match what the areEqual "
+                        "rewrite expects: %s",
                         err->c_str());
     }
 

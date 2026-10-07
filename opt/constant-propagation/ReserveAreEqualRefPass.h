@@ -18,9 +18,10 @@
  *
  * The reservation is taken in `eval_pass` (which runs before any pass's
  * `run_pass`, hence before `InterDexPass`), so InterDex and
- * `InterDexReshufflePass` leave the slot free; it is released in `run_pass`. It
- * is taken only when `enable_replacing_areequal` is set, so a build that does
- * not run the rewrite pays no headroom cost.
+ * `InterDexReshufflePass` leave the slot free; it is released in `run_pass`.
+ * The reservation is only made if `enable_replacing_areequal` is set and
+ * `Intrinsics.areEqual` is present (whether defined or referenced), so for
+ * inputs without it, no dex loses a method ref slot to this reservation.
  *
  * Scheduling and presence are enforced by the `NeedsAreEqualRefReservation`
  * (Negative) property: every constant-propagation pass `Establishes` it and
