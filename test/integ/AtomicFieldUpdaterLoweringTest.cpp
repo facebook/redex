@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "AtomicFieldUpdaterLoweringPass.h"
+#include "AtomicFieldUpdaters.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "RedexTest.h"
@@ -103,26 +104,27 @@ TEST_F(AtomicFieldUpdaterLoweringIntegTest, leavesUnresolvableUpdaterAlone) {
       "AtomicFieldUpdaterLowering$Holder;)Ljava/lang/Object;");
   EXPECT_EQ(names.count("get"), 1);
   EXPECT_EQ(names.count("getObjectVolatile"), 0);
-  // Not an exact total: D8's compareAndSet forwarder is a second, incidental
-  // instance of the same shape, and pinning the count here would make the test
-  // a record of desugaring behavior.
-  EXPECT_GE(metric("calls_skipped_unresolved_updater"), 1);
+  // Exact: d8's forwarder also takes its updater as a parameter, but its body
+  // is not analyzed -- its call sites are -- so it adds nothing here.
+  EXPECT_EQ(metric("calls_skipped_unresolved_updater"), 1);
 }
 
 // A provably non-null holder lowers with no guard: the updater calls are gone
 // and the corresponding Unsafe primitives are in their place.
 //
-// `compareAndSet` is deliberately not asserted on here. D8 rewrites the
-// reference-flavored one into a `$$ExternalSyntheticBackportWithForwarding0`
-// forwarder that receives the updater as a parameter, so at this call site it
-// is no longer an updater operation at all. That is a property of desugaring,
-// not of the pass; `primitives` below covers compare-and-set on the Integer
-// flavor, which D8 leaves alone.
+// d8 turns the reference `compareAndSet` into a call to its forwarder, and that
+// call is lowered as the operation. The app's min_sdk is below the one where a
+// reference CAS is reliable, so it lowers to the retrying helper rather than
+// the raw primitive.
 TEST_F(AtomicFieldUpdaterLoweringIntegTest, lowersProvenHolder) {
   run();
   auto names = invoked_in("provenHolder:()Ljava/lang/Object;");
   EXPECT_EQ(names.count("getObjectVolatile"), 1);
   EXPECT_EQ(names.count("get"), 0);
+  EXPECT_EQ(names.count(atomic_field_updaters::CAS_RETRY_METHOD_NAME), 1);
+  EXPECT_EQ(names.count("compareAndSwapObject"), 0);
+  EXPECT_EQ(names.count("m"), 0) << "the call to d8's forwarder is gone";
+  EXPECT_EQ(metric("backport_cas_calls_rewritten"), 1);
   // `set(h, "a")` writes a String into an Object-typed field. The value
   // obligation cannot lean on `check_cast` here: that walks the hierarchy via
   // `type_class`, which is null for a framework type no dex defines, so it

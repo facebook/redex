@@ -700,6 +700,47 @@ TEST_F(AtomicFieldUpdaterLoweringTest, forwarderCallIsRecognizedAndCounted) {
   EXPECT_EQ(metric("ops_backport_cas_calls"), 1);
 }
 
+// The production shape: the call to the forwarder is the operation, and below
+// the reliable API it lowers to the retrying helper, not the raw primitive.
+TEST_F(AtomicFieldUpdaterLoweringTest, forwarderCallLowersThroughRetryHelper) {
+  auto* fwd = make_forwarder("LFwdK;", kForwarder);
+  auto* caller = make_caller(
+      "LCasK;", kCallForwarder,
+      {{"$CLS", "LCasK;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdK;"}});
+
+  run("LCasK;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("calls_rewritten"), 1);
+  EXPECT_EQ(metric("backport_cas_calls_rewritten"), 1);
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 1);
+  // The forwarder's own two calls take the updater as a parameter; they are
+  // not analyzed, so they do not count as unresolved.
+  EXPECT_EQ(metric("calls_skipped_unresolved_updater"), 0);
+
+  auto calls = invoked(caller);
+  EXPECT_EQ(count(calls, kRetryHelper), 1u);
+  EXPECT_EQ(count(calls, "LFwdK;.m"), 0u);
+  EXPECT_EQ(count(calls, kRawCas), 0u)
+      << "a raw reference CAS can fail spuriously on Android 12";
+}
+
+// Where the platform cannot fail spuriously there is nothing to retry, so the
+// same site lowers to the primitive itself.
+TEST_F(AtomicFieldUpdaterLoweringTest,
+       forwarderLowersToRawCasAtReliableMinSdk) {
+  min_sdk = atomic_field_updaters::kReferenceCasReliableMinSdk;
+  auto* fwd = make_forwarder("LFwdB;", kForwarder);
+  auto* caller = make_caller(
+      "LCasB;", kCallForwarder,
+      {{"$CLS", "LCasB;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdB;"}});
+
+  run("LCasB;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  EXPECT_EQ(metric("backport_cas_calls_rewritten"), 1);
+  EXPECT_EQ(metric("cas_retry_calls_emitted"), 0);
+  auto calls = invoked(caller);
+  EXPECT_EQ(count(calls, kRawCas), 1u);
+  EXPECT_EQ(count(calls, kRetryHelper), 0u);
+}
+
 // Recognition rests on what the body does, not on how a compiler laid it out.
 TEST_F(AtomicFieldUpdaterLoweringTest, invertedForwarderIsRecognized) {
   auto* fwd = make_forwarder("LFwdC;", kForwarderInverted);
@@ -709,6 +750,7 @@ TEST_F(AtomicFieldUpdaterLoweringTest, invertedForwarderIsRecognized) {
 
   run("LCasC;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
   EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 1);
+  EXPECT_EQ(count(invoked(caller), kRetryHelper), 1u);
 }
 
 // A method shaped like the forwarder that retries on the wrong value is not
@@ -722,6 +764,7 @@ TEST_F(AtomicFieldUpdaterLoweringTest, forwarderWithWrongComparandIsRejected) {
   run("LCasD;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
   EXPECT_EQ(metric("backport_cas_forwarders_recognized"), 0);
   EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+  EXPECT_EQ(count(invoked(caller), "LFwdD;.m"), 1u);
 }
 
 // Likewise one that reports the outcome inverted.
@@ -733,6 +776,7 @@ TEST_F(AtomicFieldUpdaterLoweringTest, forwarderWithInvertedResultIsRejected) {
 
   run("LCasE;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
   EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+  EXPECT_EQ(count(invoked(caller), "LFwdE;.m"), 1u);
 }
 
 // Replacing the call drops the initialization of the forwarder's class, so a
@@ -746,6 +790,7 @@ TEST_F(AtomicFieldUpdaterLoweringTest,
 
   run("LCasF;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
   EXPECT_EQ(metric("backport_cas_forwarders_rejected"), 1);
+  EXPECT_EQ(count(invoked(caller), "LFwdF;.m"), 1u);
 }
 
 // A direct strong reference CAS has to keep retrying where the primitive can
@@ -758,6 +803,7 @@ TEST_F(AtomicFieldUpdaterLoweringTest, directCasRetriesBelowReliableMinSdk) {
 
   run("LCasG;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller});
   EXPECT_EQ(metric("cas_retry_calls_emitted"), 1);
+  EXPECT_EQ(metric("backport_cas_calls_rewritten"), 0);
   auto calls = invoked(caller);
   EXPECT_EQ(count(calls, kRetryHelper), 1u);
   EXPECT_EQ(count(calls, kRawCas), 0u);

@@ -42,3 +42,27 @@ class AtomicFieldUpdaterAccessors {
     }
   }
 }
+
+/**
+ * An updater reached only through `compareAndSet`. d8 sends that call to its forwarder, so the
+ * accessor chain feeds a forwarder call rather than an updater call, and has to be found from there
+ * for the site to lower.
+ */
+class AtomicFieldUpdaterAccessorsCas {
+  @Volatile @JvmField var state: Any? = null
+
+  companion object {
+    private val S: AtomicReferenceFieldUpdater<AtomicFieldUpdaterAccessorsCas, Any> =
+        AtomicReferenceFieldUpdater.newUpdater(
+            AtomicFieldUpdaterAccessorsCas::class.java,
+            Any::class.java,
+            "state",
+        )
+  }
+
+  class Nested {
+    fun claim(h: AtomicFieldUpdaterAccessorsCas, expect: Any, update: Any): Boolean {
+      return S.compareAndSet(h, expect, update)
+    }
+  }
+}
