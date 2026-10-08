@@ -72,7 +72,7 @@ class StringBuilderOutlinerTest : public RedexTest {
   }
 
  protected:
-  void run_outliner(IRCode* code) {
+  Stats run_outliner(IRCode* code) {
     code->build_cfg();
     Outliner outliner(m_config);
     outliner.analyze(*code);
@@ -84,6 +84,7 @@ class StringBuilderOutlinerTest : public RedexTest {
     // contain a run of OSDCE after StringBuilderOutlinerPass.
     remove_dead_instructions(code);
     code->clear_cfg();
+    return outliner.get_stats();
   }
 
   void populate_summary_maps(
@@ -861,4 +862,68 @@ TEST_F(StringBuilderOutlinerTest, buildersSharingARegisterDoNotConflate) {
     )
   )");
   EXPECT_CODE_EQ(expected_code.get(), code.get());
+}
+
+TEST_F(StringBuilderOutlinerTest, hotOutlinedCallSiteIsCountedAsHot) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0))
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "foo")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+
+  auto stats = run_outliner(code.get());
+
+  EXPECT_EQ(stats.tostring_outlined_hot.load(), 1);
+}
+
+TEST_F(StringBuilderOutlinerTest, coldOutlinedCallSiteIsNotCountedAsHot) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (0.0 0.0))
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "foo")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+
+  auto stats = run_outliner(code.get());
+
+  EXPECT_EQ(stats.tostring_outlined_hot.load(), 0);
+}
+
+TEST_F(StringBuilderOutlinerTest, hotCallSiteLeftInlineIsNotCountedAsOutlined) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.src_block "LFoo;.bar:()V" 0 (1.0 1.0))
+      (new-instance "Ljava/lang/StringBuilder;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/StringBuilder;.<init>:()V")
+      (const-string "foo")
+      (move-result-pseudo-object v1)
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (invoke-virtual (v0) "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;")
+      (move-result-object v0)
+      (return-object v0)
+    )
+  )");
+
+  m_config.min_outline_count = 2;
+  auto stats = run_outliner(code.get());
+
+  EXPECT_EQ(stats.tostring_outlined_hot.load(), 0);
 }

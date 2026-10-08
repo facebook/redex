@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "AtomicStatCounter.h"
 #include "DeterministicContainers.h"
 #include "Pass.h"
 #include "StringBuilderAnalysis.h"
@@ -29,6 +30,7 @@ struct Stats {
   size_t stringbuilders_removed{0};
   size_t operations_removed{0};
   size_t helper_methods_created{0};
+  AtomicStatCounter<size_t> tostring_outlined_hot{0};
 };
 
 class Outliner {
