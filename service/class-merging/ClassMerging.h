@@ -22,6 +22,7 @@ ModelStats merge_model(Scope& scope,
                        const bool is_intra_dex);
 
 ModelStats merge_model(const TypeSystem&,
+                       const virtual_scope::VirtualScopes& vscopes,
                        Scope& scope,
                        ConfigFiles& conf,
                        PassManager& mgr,

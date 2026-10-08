@@ -20,6 +20,7 @@
 #include "PassManager.h"
 #include "Trace.h"
 #include "TypeSystem.h"
+#include "VirtualScopes.h"
 
 struct ConfigFiles;
 class PassManager;
@@ -251,6 +252,7 @@ class Model {
                            ConfigFiles& conf,
                            const ModelSpec& spec,
                            const TypeSystem& type_system,
+                           const virtual_scope::VirtualScopes& vscopes,
                            const RefChecker& refchecker);
 
   const std::string& get_name() const { return m_spec.name; }
@@ -368,6 +370,9 @@ class Model {
   TypeSet m_non_mergeables;
 
   const TypeSystem& m_type_system;
+  // Built once per pass and shared across all ModelSpecs (like m_type_system),
+  // so every spec reads the same pre-merge scope.
+  const virtual_scope::VirtualScopes& m_vscopes;
   const RefChecker& m_ref_checker;
 
   // Number of merger types created with the same shape per model.
@@ -380,11 +385,14 @@ class Model {
   ConfigFiles& m_conf;
   const XDexRefs m_x_dex;
 
-  // Cache: VirtualScope* -> (class -> method) for fast lookup in
-  // distribute_virtual_methods. Avoids iterating all methods in a scope.
-  mutable UnorderedMap<const VirtualScope*,
-                       UnorderedMap<const DexType*, DexMethod*>>
-      m_scope_class_method_map;
+  // Cache for distribute_virtual_methods: VirtualScope* -> (class -> method),
+  // avoiding a full re-scan of a scope's methods. Keys reference the
+  // VirtualScopes owned by the collect_methods() run, so this is threaded as a
+  // local through the recursion (NOT model state) -- it must not outlive that
+  // VirtualScopes.
+  using ScopeClassMethodMap =
+      UnorderedMap<const virtual_scope::VirtualScope*,
+                   UnorderedMap<const DexType*, DexMethod*>>;
 
   /**
    * Build a Model given a set of roots and a set of types deriving from the
@@ -395,6 +403,7 @@ class Model {
         ConfigFiles& conf,
         const ModelSpec& spec,
         const TypeSystem& type_system,
+        const virtual_scope::VirtualScopes& vscopes,
         const RefChecker& refchecker);
 
   void init(const Scope& scope,
@@ -453,10 +462,15 @@ class Model {
 
   // collect and distribute methods across MergerTypes
   void collect_methods();
-  void add_virtual_scope(MergerType& merger, const VirtualScope& virt_scope);
-  void add_interface_scope(MergerType& merger, const VirtualScope& intf_scope);
-  void distribute_virtual_methods(const DexType* type,
-                                  std::vector<const VirtualScope*> base_scopes);
+  void add_virtual_scope(MergerType& merger,
+                         const virtual_scope::VirtualScope& virt_scope);
+  void add_interface_scope(MergerType& merger,
+                           const virtual_scope::VirtualScope& intf_scope);
+  void distribute_virtual_methods(
+      const DexType* type,
+      std::vector<const virtual_scope::VirtualScope*> base_scopes,
+      const virtual_scope::VirtualScopes& vscopes,
+      ScopeClassMethodMap& scope_class_method_map);
 
   // Model internal type system helpers
   void set_parent_child(const DexType* parent, const DexType* child) {
