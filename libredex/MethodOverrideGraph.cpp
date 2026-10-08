@@ -14,6 +14,7 @@
 #include "BinarySerialization.h"
 #include "CppUtil.h"
 #include "Debug.h"
+#include "RedexContext.h"
 #include "Show.h"
 #include "Timer.h"
 #include "Walkers.h"
@@ -81,7 +82,8 @@ void unify_signature_maps(const SignatureMap& to_add, SignatureMap* target) {
 
 class GraphBuilder {
  public:
-  explicit GraphBuilder(const Scope& scope) : m_scope(scope) {}
+  explicit GraphBuilder(const Scope& scope, const GraphConfig& config = {})
+      : m_scope(scope), m_config(config) {}
 
   std::unique_ptr<Graph> run() {
     m_graph = std::make_unique<Graph>();
@@ -92,6 +94,10 @@ class GraphBuilder {
         analyze_non_interface(cls);
       }
     });
+    if (m_config.include_miranda) {
+      synthesize_miranda_nodes();
+      m_graph->set_has_miranda(true);
+    }
     return std::move(m_graph);
   }
 
@@ -256,11 +262,147 @@ class GraphBuilder {
     return *map_ptr;
   }
 
+  // For each non-interface class whose directly-declared interfaces have
+  // methods absent from the class's own vmethods, synthesize a miranda
+  // dispatch slot. This covers both abstract classes with unimplemented
+  // obligations and concrete classes that inherit impls from super but
+  // directly declare the interface. Adds an edge from each backing
+  // interface method to the miranda node so consumers traversing
+  // get_overriding_methods see the miranda layer.
+  //
+  // We do NOT rewire existing interface->concrete-impl edges. Consumers that
+  // want miranda-aware grouping should use find_class_dispatch_root(), which
+  // walks the class chain and picks up miranda nodes when present.
+  void synthesize_miranda_nodes() {
+    // Iterate ALL classes processed by analyze_non_interface — this includes
+    // EXTERNAL classes reached transitively via super_class chains from
+    // m_scope (internal) classes. Restricting to m_scope alone misses
+    // mirandas at external abstract intermediates (e.g., framework classes
+    // like android.view.View) that internal classes inherit from. Such
+    // mirandas are needed to:
+    //   1. Group cross-internal-class methods that share an external
+    //      abstract dispatch root (for VirtualMerging).
+    //   2. Allow MethodProfiles to resolve profile lines that reference
+    //      framework miranda slots.
+    auto create_miranda_for = [&](const DexClass* cls,
+                                  const DexMethod* iface_method) {
+      auto* miranda = DexMethod::make_method_downcast(
+          cls->get_type(), iface_method->get_name(), iface_method->get_proto());
+      // make_method_downcast dynamic_casts the DexMethodRef to DexMethod*; it
+      // yields null if a same-signature ref exists that is not a DexMethod.
+      // Skip rather than insert a null-keyed node / mark null as miranda.
+      if (miranda == nullptr) {
+        return;
+      }
+      // A miranda is a synthetic dispatch slot with no real definition. If a
+      // real def already exists for (cls, name, proto) -- e.g. a direct /
+      // static / private / synthetic method whose signature collides with an
+      // unimplemented interface method -- do not mark it miranda or add an
+      // interface edge; that would make a real method a dispatch root.
+      if (miranda->is_def()) {
+        return;
+      }
+      m_graph->add_edge(iface_method, /* overridden_is_interface */ true,
+                        miranda, /* overriding_is_interface */ false);
+      m_graph->mark_miranda(miranda);
+    };
+
+    // For each non-interface class, walk its directly-implemented interfaces
+    // (transitively through super-interfaces only — NOT super class's
+    // interfaces). For each interface method, if cls's vmethods don't have a
+    // matching one, create a miranda at cls. Even concrete classes that
+    // inherit impls from super get a miranda ref at their own type for
+    // downstream lookups (e.g., MethodProfiles resolution).
+    auto process_cls = [&](const DexClass* cls) {
+      if (is_interface(cls)) {
+        return;
+      }
+      // Collect direct interfaces transitively (through super-interfaces).
+      std::set<const DexType*, dextypes_comparator> intfs;
+      const auto collect = [&](auto self, const DexType* intf_type) -> void {
+        if (intf_type == nullptr || !intfs.insert(intf_type).second) {
+          return;
+        }
+        const DexClass* intf_cls = type_class(intf_type);
+        if (intf_cls == nullptr) {
+          return;
+        }
+        for (const auto* super_intf : *intf_cls->get_interfaces()) {
+          self(self, super_intf);
+        }
+      };
+      for (const auto* intf : *cls->get_interfaces()) {
+        self_recursive_fn(collect, intf);
+      }
+      // For each interface method, check if cls's vmethods has it.
+      for (const auto* intf_type : intfs) {
+        const DexClass* intf_cls = type_class(intf_type);
+        if (intf_cls == nullptr) {
+          continue;
+        }
+        for (const auto* intf_meth : intf_cls->get_vmethods()) {
+          const auto* name = intf_meth->get_name();
+          auto* proto = intf_meth->get_proto();
+          bool has = false;
+          for (const auto* m : cls->get_vmethods()) {
+            if (m->get_name() == name && m->get_proto() == proto) {
+              has = true;
+              break;
+            }
+          }
+          if (has) {
+            continue;
+          }
+          // The same (name, proto) may be declared by more than one interface
+          // in `intfs` (e.g. a class implementing both List and Collection,
+          // both declaring size(); or an interface and a super-interface that
+          // re-declares a method). We intentionally call create_miranda_for
+          // once per declaring interface method: make_method_downcast returns
+          // the SAME miranda ref each time (idempotent) and mark_miranda is
+          // idempotent, but each call adds a DISTINCT interface->miranda parent
+          // edge -- the one miranda slot legitimately implements the method for
+          // every such interface. So this is not duplicate work to dedup; a
+          // per-(name, proto) seen-set would be a bug, dropping the extra
+          // interface parents that consumers (get_implemented_interfaces) read.
+          create_miranda_for(cls, intf_meth);
+        }
+      }
+    };
+
+    // Process all non-interface classes known to g_redex (internal +
+    // external). External coverage matters because (a) IR may reference
+    // mirandas at framework classes (e.g., android.view.View) that no
+    // internal class extends, and (b) MethodProfiles' resolution depends
+    // on these refs being lookup-able.
+    //
+    // When m_config.miranda_within_scope is set, restrict synthesis to the
+    // build_type_hierarchy(scope) node set (scope U external): skip other
+    // stores' internal classes so make_method_downcast does not materialize
+    // refs outside `scope`'s own hierarchy.
+    UnorderedSet<const DexType*> in_scope;
+    if (m_config.miranda_within_scope) {
+      in_scope.reserve(m_scope.size());
+      for (const auto* cls : m_scope) {
+        in_scope.insert(cls->get_type());
+      }
+    }
+    // walk_type_class iterates g_redex's InsertOnlyConcurrentSet of classes, so
+    // each class is visited exactly once -- no dedup set needed.
+    g_redex->walk_type_class([&](const DexType* /*type*/, const DexClass* cls) {
+      if (m_config.miranda_within_scope && !cls->is_external() &&
+          in_scope.count(cls->get_type()) == 0) {
+        return;
+      }
+      process_cls(cls);
+    });
+  }
+
   std::unique_ptr<Graph> m_graph;
   ClassSignatureMaps m_class_signature_maps;
   InterfaceSignatureMaps m_interface_signature_maps;
   UnifiedInterfacesSignatureMaps m_unified_interfaces_signature_maps;
   const Scope& m_scope;
+  GraphConfig m_config;
 };
 
 template <typename F>
@@ -394,6 +536,13 @@ const Node& Graph::get_node(const DexMethod* method) const {
   return it->second;
 }
 
+void Graph::mark_miranda(const DexMethod* method) {
+  m_nodes.update(method, [&](const DexMethod*, Node& node, bool /*exists*/) {
+    node.method = method;
+    node.is_miranda = true;
+  });
+}
+
 void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
   // The type-class lookup should only ever fail during testing if the
   // environment isn't fully built up.
@@ -498,6 +647,12 @@ void Graph::dump(std::ostream& os) const {
 std::unique_ptr<const Graph> build_graph(const Scope& scope) {
   Timer t("Building method override graph");
   return GraphBuilder(scope).run();
+}
+
+std::unique_ptr<const Graph> build_graph(const Scope& scope,
+                                         const GraphConfig& config) {
+  Timer t("Building method override graph");
+  return GraphBuilder(scope, config).run();
 }
 
 UnorderedBag<const DexMethod*> get_overriding_methods(
@@ -608,6 +763,54 @@ UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
     }
   }
   return res;
+}
+
+const DexMethod* find_class_dispatch_root(const Graph& graph,
+                                          const DexMethod* method) {
+  const auto* name = method->get_name();
+  auto* proto = method->get_proto();
+  const DexMethod* root = method;
+  const auto* cls = type_class(method->get_class());
+  if (cls == nullptr) {
+    return root;
+  }
+  const bool has_miranda = graph.has_miranda();
+  auto* type = cls->get_super_class();
+  while (type != nullptr) {
+    cls = type_class(type);
+    if (cls == nullptr) {
+      break;
+    }
+    if (!is_interface(cls)) {
+      // Prefer a real vmethod at this class.
+      bool found = false;
+      for (const auto* m : cls->get_vmethods()) {
+        if (m->get_name() == name && m->get_proto() == proto) {
+          root = m;
+          found = true;
+          break;
+        }
+      }
+      // Otherwise, look for a miranda slot at this class. Only consult the
+      // graph if it's miranda-aware — otherwise miranda nodes don't exist.
+      // Note: a synthesized miranda is stored as a DexMethodRef cast to
+      // DexMethod* (not a real def), so we don't filter on is_def() here.
+      if (!found && has_miranda) {
+        auto* maybe_ref = DexMethod::get_method(type, name, proto);
+        if (maybe_ref != nullptr) {
+          const auto* maybe_miranda = dynamic_cast<const DexMethod*>(maybe_ref);
+          if (maybe_miranda != nullptr) {
+            const auto& node = graph.get_node(maybe_miranda);
+            if (node.is_miranda) {
+              root = maybe_miranda;
+            }
+          }
+        }
+      }
+    }
+    type = cls->get_super_class();
+  }
+  return root;
 }
 
 } // namespace method_override_graph
