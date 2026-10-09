@@ -21,6 +21,10 @@ using DexStoresVector = std::vector<DexStore>;
 using Scope = std::vector<DexClass*>;
 using DexClasses = std::vector<DexClass*>;
 
+namespace virtual_scope {
+class VirtualScopes;
+} // namespace virtual_scope
+
 namespace class_merging {
 
 class Model;
@@ -50,6 +54,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
  */
 class_merging::Model construct_global_model(
     const TypeSystem& type_system,
+    const virtual_scope::VirtualScopes& vscopes,
     DexClasses& scope,
     PassManager& mgr,
     ConfigFiles& conf,

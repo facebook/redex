@@ -229,6 +229,7 @@ void find_all_mergeables_and_roots(const TypeSystem& type_system,
 
 class_merging::Model construct_global_model(
     const TypeSystem& type_system,
+    const virtual_scope::VirtualScopes& vscopes,
     DexClasses& scope,
     PassManager& mgr,
     ConfigFiles& conf,
@@ -248,8 +249,8 @@ class_merging::Model construct_global_model(
   find_all_mergeables_and_roots(type_system, scope,
                                 /*global_min_count=*/global_min_count, mgr,
                                 &global_model_merging_spec);
-  return class_merging::construct_model(type_system, scope, conf, mgr, stores,
-                                        global_model_merging_spec);
+  return class_merging::construct_model(type_system, vscopes, scope, conf, mgr,
+                                        stores, global_model_merging_spec);
 };
 
 } // namespace class_merging
