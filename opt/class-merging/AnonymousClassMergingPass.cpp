@@ -48,6 +48,8 @@ void AnonymousClassMergingPass::bind_config() {
   bind("interdex_grouping", "non-ordered-set", interdex_grouping);
   // Inferring_mode is "class-loads" by default.
   m_merging_spec.interdex_config.init_type(interdex_grouping);
+  bind("hot_cold_grouping", false, m_merging_spec.hot_cold_grouping,
+       "Split each merging group into hot and cold mergeables");
 }
 
 void AnonymousClassMergingPass::run_pass(DexStoresVector& stores,

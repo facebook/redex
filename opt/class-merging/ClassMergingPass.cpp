@@ -226,6 +226,8 @@ void ClassMergingPass::bind_config() {
                         "Cannot group %s when type tag is not needed.",
                         model.name.c_str());
 
+      model_spec.get("hot_cold_grouping", false, model.hot_cold_grouping);
+
       std::string interdex_grouping_inferring_mode_local;
       model_spec.get("interdex_grouping_inferring_mode",
                      interdex_grouping_inferring_mode,
