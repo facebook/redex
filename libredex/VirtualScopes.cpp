@@ -8,7 +8,9 @@
 #include "VirtualScopes.h"
 
 #include <algorithm>
+#include <functional>
 #include <limits>
+#include <map>
 #include <set>
 #include <utility>
 #include <vector>
@@ -174,6 +176,12 @@ VirtualScopes::VirtualScopes(const Scope& scope) {
       vs->m_methods.push_back(m);
       if (m->is_def()) {
         vs->m_has_def = true;
+      }
+      // legacy sets VirtualFlags::ESCAPED per member; a scope is escaped if any
+      // member's class is in the escaped set (branch touching an unresolvable
+      // interface).
+      if (escaped.count(m->get_class()) != 0) {
+        vs->m_escaped = true;
       }
     }
     for (const auto* i : intfs) {
@@ -372,6 +380,40 @@ const VirtualScope* VirtualScopes::find(const DexMethod* meth) const {
     type = cls->get_super_class();
   }
   return nullptr;
+}
+
+void VirtualScopes::walk_interface_scopes(
+    const std::function<void(const DexString*,
+                             const DexProto*,
+                             const std::vector<const VirtualScope*>&,
+                             const TypeSet&)>& walker) const {
+  // Group interface-implementing scopes by (top-def name, proto). The ordering
+  // (dexstrings then dexprotos comparator) reproduces legacy SignatureMap
+  // iteration in ClassScopes::walk_all_intf_scopes -- behaviorally significant
+  // because the renamer advances a shared seed per group. Scope order WITHIN a
+  // group is irrelevant (all scopes in a group are renamed to one shared name).
+  std::map<const DexString*,
+           std::map<const DexProto*,
+                    std::pair<std::vector<const VirtualScope*>, TypeSet>,
+                    dexprotos_comparator>,
+           dexstrings_comparator>
+      groups;
+  for (const auto& s : m_storage) {
+    if (!s->implements_interface()) {
+      continue;
+    }
+    const auto* td = s->top_def();
+    auto& entry = groups[td->get_name()][td->get_proto()];
+    entry.first.push_back(s.get());
+    for (const auto* i : UnorderedIterable(s->implemented_interfaces())) {
+      entry.second.insert(i);
+    }
+  }
+  for (const auto& [name, protos] : groups) {
+    for (const auto& [proto, entry] : protos) {
+      walker(name, proto, entry.first, entry.second);
+    }
+  }
 }
 
 } // namespace virtual_scope

@@ -68,12 +68,14 @@ std::string join(const std::vector<std::string>& parts) {
 std::string scope_str(char kind,
                       const std::vector<std::string>& methods,
                       std::vector<std::string> intfs,
-                      bool has_def) {
+                      bool has_def,
+                      bool escaped) {
   // methods are compared in order (order is behaviorally significant);
   // interface sets are order-insensitive, so sort them for comparison.
   std::sort(intfs.begin(), intfs.end());
   std::string s(1, kind);
   s += has_def ? " has_def=1" : " has_def=0";
+  s += escaped ? " escaped=1" : " escaped=0";
   s += " methods=[";
   for (size_t i = 0; i < methods.size(); i++) {
     if (i != 0) {
@@ -109,7 +111,13 @@ std::string legacy_summary(const virt_scope::ClassScopes& cs,
     for (const auto* i : s->interfaces) {
       is.emplace_back(SHOW(i));
     }
-    lines.push_back(scope_str(kind, ms, is, s->has_def()));
+    bool escaped = false;
+    for (const auto& m : s->methods) {
+      if ((m.second & virt_scope::ESCAPED) != 0) {
+        escaped = true;
+      }
+    }
+    lines.push_back(scope_str(kind, ms, is, s->has_def(), escaped));
   }
   return join(lines);
 }
@@ -131,7 +139,7 @@ std::string new_summary(const virtual_scope::VirtualScopes& vs,
     for (const auto* i : UnorderedIterable(s->implemented_interfaces())) {
       is.emplace_back(SHOW(i));
     }
-    lines.push_back(scope_str(kind, ms, is, s->has_def()));
+    lines.push_back(scope_str(kind, ms, is, s->has_def(), s->escaped()));
   }
   return join(lines);
 }
@@ -167,6 +175,60 @@ std::string find_sig_new(const virtual_scope::VirtualScope* s) {
          join(ms);
 }
 
+// One line per walker invocation: "name proto | scopes=[sorted root#topdef] |
+// intfs=[sorted]". Group order (name, proto) is behaviorally significant (the
+// renamer advances a shared seed per group), so lines are compared in order;
+// scope/intf sets within a group are sorted (intra-group order is irrelevant).
+std::string walk_intf_legacy(const virt_scope::ClassScopes& cs) {
+  std::vector<std::string> lines;
+  cs.walk_all_intf_scopes(
+      [&](const DexString* name, const DexProto* proto,
+          const std::vector<const virt_scope::VirtualScope*>& scopes,
+          const TypeSet& intfs) {
+        std::vector<std::string> ss;
+        ss.reserve(scopes.size());
+        for (const auto* s : scopes) {
+          ss.emplace_back(std::string(SHOW(s->type)) + "#" +
+                          SHOW(s->methods[0].first));
+        }
+        std::sort(ss.begin(), ss.end());
+        std::vector<std::string> is;
+        is.reserve(intfs.size());
+        for (const auto* i : intfs) {
+          is.emplace_back(SHOW(i));
+        }
+        std::sort(is.begin(), is.end());
+        lines.push_back(std::string(SHOW(name)) + SHOW(proto) +
+                        " scopes=" + join(ss) + " intfs=" + join(is));
+      });
+  return join(lines);
+}
+
+std::string walk_intf_new(const virtual_scope::VirtualScopes& vs) {
+  std::vector<std::string> lines;
+  vs.walk_interface_scopes(
+      [&](const DexString* name, const DexProto* proto,
+          const std::vector<const virtual_scope::VirtualScope*>& scopes,
+          const TypeSet& intfs) {
+        std::vector<std::string> ss;
+        ss.reserve(scopes.size());
+        for (const auto* s : scopes) {
+          ss.emplace_back(std::string(SHOW(s->root())) + "#" +
+                          SHOW(s->top_def()));
+        }
+        std::sort(ss.begin(), ss.end());
+        std::vector<std::string> is;
+        is.reserve(intfs.size());
+        for (const auto* i : intfs) {
+          is.emplace_back(SHOW(i));
+        }
+        std::sort(is.begin(), is.end());
+        lines.push_back(std::string(SHOW(name)) + SHOW(proto) +
+                        " scopes=" + join(ss) + " intfs=" + join(is));
+      });
+  return join(lines);
+}
+
 // Compare legacy vs new for every non-interface class in `scope`, INCLUDING
 // external classes -- at(externalType) (e.g. java.lang.Object) must match
 // legacy get(externalType), since ClassMerging's distribute walks parent_chain
@@ -181,6 +243,9 @@ void expect_parity(Scope& scope) {
   virt_scope::ClassScopes cs(scope);
   virtual_scope::VirtualScopes vs(scope);
   TypeSystem ts(scope);
+  // Interface-scope walk parity (the accessor VirtualRenamer's interface pass
+  // uses); compared once for the whole scope.
+  EXPECT_EQ(walk_intf_legacy(cs), walk_intf_new(vs));
   for (auto* cls : scope) {
     if (is_interface(cls)) {
       continue;
@@ -794,4 +859,154 @@ TEST_F(VirtualScopesDifferentialTest, ExtDefaultAbstractBaseWithOwnImpl) {
   auto* d = make_class(scope, "LD;", c->get_type());
   create_empty_method(d, "d", void_proto());
   expect_parity(scope);
+}
+
+// Shapes observed diverging on a real app (b4a) but absent from the shapes
+// above. In both, an override lives BELOW the class that roots the scope and
+// interface attribution is in play; legacy keeps the whole family under the
+// class root.
+
+// androidx MenuBuilder/SubMenuBuilder: the root implements the interface and
+// defines the method; a subclass overrides it.
+TEST_F(VirtualScopesDifferentialTest, IntfImplOnRootWithSubclassOverride) {
+  auto scope = create_empty_scope();
+  auto* i = make_ext_intf(scope, "LEI;");
+  create_abstract_method(i, "m", void_proto());
+  auto* c = make_class(scope, "LC;", obj(), {i->get_type()});
+  create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type());
+  create_empty_method(d, "m", void_proto());
+  expect_parity(scope);
+}
+
+// rendercore RenderUnit: the root does NOT implement the interface (plain
+// TOP_DEF); a subclass both implements the interface and overrides the method.
+TEST_F(VirtualScopesDifferentialTest, SubclassImplementsIntfRootDoesNot) {
+  auto scope = create_empty_scope();
+  auto* i = make_class(scope, "LI;", obj(), {},
+                       ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+  create_abstract_method(i, "m", void_proto());
+  auto* c = make_class(scope, "LC;", obj());
+  create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {i->get_type()});
+  create_empty_method(d, "m", void_proto());
+  expect_parity(scope);
+}
+
+// The exact MenuBuilder/SubMenuBuilder shape: the subclass declares a
+// SUB-interface of the one the root declares, and overrides the method.
+TEST_F(VirtualScopesDifferentialTest, SubclassDeclaresSubIntfAndOverrides) {
+  auto scope = create_empty_scope();
+  auto* base_i = make_ext_intf(scope, "LEMenu;");
+  create_abstract_method(base_i, "m", void_proto());
+  auto* sub_i = make_ext_intf(scope, "LESubMenu;", {base_i->get_type()});
+  auto* c = make_class(scope, "LC;", obj(), {base_i->get_type()});
+  create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {sub_i->get_type()});
+  create_empty_method(d, "m", void_proto());
+  expect_parity(scope);
+}
+
+// Same, all-internal interfaces.
+TEST_F(VirtualScopesDifferentialTest,
+       SubclassDeclaresInternalSubIntfAndOverrides) {
+  auto scope = create_empty_scope();
+  auto* base_i = make_class(scope, "LI;", obj(), {},
+                            ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+  create_abstract_method(base_i, "m", void_proto());
+  auto* sub_i = make_class(scope, "LSubI;", obj(), {base_i->get_type()},
+                           ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+  auto* c = make_class(scope, "LC;", obj(), {base_i->get_type()});
+  create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {sub_i->get_type()});
+  create_empty_method(d, "m", void_proto());
+  expect_parity(scope);
+}
+
+// Same, with an external interface (the android.view.Menu flavor).
+TEST_F(VirtualScopesDifferentialTest, SubclassImplementsExtIntfRootDoesNot) {
+  auto scope = create_empty_scope();
+  auto* i = make_ext_intf(scope, "LEI;");
+  create_abstract_method(i, "m", void_proto());
+  auto* c = make_class(scope, "LC;", obj());
+  create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {i->get_type()});
+  create_empty_method(d, "m", void_proto());
+  expect_parity(scope);
+}
+
+// =========================================================================
+// The ONE known, deliberate divergence from legacy.
+//
+// `DexClass::remove_method` (what a pass does when it deletes a virtual
+// method) only erases the method from the class's vmethod vector. The
+// DexMethod object stays interned in the global registry, keeps `is_def()`,
+// and is still returned by `DexMethod::get_method(cls, name, proto)`.
+//
+// Legacy reaches interface obligations through exactly that global lookup, so
+// at a class that declares an interface but has no LIVE implementation it
+// resurrects the detached method and records it as a scope member (with the
+// MIRANDA flag). The MOG-backed implementation only walks live
+// `get_vmethods()`, so it does not.
+//
+// The new behavior is the correct one: a method that is in no class's method
+// list is not in the dex and cannot be dispatched at runtime, so it is not
+// part of any virtual scope.
+//
+// Consequence, and why the size delta is safe: VirtualRenamer renames every
+// member of a scope, and `rename()` mutates the global DexMethodRef registry
+// that `usable_name()` consults. Legacy renames these dead entries, the new
+// implementation leaves them alone, which perturbs later name choices. On b4a
+// this is the sole source of the measured `uncomp=-7 B` (46 affected scopes
+// out of 114215 types; fb4a and IG4A measured 0). No live method changes
+// name, so no dispatch changes.
+// =========================================================================
+TEST_F(VirtualScopesDifferentialTest, LegacyResurrectsDetachedMethod) {
+  auto scope = create_empty_scope();
+  auto* i = make_ext_intf(scope, "LEI;");
+  create_abstract_method(i, "m", void_proto());
+  auto* c = make_class(scope, "LC;", obj(), {i->get_type()});
+  auto* cm = create_empty_method(c, "m", void_proto());
+  auto* d = make_class(scope, "LD;", c->get_type(), {i->get_type()});
+  auto* dm = create_empty_method(d, "m", void_proto());
+
+  // An earlier pass deletes D::m. It leaves the class's vmethod list, but the
+  // DexMethod survives as a findable def -- the exact state observed on b4a.
+  d->remove_method(dm);
+  ASSERT_TRUE(dm->is_def());
+  ASSERT_EQ(
+      DexMethod::get_method(d->get_type(), dm->get_name(), dm->get_proto()),
+      static_cast<DexMethodRef*>(dm));
+
+  virt_scope::ClassScopes cs(scope);
+  virtual_scope::VirtualScopes vs(scope);
+
+  const auto legacy_has = [&](const DexMethod* m) {
+    for (const auto* s : cs.get(c->get_type())) {
+      for (const auto& mm : s->methods) {
+        if (mm.first == m) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  const auto new_has = [&](const DexMethod* m) {
+    for (const auto* s : vs.at(c->get_type())) {
+      for (const auto* mm : s->methods()) {
+        if (mm == m) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // The live implementation is a member on both sides.
+  EXPECT_TRUE(legacy_has(cm));
+  EXPECT_TRUE(new_has(cm));
+
+  // The detached one is a member only in legacy.
+  EXPECT_TRUE(legacy_has(dm));
+  EXPECT_FALSE(new_has(dm));
 }
