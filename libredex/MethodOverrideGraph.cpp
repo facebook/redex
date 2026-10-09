@@ -274,7 +274,7 @@ class GraphBuilder {
   // want miranda-aware grouping should use find_class_dispatch_root(), which
   // walks the class chain and picks up miranda nodes when present.
   void synthesize_miranda_nodes() {
-    // Iterate ALL classes processed by analyze_non_interface — this includes
+    // Iterate ALL classes processed by analyze_non_interface -- this includes
     // EXTERNAL classes reached transitively via super_class chains from
     // m_scope (internal) classes. Restricting to m_scope alone misses
     // mirandas at external abstract intermediates (e.g., framework classes
@@ -308,7 +308,7 @@ class GraphBuilder {
     };
 
     // For each non-interface class, walk its directly-implemented interfaces
-    // (transitively through super-interfaces only — NOT super class's
+    // (transitively through super-interfaces only -- NOT super class's
     // interfaces). For each interface method, if cls's vmethods don't have a
     // matching one, create a miranda at cls. Even concrete classes that
     // inherit impls from super get a miranda ref at their own type for
@@ -792,7 +792,7 @@ const DexMethod* find_class_dispatch_root(const Graph& graph,
         }
       }
       // Otherwise, look for a miranda slot at this class. Only consult the
-      // graph if it's miranda-aware — otherwise miranda nodes don't exist.
+      // graph if it's miranda-aware -- otherwise miranda nodes don't exist.
       // Note: a synthesized miranda is stored as a DexMethodRef cast to
       // DexMethod* (not a real def), so we don't filter on is_def() here.
       if (!found && has_miranda) {

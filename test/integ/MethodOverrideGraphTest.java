@@ -44,7 +44,7 @@ interface ID {
 }
 
 abstract class AbstractD implements ID {
-  // Note: no concrete p() — miranda case.
+  // Note: no concrete p() -- miranda case.
 }
 
 class ConcreteD1 extends AbstractD {

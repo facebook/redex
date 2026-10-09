@@ -217,7 +217,7 @@ UnorderedSet<DexClass*> get_classes_with_overridden_finalize(
 
 /*
  * Walk the superclass chain of `method->get_class()` and return the topmost
- * "class-level dispatch root" — either a real vmethod with the same
+ * "class-level dispatch root" -- either a real vmethod with the same
  * (name, proto) or, if the graph was built with include_miranda=true, a
  * synthetic miranda slot at an abstract intermediate. Returns `method`
  * itself if no override target is found above it.
