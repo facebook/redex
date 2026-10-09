@@ -208,6 +208,9 @@ void Model::init(const Scope& scope,
   TRACE(CLMG, 3, "Non mergeables %zu", m_non_mergeables.size());
   m_stats.m_non_mergeables = static_cast<uint32_t>(m_non_mergeables.size());
   m_stats.m_all_types = static_cast<uint32_t>(m_spec.merging_targets.size());
+  if (m_spec.hot_cold_grouping) {
+    m_hot_methods = get_hot_methods(scope, m_conf);
+  }
 }
 
 void Model::build_hierarchy(const TypeSet& roots) {
@@ -384,6 +387,56 @@ void Model::create_mergers_helper(
                                            subgroup_cnt++);
                       m_stats.m_merging_size_counts[group.size()]++;
                     });
+}
+
+void Model::create_hot_cold_mergers(
+    const DexType* merger_type,
+    const MergerType::Shape& shape,
+    const TypeSet& intf_set,
+    const std::optional<size_t>& dex_id,
+    const TypeSet& group_values,
+    const std::optional<InterdexSubgroupIdx>& interdex_subgroup_idx) {
+  if (!m_spec.hot_cold_grouping) {
+    create_mergers_helper(merger_type, shape, intf_set, dex_id, group_values,
+                          m_spec.strategy, interdex_subgroup_idx,
+                          m_spec.max_count, m_spec.min_count);
+    return;
+  }
+
+  TypeSet hot;
+  TypeSet cold;
+  for (const auto* type : group_values) {
+    const auto* cls = type_class(type);
+    always_assert(cls);
+    if (is_hot_mergeable(cls, m_vscopes, m_hot_methods)) {
+      hot.insert(type);
+    } else {
+      cold.insert(type);
+    }
+  }
+  TRACE(CLMG, 5, "Hot/cold split of %zu mergeables: %zu hot, %zu cold",
+        group_values.size(), hot.size(), cold.size());
+  m_stats.m_hot_mergeables += hot.size();
+  m_stats.m_cold_mergeables += cold.size();
+  if (!hot.empty() && !cold.empty()) {
+    m_stats.m_hot_cold_split_groups++;
+  }
+
+  const auto create_part_mergers = [&](const TypeSet& part) {
+    if (part.empty()) {
+      return;
+    }
+    if (part.size() < m_spec.min_count) {
+      m_stats.m_hot_cold_dropped += part.size();
+      m_stats.m_dropped += part.size();
+      return;
+    }
+    create_mergers_helper(merger_type, shape, intf_set, dex_id, part,
+                          m_spec.strategy, interdex_subgroup_idx,
+                          m_spec.max_count, m_spec.min_count);
+  };
+  create_part_mergers(hot);
+  create_part_mergers(cold);
 }
 
 /**
@@ -666,18 +719,16 @@ void Model::flatten_shapes(const InterDexGrouping& interdex_grouping,
         auto group = pair.second;
         const auto interdex_visitor = [&](const InterdexSubgroupIdx gid,
                                           const TypeSet& itd_group) {
-          create_mergers_helper(merger.type, *shape, *intf_set, dex_id,
-                                itd_group, m_spec.strategy, gid,
-                                m_spec.max_count, m_spec.min_count);
+          create_hot_cold_mergers(merger.type, *shape, *intf_set, dex_id,
+                                  itd_group, gid);
           m_stats.m_interdex_groups[gid] += itd_group.size();
         };
         // InterDex grouping layer
         if (interdex_grouping.num_groups() > 1) {
           interdex_grouping.visit_groups(m_spec, group, interdex_visitor);
         } else {
-          create_mergers_helper(merger.type, *shape, *intf_set, dex_id, group,
-                                m_spec.strategy, std::nullopt, m_spec.max_count,
-                                m_spec.min_count);
+          create_hot_cold_mergers(merger.type, *shape, *intf_set, dex_id, group,
+                                  std::nullopt);
         }
       }
     }
@@ -1365,6 +1416,11 @@ ModelStats& ModelStats::operator+=(const ModelStats& stats) {
     m_interdex_groups[pair.first] += pair.second;
   }
 
+  m_hot_cold_split_groups += stats.m_hot_cold_split_groups;
+  m_hot_mergeables += stats.m_hot_mergeables;
+  m_cold_mergeables += stats.m_cold_mergeables;
+  m_hot_cold_dropped += stats.m_hot_cold_dropped;
+
   for (const auto& pair : stats.m_merging_size_counts) {
     m_merging_size_counts[pair.first] += pair.second;
   }
@@ -1395,6 +1451,14 @@ void ModelStats::update_redex_stats(const std::string& prefix,
                     group_size);
     TRACE(CLMG, 3, "InterDex Group %s_%u %zu", prefix.c_str(), group_id,
           group_size);
+  }
+
+  // Only emitted when hot/cold grouping ran, so disabled models add no keys.
+  if (m_hot_mergeables + m_cold_mergeables > 0) {
+    mgr.incr_metric(prefix + "_hot_cold_split_groups", m_hot_cold_split_groups);
+    mgr.incr_metric(prefix + "_hot_mergeables", m_hot_mergeables);
+    mgr.incr_metric(prefix + "_cold_mergeables", m_cold_mergeables);
+    mgr.incr_metric(prefix + "_hot_cold_dropped", m_hot_cold_dropped);
   }
 
   for (const auto& pair : m_merging_size_counts) {
