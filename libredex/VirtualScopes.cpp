@@ -227,6 +227,18 @@ VirtualScopes::VirtualScopes(const Scope& scope) {
       for (const auto* i : *c->get_interfaces()) {
         st.push_back(i);
       }
+      // A subclass can declare an interface while inheriting this method from
+      // its superclass. MOG records that obligation on the live implementation
+      // even when an earlier pass detached the subclass override. Preserve the
+      // interface relationship without resurrecting the detached method as a
+      // scope member.
+      const auto& node = graph->get_node(m);
+      if (node.other_interface_implementations != nullptr) {
+        for (const auto* parent :
+             UnorderedIterable(node.other_interface_implementations->parents)) {
+          st.push_back(parent->get_class());
+        }
+      }
     }
     while (!st.empty()) {
       const auto* it = st.back();
