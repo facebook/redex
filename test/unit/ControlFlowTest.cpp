@@ -14,6 +14,7 @@
 #include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "IRTemplate.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
 #include "Show.h"
@@ -1049,6 +1050,37 @@ TEST_F(ControlFlowTest, deep_copy1) {
   auto copy_list = copy.linearize();
 
   EXPECT_TRUE(orig_list->structural_equals(*copy_list, m_equal));
+}
+
+TEST_F(ControlFlowTest, structural_equals_switch_case_keys) {
+  // The case keys live on the CFG edges, not on the switch instruction.
+  constexpr const char* kSwitch = R"(
+    (
+      (load-param v0)
+      (switch v0 (:a :b))
+      (return-void)
+      (:a $KEY_A)
+      (const v1 10)
+      (return-void)
+      (:b $KEY_B)
+      (const v1 20)
+      (return-void)
+    )
+  )";
+  auto make_code = [&](const std::string& key_a, const std::string& key_b) {
+    return assembler::ircode_from_string(
+        ir(kSwitch, {{"$KEY_A", key_a}, {"$KEY_B", key_b}}));
+  };
+  auto keys_0_1 = make_code("0", "1");
+  auto keys_0_1_copy = make_code("0", "1");
+  auto keys_1_2 = make_code("1", "2");
+  EXPECT_FALSE(keys_0_1->structural_equals(*keys_1_2));
+
+  keys_0_1->build_cfg();
+  keys_0_1_copy->build_cfg();
+  keys_1_2->build_cfg();
+  EXPECT_TRUE(keys_0_1->cfg().structural_equals(keys_0_1_copy->cfg()));
+  EXPECT_FALSE(keys_0_1->cfg().structural_equals(keys_1_2->cfg()));
 }
 
 TEST_F(ControlFlowTest, deep_copy2) {
