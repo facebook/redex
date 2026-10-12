@@ -3243,6 +3243,9 @@ bool ControlFlowGraph::structural_equals(
       return false;
     }
     for (size_t i = 0; i < branch1_edges.size(); i++) {
+      if (branch1_edges[i]->case_key() != branch2_edges[i]->case_key()) {
+        return false;
+      }
       auto* branch1 = branch1_edges[i]->target();
       auto* branch2 = branch2_edges[i]->target();
       if (!branch1->extended_structural_equals(branch2, instruction_equals)) {
