@@ -21,12 +21,11 @@
 
 #include <boost/filesystem.hpp>
 
-#include <google/protobuf/descriptor.h>
 #include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/message.h>
 #include <google/protobuf/text_format.h>
 
 #include "protocfg/config.pb.h"
+#include "protores/ProtoReflection.h"
 
 #include "Debug.h"
 #include "DetectBundle.h"
@@ -1768,42 +1767,6 @@ std::string ResourcesPbFile::resolve_module_name_for_resource_id(
 }
 
 namespace {
-void reset_pb_source(google::protobuf::Message* message) {
-  if (message == nullptr) {
-    return;
-  }
-  const google::protobuf::Descriptor* desc = message->GetDescriptor();
-  const google::protobuf::Reflection* refl = message->GetReflection();
-  for (int i = 0; i < desc->field_count(); i++) {
-    const google::protobuf::FieldDescriptor* field_desc = desc->field(i);
-    auto repeated = field_desc->is_repeated();
-    auto cpp_type = field_desc->cpp_type();
-    if (cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_UINT32 &&
-        refl->HasField(*message, field_desc) && !repeated) {
-      auto name = field_desc->name();
-      if (name == "path_idx" || name == "line_number" ||
-          name == "column_number") {
-        TRACE(RES, 9, "resetting uint32 field: %.*s", (int)name.size(),
-              name.data());
-        refl->SetUInt32(message, field_desc, 0);
-      }
-    } else if (cpp_type == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
-      if (repeated) {
-        // Note: HasField not relevant for repeated fields.
-        auto size = refl->FieldSize(*message, field_desc);
-        for (int j = 0; j < size; j++) {
-          auto* sub_message =
-              refl->MutableRepeatedMessage(message, field_desc, j);
-          reset_pb_source(sub_message);
-        }
-      } else if (refl->HasField(*message, field_desc)) {
-        auto* sub_message = refl->MutableMessage(message, field_desc);
-        reset_pb_source(sub_message);
-      }
-    }
-  }
-}
-
 bool compare_reference(const aapt::pb::Reference& a,
                        const aapt::pb::Reference& b) {
   if (a.type() != b.type()) {
@@ -1897,7 +1860,7 @@ void ResourcesPbFile::collect_resource_data_for_file(
           // further operations, set them to a predictable value.
           // NOTE: Not all input .aab files will have this data; release style
           // bundles should omit this data.
-          reset_pb_source(&pb_restable);
+          redex::reset_pb_source(&pb_restable);
         }
         // Repeated fields might not be coming in ordered, to make following
         // config_value comparison work with different order, reorder repeated

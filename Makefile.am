@@ -391,6 +391,7 @@ libredex_la_LIBADD = \
 
 if SET_PROTOBUF
 libredex_la_SOURCES += \
+	libredex/ProtoReflection.cpp \
 	protores/Resources.pb.cc \
 	protores/Configuration.pb.cc \
 	protocfg/config.pb.cc
