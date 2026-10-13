@@ -10,8 +10,8 @@
 #include <gtest/gtest.h>
 
 #include "ApkResources.h"
+#include "DexClass.h"
 #include "RedexResources.h"
-#include "verify/VerifyUtil.h"
 
 void resource_inlining_PreVerify(ResourceTableFile* res_table);
 void resource_inlining_PostVerify(DexClass* cls);
