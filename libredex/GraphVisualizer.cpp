@@ -11,7 +11,7 @@
 #include <iostream>
 #include <sstream>
 
-#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/range/adaptor/transformed.hpp>
 
 #include "ControlFlow.h"
