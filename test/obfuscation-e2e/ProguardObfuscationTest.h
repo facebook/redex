@@ -14,7 +14,6 @@
 
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "ProguardConfiguration.h"
 #include "ProguardMap.h"
 #include "ProguardMatcher.h"
 #include "ProguardParser.h"
