@@ -687,7 +687,6 @@ class DexDebugItem {
   const std::vector<const DexString*>& get_param_names() const {
     return m_param_names;
   }
-  void remove_param_names() { m_param_names.clear(); }
   uint32_t get_on_disk_size() const { return m_on_disk_size; }
   uint32_t get_source_checksum() const { return m_source_checksum; }
   uint32_t get_source_offset() const { return m_source_offset; }

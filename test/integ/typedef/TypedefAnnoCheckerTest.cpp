@@ -813,7 +813,7 @@ TEST_F(TypedefAnnoCheckerTest, testSynthAccessor) {
   Check that the value is annotated and exists in the typedef annotation class.\n\
   failed instruction: CONST_STRING \"liu\"\n\
   Calling: Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;.access$takesStrConst:(Lcom/facebook/redextest/TypedefAnnoCheckerKtTest;Ljava/lang/String;)Ljava/lang/String;\n\
-  Incorrect parameter: index 1");
+  Incorrect parameter: index 1(str)");
 }
 
 TEST_F(TypedefAnnoCheckerTest, testDefaultArg) {
