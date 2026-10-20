@@ -13,6 +13,7 @@
 #include "Show.h"
 #include "TypedefAnnoCheckerPass.h"
 #include "TypedefAnnoPatcher.h"
+#include "Walkers.h"
 
 struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
   TypedefAnnoCheckerPass::Config get_config() {
@@ -45,6 +46,23 @@ struct TypedefAnnoCheckerTest : public RedexIntegrationTest {
                              StrDefConstants& strdef_constants,
                              IntDefConstants& intdef_constants) {
     pass.gather_typedef_values(cls, strdef_constants, intdef_constants);
+  }
+
+  void collect_typedef_param_methods(
+      const Scope& scope,
+      const method_override_graph::Graph& method_override_graph,
+      const UnorderedSet<const DexType*>& typedef_annos,
+      InsertOnlyConcurrentSet<const DexMethod*>& typedef_param_methods) {
+    TypedefAnnoCheckerPass::collect_typedef_param_methods(
+        scope, method_override_graph, typedef_annos, typedef_param_methods);
+  }
+
+  bool has_typedef_sink(
+      DexMethod* m,
+      const InsertOnlyConcurrentSet<const DexMethod*>& typedef_param_methods,
+      const UnorderedSet<const DexType*>& typedef_annos) {
+    return TypedefAnnoCheckerPass::has_typedef_sink(m, typedef_param_methods,
+                                                    typedef_annos);
   }
 
   void run_patcher(const Scope& scope,
@@ -1914,4 +1932,44 @@ TEST_F(TypedefAnnoCheckerTest, TestKotlinEnumCtorValid) {
                      ->as_def();
   auto checker2 = run_checker(scope, method, *method_override_graph);
   EXPECT_TRUE(checker2.complete());
+}
+
+TEST_F(TypedefAnnoCheckerTest, TestMethodsWithoutSinksPass) {
+  auto scope = build_class_scope(stores);
+  build_cfg(scope);
+  auto method_override_graph = mog::build_graph(scope);
+  run_patcher(scope, *method_override_graph);
+
+  auto config = get_config();
+  StrDefConstants strdef_constants;
+  IntDefConstants intdef_constants;
+  TypedefAnnoCheckerPass pass = TypedefAnnoCheckerPass(config);
+  for (auto* cls : scope) {
+    gather_typedef_values(pass, cls, strdef_constants, intdef_constants);
+  }
+  UnorderedSet<const DexType*> typedef_annos{config.int_typedef,
+                                             config.str_typedef};
+  InsertOnlyConcurrentSet<const DexMethod*> typedef_param_methods;
+  collect_typedef_param_methods(scope, *method_override_graph, typedef_annos,
+                                typedef_param_methods);
+
+  // Every method the checker fails must be one that run_pass checks, and some
+  // methods must be skipped for this to test anything.
+  size_t failing = 0;
+  size_t skipped = 0;
+  walk::methods(scope, [&](DexMethod* m) {
+    bool has_sink = has_typedef_sink(m, typedef_param_methods, typedef_annos);
+    if (!has_sink) {
+      skipped++;
+    }
+    TypedefAnnoChecker checker = TypedefAnnoChecker(
+        strdef_constants, intdef_constants, config, *method_override_graph);
+    checker.run(m);
+    if (!checker.complete()) {
+      failing++;
+      EXPECT_TRUE(has_sink) << show(m);
+    }
+  });
+  EXPECT_GT(failing, 0u);
+  EXPECT_GT(skipped, 0u);
 }

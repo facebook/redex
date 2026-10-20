@@ -34,18 +34,13 @@ bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg) {
   return !is_string(env, reg) && !is_int(env, reg);
 }
 
-} // namespace typedef_anno
-
-namespace {
-
-bool has_typedef_annos(
-    ParamAnnotations* param_annos,
-    const UnorderedSet<const TypedefAnnoType*>& typedef_annos) {
+bool has_typedef_annos(const ParamAnnotations* param_annos,
+                       const UnorderedSet<const DexType*>& typedef_annos) {
   if (param_annos == nullptr) {
     return false;
   }
-  for (auto& anno : *param_annos) {
-    auto& anno_set = anno.second;
+  for (const auto& anno : *param_annos) {
+    const auto& anno_set = anno.second;
     auto typedef_anno = type_inference::get_typedef_annotation(
         anno_set->get_annotations(), typedef_annos);
     if (typedef_anno != std::nullopt) {
@@ -55,6 +50,10 @@ bool has_typedef_annos(
   return false;
 }
 
+} // namespace typedef_anno
+
+namespace {
+
 DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
   auto* def_method = resolve_method_deprecated(insn->get_method(),
                                                opcode_to_search(insn), caller);
@@ -63,6 +62,42 @@ DexMethod* resolve_method(DexMethod* caller, IRInstruction* insn) {
                                            MethodSearch::InterfaceVirtual);
   }
   return def_method;
+}
+
+// Type inference attaches a typedef annotation only to a typedef param, a read
+// of a typedef field or the result of a call to a typedef-annotated method, and
+// every candidate needs one of those or a write to a typedef field. A method
+// with none of them cannot yield a candidate, so it is not analyzed.
+bool may_have_candidates(
+    DexMethod* m, const UnorderedSet<const TypedefAnnoType*>& typedef_annos) {
+  if (m->get_code() == nullptr) {
+    return false;
+  }
+  if (typedef_anno::has_typedef_annos(m->get_param_anno(), typedef_annos)) {
+    return true;
+  }
+  auto is_typedef_method = [&](const DexMethod* method) {
+    return method != nullptr && (type_inference::get_typedef_anno_from_member(
+                                     method, typedef_annos) ||
+                                 typedef_anno::has_typedef_annos(
+                                     method->get_param_anno(), typedef_annos));
+  };
+  for (const auto& mie : cfg::InstructionIterable(m->get_code()->cfg())) {
+    auto* insn = mie.insn;
+    if (insn->has_field()) {
+      if (type_inference::get_typedef_anno_from_member(insn->get_field(),
+                                                       typedef_annos)) {
+        return true;
+      }
+    } else if (insn->has_method()) {
+      auto* callee = insn->get_method();
+      if ((callee->is_def() && is_typedef_method(callee->as_def())) ||
+          is_typedef_method(resolve_method(m, insn))) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -487,15 +522,19 @@ void TypedefAnnoPatcher::run(const Scope& scope) {
             fix_kt_enum_ctor_param(cls, class_stats);
           }
           for (auto* m : cls->get_all_methods()) {
-            auto analysis = MethodAnalysis::create(m, m_typedef_annos,
-                                                   m_method_override_graph);
+            auto analysis =
+                may_have_candidates(m, m_typedef_annos)
+                    ? MethodAnalysis::create(m, m_typedef_annos,
+                                             m_method_override_graph)
+                    : nullptr;
             if (analysis) {
               collect_param_candidates_impl(m, candidates, *analysis);
               collect_return_candidates_impl(m, candidates, *analysis);
             }
             collect_overriding_method_candidates(m, candidates);
             if (is_constructor(m) &&
-                has_typedef_annos(m->get_param_anno(), m_typedef_annos)) {
+                typedef_anno::has_typedef_annos(m->get_param_anno(),
+                                                m_typedef_annos)) {
               patch_synth_cls_fields_from_ctor_param(m, class_stats);
             }
           }
