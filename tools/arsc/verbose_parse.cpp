@@ -6,7 +6,10 @@
  */
 
 #include <boost/iostreams/device/mapped_file.hpp>
-#include <boost/program_options.hpp>
+#include <boost/program_options/options_description.hpp>
+#include <boost/program_options/parsers.hpp>
+#include <boost/program_options/value_semantic.hpp>
+#include <boost/program_options/variables_map.hpp>
 #include <iostream>
 
 #include "utils/Visitor.h"
