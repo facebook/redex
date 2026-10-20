@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "RedexResources.h"
-#include "verify/VerifyUtil.h"
 
 // Asserts based on ID ranges that were moved, not moved, type ids that exist
 // post transform, and expected string values for certain resources. Actual
