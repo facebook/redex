@@ -13,7 +13,6 @@
 #include <optional>
 #include <ostream>
 
-#include "ConstantEnvironment.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
 #include "DeterministicContainers.h"
