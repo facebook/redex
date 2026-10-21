@@ -16,6 +16,9 @@
 
 namespace typedef_anno {
 bool is_not_str_nor_int(const type_inference::TypeEnvironment& env, reg_t reg);
+
+bool has_typedef_annos(const ParamAnnotations* param_annos,
+                       const UnorderedSet<const DexType*>& typedef_annos);
 } // namespace typedef_anno
 
 using TypedefAnnoType = DexType;

@@ -637,7 +637,16 @@ void TypedefAnnoCheckerPass::run_pass(DexStoresVector& stores,
   patcher.print_stats(mgr);
   TRACE(TAC, 1, "Finished patcher run");
 
+  UnorderedSet<const DexType*> typedef_annos{m_config.int_typedef,
+                                             m_config.str_typedef};
+  InsertOnlyConcurrentSet<const DexMethod*> typedef_param_methods;
+  collect_typedef_param_methods(scope, *method_override_graph, typedef_annos,
+                                typedef_param_methods);
+
   auto stats = walk::parallel::methods<CheckerStats>(scope, [&](DexMethod* m) {
+    if (!has_typedef_sink(m, typedef_param_methods, typedef_annos)) {
+      return CheckerStats();
+    }
     TypedefAnnoChecker checker = TypedefAnnoChecker(
         strdef_constants, intdef_constants, m_config, *method_override_graph);
     checker.run(m);
@@ -660,6 +669,51 @@ Encountered %zu faulty methods. The errors are
 )",
       stats.m_count,
       stats.m_errors.c_str());
+}
+
+void TypedefAnnoCheckerPass::collect_typedef_param_methods(
+    const Scope& scope,
+    const method_override_graph::Graph& method_override_graph,
+    const UnorderedSet<const DexType*>& typedef_annos,
+    InsertOnlyConcurrentSet<const DexMethod*>& typedef_param_methods) {
+  walk::parallel::methods(scope, [&](DexMethod* m) {
+    if (!typedef_anno::has_typedef_annos(m->get_param_anno(), typedef_annos)) {
+      return;
+    }
+    typedef_param_methods.insert(m);
+    auto overriddens =
+        mog::get_overridden_methods(method_override_graph, m,
+                                    /* include_interfaces */ true);
+    for (const auto* overridden : UnorderedIterable(overriddens)) {
+      typedef_param_methods.insert(overridden);
+    }
+  });
+}
+
+bool TypedefAnnoCheckerPass::has_typedef_sink(
+    DexMethod* m,
+    const InsertOnlyConcurrentSet<const DexMethod*>& typedef_param_methods,
+    const UnorderedSet<const DexType*>& typedef_annos) {
+  if (m->get_code() == nullptr) {
+    return false;
+  }
+  if (type_inference::get_typedef_anno_from_member(m, typedef_annos)) {
+    return true;
+  }
+  for (const auto& mie : cfg::InstructionIterable(m->get_code()->cfg())) {
+    auto* insn = mie.insn;
+    auto op = insn->opcode();
+    if (opcode::is_an_iput(op) || opcode::is_an_sput(op)) {
+      if (type_inference::get_typedef_anno_from_member(insn->get_field(),
+                                                       typedef_annos)) {
+        return true;
+      }
+    } else if (insn->has_method() &&
+               typedef_param_methods.count(resolve_method(m, insn)) != 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void TypedefAnnoCheckerPass::gather_typedef_values(
