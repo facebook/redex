@@ -374,6 +374,21 @@ bool TypeInference::is_pure_virtual_with_annotation(
   return false;
 }
 
+std::optional<const DexType*> TypeInference::get_return_typedef_anno(
+    DexMethodRef* callee) const {
+  auto annotation = get_typedef_anno_from_member(callee, m_annotations);
+  if (!annotation || !is_pure_virtual_with_annotation(callee)) {
+    return annotation;
+  }
+  bool all_overrides_agree = method_override_graph::all_overriding_methods(
+      *m_method_override_graph, callee->as_def(),
+      [&](const DexMethod* overrider) {
+        return get_typedef_anno_from_member(overrider, m_annotations) ==
+               annotation;
+      });
+  return all_overrides_agree ? annotation : std::nullopt;
+}
+
 TypeDomain TypeInference::refine_type(const TypeDomain& type,
                                       IRType expected,
                                       IRType const_type,
@@ -1276,41 +1291,14 @@ void TypeInference::analyze_instruction(const IRInstruction* insn,
       break;
     }
     if (type::is_object(return_type)) {
-      std::optional<const DexType*> annotation =
-          get_typedef_anno_from_member(dex_method, m_annotations);
-      if (is_pure_virtual_with_annotation(dex_method)) {
-        auto callees = method_override_graph::get_overriding_methods(
-            *m_method_override_graph, dex_method->as_def());
-        for (const DexMethod* callee : UnorderedIterable(callees)) {
-          std::optional<const DexType*> anno =
-              get_typedef_anno_from_member(callee, m_annotations);
-          if (anno == std::nullopt || anno != annotation) {
-            annotation = std::nullopt;
-            break;
-          }
-        }
-      }
       set_reference_with_anno(current_state, RESULT_REGISTER, return_type,
-                              annotation);
+                              get_return_typedef_anno(dex_method));
       break;
     }
     if (type::is_integral(return_type)) {
       if (type::is_int(return_type)) {
-        std::optional<const DexType*> annotation =
-            get_typedef_anno_from_member(dex_method, m_annotations);
-        if (is_pure_virtual_with_annotation(dex_method)) {
-          auto callees = method_override_graph::get_overriding_methods(
-              *m_method_override_graph, dex_method->as_def());
-          for (const DexMethod* callee : UnorderedIterable(callees)) {
-            std::optional<const DexType*> anno =
-                get_typedef_anno_from_member(callee, m_annotations);
-            if (anno == std::nullopt || anno != annotation) {
-              annotation = std::nullopt;
-              break;
-            }
-          }
-        }
-        set_int(current_state, RESULT_REGISTER, annotation);
+        set_int(current_state, RESULT_REGISTER,
+                get_return_typedef_anno(dex_method));
         break;
       }
       if (type::is_char(return_type)) {

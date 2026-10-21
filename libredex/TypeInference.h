@@ -364,6 +364,10 @@ class TypeInference final
   void refine_byte(TypeEnvironment* state, reg_t reg) const;
 
   bool is_pure_virtual_with_annotation(DexMethodRef* dex_method) const;
+  // The typedef annotation of a value returned by calling `callee`. For a pure
+  // virtual callee, every override must carry the same annotation.
+  std::optional<const DexType*> get_return_typedef_anno(
+      DexMethodRef* callee) const;
   void set_annotation(TypeEnvironment* state,
                       reg_t reg,
                       const DexType* type) const;
