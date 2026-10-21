@@ -188,11 +188,6 @@ void TypedefAnnoChecker::run(DexMethod* m) {
   if (!m_good) {
     TRACE(TAC, 2, "Done checking %s", SHOW(m));
   }
-  // Clean up the param names from dex debug items to prevent them from
-  // leaking into error messages of subsequent methods checked in the same run.
-  if (code->get_debug_item() != nullptr) {
-    code->get_debug_item()->remove_param_names();
-  }
 }
 
 std::string TypedefAnnoChecker::format_source_loc(
