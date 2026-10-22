@@ -1416,4 +1416,218 @@ public class InstrumentBasicBlockHitCount {
     assertThat(MetadataParser.getHitOffset("testFunc22")).isEqualTo(235);
     assertThat(MetadataParser.getBlockHits("testFunc22", stats, hitStats)).isEqualTo("15[1:1,2:1,3:1,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,13:1,14:0,15:0,17:0]");
   }
+
+  // More instrumented blocks than one onNonLoopBlockHit call can take
+  // (InstrumentBasicBlockAnalysis has arity 3, i.e. 48 blocks), so the
+  // non-loop hits are flushed with several calls, each starting further
+  // into the hits array. The loop puts loop blocks into the last of them.
+  @DoNotStrip
+  public int testFunc23(int x) {
+    int r = 0;
+    if (x > 0) {
+      r = r * 31 + 1;
+    }
+    if (x > 1) {
+      r = r * 31 + 2;
+    }
+    if (x > 2) {
+      r = r * 31 + 3;
+    }
+    if (x > 3) {
+      r = r * 31 + 4;
+    }
+    if (x > 4) {
+      r = r * 31 + 5;
+    }
+    if (x > 5) {
+      r = r * 31 + 6;
+    }
+    if (x > 6) {
+      r = r * 31 + 7;
+    }
+    if (x > 7) {
+      r = r * 31 + 8;
+    }
+    if (x > 8) {
+      r = r * 31 + 9;
+    }
+    if (x > 9) {
+      r = r * 31 + 10;
+    }
+    if (x > 10) {
+      r = r * 31 + 11;
+    }
+    if (x > 11) {
+      r = r * 31 + 12;
+    }
+    if (x > 12) {
+      r = r * 31 + 13;
+    }
+    if (x > 13) {
+      r = r * 31 + 14;
+    }
+    if (x > 14) {
+      r = r * 31 + 15;
+    }
+    if (x > 15) {
+      r = r * 31 + 16;
+    }
+    if (x > 16) {
+      r = r * 31 + 17;
+    }
+    if (x > 17) {
+      r = r * 31 + 18;
+    }
+    if (x > 18) {
+      r = r * 31 + 19;
+    }
+    if (x > 19) {
+      r = r * 31 + 20;
+    }
+    if (x > 20) {
+      r = r * 31 + 21;
+    }
+    if (x > 21) {
+      r = r * 31 + 22;
+    }
+    if (x > 22) {
+      r = r * 31 + 23;
+    }
+    if (x > 23) {
+      r = r * 31 + 24;
+    }
+    if (x > 24) {
+      r = r * 31 + 25;
+    }
+    if (x > 25) {
+      r = r * 31 + 26;
+    }
+    if (x > 26) {
+      r = r * 31 + 27;
+    }
+    if (x > 27) {
+      r = r * 31 + 28;
+    }
+    if (x > 28) {
+      r = r * 31 + 29;
+    }
+    if (x > 29) {
+      r = r * 31 + 30;
+    }
+    if (x > 30) {
+      r = r * 31 + 31;
+    }
+    if (x > 31) {
+      r = r * 31 + 32;
+    }
+    if (x > 32) {
+      r = r * 31 + 33;
+    }
+    if (x > 33) {
+      r = r * 31 + 34;
+    }
+    if (x > 34) {
+      r = r * 31 + 35;
+    }
+    if (x > 35) {
+      r = r * 31 + 36;
+    }
+    if (x > 36) {
+      r = r * 31 + 37;
+    }
+    if (x > 37) {
+      r = r * 31 + 38;
+    }
+    if (x > 38) {
+      r = r * 31 + 39;
+    }
+    if (x > 39) {
+      r = r * 31 + 40;
+    }
+    if (x > 40) {
+      r = r * 31 + 41;
+    }
+    if (x > 41) {
+      r = r * 31 + 42;
+    }
+    if (x > 42) {
+      r = r * 31 + 43;
+    }
+    if (x > 43) {
+      r = r * 31 + 44;
+    }
+    if (x > 44) {
+      r = r * 31 + 45;
+    }
+    if (x > 45) {
+      r = r * 31 + 46;
+    }
+    if (x > 46) {
+      r = r * 31 + 47;
+    }
+    if (x > 47) {
+      r = r * 31 + 48;
+    }
+    if (x > 48) {
+      r = r * 31 + 49;
+    }
+    if (x > 49) {
+      r = r * 31 + 50;
+    }
+    if (x > 50) {
+      r = r * 31 + 51;
+    }
+    if (x > 51) {
+      r = r * 31 + 52;
+    }
+    if (x > 52) {
+      r = r * 31 + 53;
+    }
+    if (x > 53) {
+      r = r * 31 + 54;
+    }
+    if (x > 54) {
+      r = r * 31 + 55;
+    }
+    if (x > 55) {
+      r = r * 31 + 56;
+    }
+    if (x > 56) {
+      r = r * 31 + 57;
+    }
+    if (x > 57) {
+      r = r * 31 + 58;
+    }
+    if (x > 58) {
+      r = r * 31 + 59;
+    }
+    if (x > 59) {
+      r = r * 31 + 60;
+    }
+    for (int i = 0; i < 3; i++) {
+      r = r * 31 + i;
+    }
+    return r;
+  }
+
+  @Test
+  @DoNotStrip
+  public void testLargeMethodHitCounts() {
+    InstrumentBasicBlockAnalysis.startTracing();
+    testFunc23(1000);
+    InstrumentBasicBlockAnalysis.stopTracing();
+
+    short[] stats = InstrumentBasicBlockAnalysis.getStats();
+    short[] hitStats = InstrumentBasicBlockAnalysis.getHitStats();
+
+    // Every branch is taken, so each block runs once, except the loop header
+    // (4) and body (3). Block 122 reads 0 regardless of the hit offsets.
+    StringBuilder expected = new StringBuilder("123[");
+    for (int block = 1; block <= 119; block++) {
+      expected.append(block).append(":1,");
+    }
+    expected.append("120:4,121:3,122:0,123:1]");
+    assertThat(MetadataParser.getBlockHits("testFunc23", stats, hitStats))
+        .isEqualTo(expected.toString());
+  }
 }
