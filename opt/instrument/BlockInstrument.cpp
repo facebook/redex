@@ -765,7 +765,6 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
   };
 
   auto create_invoke_insts_hit = [&]() -> auto {
-    // This code works in case of num_invokes == 1.
     std::vector<IRInstruction*> invoke_insts((num_invokes * 2 - 1) +
                                              num_vectors);
     std::vector<IRInstruction*> invoke_inline(num_invokes);
@@ -800,8 +799,8 @@ std::tuple<size_t, std::vector<IRInstruction*>> insert_onMethodExit_calls(
 
       if (i != num_invokes - 1) {
         inst = new IRInstruction(OPCODE_CONST);
-        // Move forward the offset.
-        offset += max_vector_arity;
+        // The hit-count array has one counter per block, not per vector.
+        offset += max_vector_arity * BIT_VECTOR_SIZE;
         inst->set_literal(static_cast<int64_t>(offset));
         inst->set_dest(reg_method_offset);
         invoke_insts.at(num_vectors + (i * 2 + 1)) = inst;
@@ -1861,9 +1860,9 @@ void BlockInstrumentHelper::do_basic_block_tracing(
 
   const auto& onNonLoopBlockHit_map = build_onMethodExit_map(
       *analysis_cls, options.analysis_method_names[4], type::_void());
-  const size_t max_vector_arity_other = onMethodExit_map.rbegin()->first;
+  const size_t max_vector_arity_hit = onNonLoopBlockHit_map.rbegin()->first;
   TRACE(INSTRUMENT, 4, "Max arity for onNonLoopBlockHit: %zu",
-        max_vector_arity_other);
+        max_vector_arity_hit);
 
   auto cold_start_classes = get_cold_start_classes(cfg);
   TRACE(INSTRUMENT, 7, "Cold start classes: %zu", cold_start_classes.size());
@@ -2012,7 +2011,7 @@ void BlockInstrumentHelper::do_basic_block_tracing(
     instrumented_methods.emplace_back(instrument_basic_blocks(
         code, method, onMethodBegin, onMethodExit_map,
         onMethodExitUnchecked_map, onBlockHit, onNonLoopBlockHit_map,
-        max_vector_arity, max_vector_arity_other, method_offset, hit_offset,
+        max_vector_arity, max_vector_arity_hit, method_offset, hit_offset,
         max_num_blocks, inliner, options));
 
     const auto& method_info = instrumented_methods.back();
