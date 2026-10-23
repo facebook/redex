@@ -17,10 +17,15 @@
 #include "IRCode.h"
 #define IS_REDEX_TEST_LIBRARY
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 #undef IS_REDEX_TEST_LIBRARY
 
 using ResourceFiles = std::unordered_map<std::string, std::string>;
 ResourceFiles decode_resource_paths(const char* location);
+
+// A copy of `path` in `dir`, which is created on first use and removed with the
+// test.
+std::string writable_copy(const std::string& path, redex::TempDir& dir);
 
 struct PreVerify : public RedexTest {
   DexClasses classes;
@@ -33,6 +38,14 @@ struct PreVerify : public RedexTest {
             /* balloon */ false)),
         resources(
             decode_resource_paths(std::getenv("extracted_resources_pre"))) {}
+
+  // `resources.at(name)`, copied where it may be written: the extracted
+  // resources are build outputs, which buck keeps read-only, and
+  // `ResourcesArscFile` maps its file read-write.
+  std::string writable_resource(const std::string& name) {
+    return writable_copy(resources.at(name), m_writable_resources);
+  }
+  redex::TempDir m_writable_resources;
 };
 
 struct PostVerify : public RedexTest {
@@ -46,6 +59,14 @@ struct PostVerify : public RedexTest {
             /* balloon */ false)),
         resources(
             decode_resource_paths(std::getenv("extracted_resources_post"))) {}
+
+  // `resources.at(name)`, copied where it may be written: the extracted
+  // resources are build outputs, which buck keeps read-only, and
+  // `ResourcesArscFile` maps its file read-write.
+  std::string writable_resource(const std::string& name) {
+    return writable_copy(resources.at(name), m_writable_resources);
+  }
+  redex::TempDir m_writable_resources;
 };
 
 // \returns -1 if no class with \name is found. Otherwise, \returns the the

@@ -13,8 +13,7 @@
 #include "ResourcesInliningPassVerifyImpl.h"
 
 TEST_F(PreVerify, ResourcesInliningPassTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   resource_inlining_PreVerify(&res_table);
 }
 

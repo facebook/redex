@@ -11,13 +11,11 @@
 #include "DedupResourceJsAssetsVerifyHelper.h"
 
 TEST_F(PreVerify, ApkDedupResourceJsAssetsTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   dedupresource_js_assets_preverify(classes, &res_table);
 }
 
 TEST_F(PostVerify, ApkDedupResourceJsAssetsTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   dedupresource_js_assets_postverify(classes, &res_table);
 }

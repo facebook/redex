@@ -32,14 +32,12 @@ const std::vector<std::string> REMOVED_FILE_PATHS = {
 } // namespace
 
 TEST_F(PreVerify, ApkDedupResourceTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   dedupresource_preverify(classes, &res_table);
 }
 
 TEST_F(PostVerify, ApkDedupResourceTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   dedupresource_postverify(classes, &res_table);
   // Perform post validation only relevant to .apk files.
   auto& pool = res_table.get_table_snapshot().get_global_strings();

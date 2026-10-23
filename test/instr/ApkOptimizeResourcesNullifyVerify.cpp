@@ -11,14 +11,12 @@
 #include "OptimizeResourcesVerifyImpl.h"
 
 TEST_F(PreVerify, ApkOptimizeResourcesTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   preverify_nullify_impl(classes, &res_table);
 }
 
 TEST_F(PostVerify, ApkOptimizeResourcesTest) {
-  const auto& resource_arsc_file = resources.at("resources.arsc");
-  auto res_table = ResourcesArscFile(resource_arsc_file);
+  auto res_table = ResourcesArscFile(writable_resource("resources.arsc"));
   postverify_nullify_impl(classes, &res_table);
   // Perform post validation only relevant to .apk files.
   apk_postverify_nullify_impl(&res_table);
