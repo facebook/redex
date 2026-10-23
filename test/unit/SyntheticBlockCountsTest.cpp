@@ -138,6 +138,10 @@ class SyntheticBlockCountsTest : public RedexTest {
     return m_pass.count_missing_hit_methods(scope, profiles, inv_slot);
   }
 
+  static size_t non_unit_vals(const Scope& scope) {
+    return SyntheticBlockCountsPass::count_non_unit_covered_vals(scope, 1);
+  }
+
   SyntheticBlockCountsPass::ClampStats clamp(
       const Scope& scope,
       const method_profiles::MethodProfiles& profiles,
@@ -1490,4 +1494,32 @@ TEST_F(SyntheticBlockCountsTest, ReflowThrowIsAnEscape) {
   // Escapes via the throw -> keeps its flow, not clamped to the handler cap
   // (5).
   EXPECT_GT(fv(thrower), 5.0f);
+}
+
+// Hit traces give covered blocks a val of exactly 1; a counting profile gives
+// other magnitudes, and the pass must recognize those so it leaves them alone.
+TEST_F(SyntheticBlockCountsTest, CountsNonUnitCoveredVals) {
+  auto* hits = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 0)
+      (if-eqz v0 :skip)
+      (.src_block "LD;.f:()V" 1 (0.0 0.0))
+      (const v1 1)
+      (:skip)
+      (.src_block "LD;.f:()V" 2 (1.0 1.0))
+      (return-void)
+    ))");
+  EXPECT_EQ(non_unit_vals(scope_of({hits})), 0u);
+
+  auto* counts = make(R"((
+      (.src_block "LD;.f:()V" 0 (2.5 1.0))
+      (const v0 0)
+      (if-eqz v0 :skip)
+      (.src_block "LD;.f:()V" 1 (0.75 0.5))
+      (const v1 1)
+      (:skip)
+      (.src_block "LD;.f:()V" 2 (1.0 1.0))
+      (return-void)
+    ))");
+  EXPECT_EQ(non_unit_vals(scope_of({hits, counts})), 2u);
 }

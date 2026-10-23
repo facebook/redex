@@ -1186,6 +1186,28 @@ SyntheticBlockCountsPass::MethodResult SyntheticBlockCountsPass::process_method(
   return res;
 }
 
+size_t SyntheticBlockCountsPass::count_non_unit_covered_vals(
+    const Scope& scope, size_t num_interactions) {
+  return walk::parallel::methods<size_t>(scope, [&](DexMethod* m) -> size_t {
+    auto* code = m->get_code();
+    if (code == nullptr || !code->cfg_built()) {
+      return 0;
+    }
+    size_t count = 0;
+    for (auto* b : code->cfg().blocks()) {
+      source_blocks::foreach_source_block(b, [&](SourceBlock* sb) {
+        for (size_t i = 0; i < num_interactions; ++i) {
+          const auto v = sb->get_val(i);
+          if (v && *v > 0.0f && *v != 1.0f) {
+            count++;
+          }
+        }
+      });
+    }
+    return count;
+  });
+}
+
 // Per interaction, count methods that ARE covered (>=1 SourceBlock val > 0) yet
 // have NO usable call_count anchor -- no profile row, or a non-finite /
 // negative call_count (a call_count of 0 counts as a usable anchor, per
@@ -1267,6 +1289,14 @@ void SyntheticBlockCountsPass::run_pass(DexStoresVector& stores,
   m_producer_written.clear();
 
   auto scope = build_class_scope(stores);
+
+  // A counting profile already has measured per-block magnitudes, which the
+  // solve below would replace with estimates.
+  if (const size_t counted = count_non_unit_covered_vals(scope, n);
+      counted > 0) {
+    mgr.set_metric("skipped_profile_has_counts", (int64_t)counted);
+    return;
+  }
 
   // Per-phase wall-clock timers, emitted as `*_ms` metrics into the redex stats
   // (same shape as the inter-method engine's p1_ms/phase_b_ms/phase_c_ms). The

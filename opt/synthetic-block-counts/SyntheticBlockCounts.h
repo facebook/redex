@@ -128,6 +128,12 @@ class SyntheticBlockCountsPass : public Pass {
       const method_profiles::MethodProfiles& profiles,
       const std::vector<std::string>& inv_slot);
 
+  // Number of covered SourceBlock vals (val > 0) that are not exactly 1. Hit
+  // traces give every covered block a val of 1, so any other value means the
+  // profile already carries measured per-block counts.
+  static size_t count_non_unit_covered_vals(const Scope& scope,
+                                            size_t num_interactions);
+
   // Result of the clamp post-pass (for metrics + tests).
   struct ClampStats {
     size_t clamp_vals_lowered{0}; // covered SourceBlock vals the clamp lowered
