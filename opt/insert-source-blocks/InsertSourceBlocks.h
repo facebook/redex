@@ -7,11 +7,19 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "Pass.h"
 
 namespace cfg {
 class ControlFlowGraph;
 } // namespace cfg
+
+namespace insert_source_blocks::testing {
+
+uint64_t stable_hash(cfg::ControlFlowGraph& cfg);
+
+} // namespace insert_source_blocks::testing
 
 class InsertSourceBlocksPass : public Pass {
  public:

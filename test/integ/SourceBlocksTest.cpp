@@ -9,6 +9,12 @@
 #include "InsertSourceBlocks.h"
 
 #include <algorithm>
+#include <array>
+#include <cinttypes>
+#include <cstdio>
+#include <fstream>
+#include <string>
+#include <string_view>
 
 #include <gtest/gtest.h>
 
@@ -828,6 +834,216 @@ TEST_F(SourceBlocksTest, source_blocks_profile_always_inject_method_profiles) {
     }
     EXPECT_EQ(actual, it->second) << show(m);
   }
+}
+
+TEST_F(SourceBlocksTest,
+       stable_hash_traverses_real_edges_and_ignores_ghost_edges) {
+  auto first_code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (if-eqz v0 :second_return)
+    (const v1 1)
+    (return-void)
+    (:second_return)
+    (const v1 2)
+    (return-void)
+  ))");
+  auto second_code = assembler::ircode_from_string(R"((
+    (const v0 0)
+    (if-eqz v0 :second_return)
+    (const v1 3)
+    (return-void)
+    (:second_return)
+    (const v1 2)
+    (return-void)
+  ))");
+  first_code->build_cfg();
+  second_code->build_cfg();
+  auto& first_cfg = first_code->cfg();
+  auto& second_cfg = second_code->cfg();
+
+  auto first_hash = insert_source_blocks::testing::stable_hash(first_cfg);
+  auto second_hash = insert_source_blocks::testing::stable_hash(second_cfg);
+  EXPECT_NE(first_hash, second_hash);
+
+  for (auto* graph : {&first_cfg, &second_cfg}) {
+    auto hash_without_exit_block =
+        insert_source_blocks::testing::stable_hash(*graph);
+    graph->calculate_exit_block();
+
+    size_t ghost_edges = 0;
+    for (auto* block : graph->blocks()) {
+      for (auto* edge : block->succs()) {
+        if (edge->type() == cfg::EDGE_GHOST) {
+          ++ghost_edges;
+        }
+      }
+    }
+    ASSERT_EQ(ghost_edges, 2);
+    EXPECT_EQ(hash_without_exit_block,
+              insert_source_blocks::testing::stable_hash(*graph));
+  }
+}
+
+namespace {
+
+uint64_t stable_hash_of(const char* ir) {
+  auto code = assembler::ircode_from_string(ir);
+  code->build_cfg();
+  return insert_source_blocks::testing::stable_hash(code->cfg());
+}
+
+// Reaches a switch, a loop back-edge and a typed catch only after the entry
+// block, so every edge kind is hashed somewhere other than the entry block.
+constexpr const char* kAllEdgeKindsIR = R"((
+  (load-param v0)
+  (if-eqz v0 :throwing)
+
+  (:loop)
+  (switch v0 (:a :b))
+  (return v0)
+
+  (:a 1)
+  (add-int/lit v0 v0 -1)
+  (goto :loop)
+
+  (:b 2)
+  (const v0 7)
+  (return v0)
+
+  (:throwing)
+  (.try_start t)
+  (invoke-static (v0) "Lcom/facebook/redextest/SourceBlocksTest;.hashCallee:(I)I")
+  (move-result v0)
+  (.try_end t)
+  (return v0)
+
+  (.catch (t) "Ljava/lang/ArithmeticException;")
+  (const v0 0)
+  (return v0)
+))";
+
+} // namespace
+
+// The hash is persisted in profiles as `access$redex<hash>$NN`, so any change
+// in what it covers or how it walks the CFG silently drops profile matches for
+// multi-block access methods until the profiles are regenerated.
+TEST_F(SourceBlocksTest, stable_hash_multi_block_value_is_pinned) {
+  EXPECT_EQ(stable_hash_of(kAllEdgeKindsIR), 0xbcb0fbec281563acULL);
+}
+
+TEST_F(SourceBlocksTest, stable_hash_covers_edges_past_the_entry_block) {
+  auto base = stable_hash_of(kAllEdgeKindsIR);
+
+  auto variant = [](std::string_view from, std::string_view to) {
+    std::string ir{kAllEdgeKindsIR};
+    auto pos = ir.find(from);
+    always_assert_log(pos != std::string::npos, "%s not in IR",
+                      std::string(from).c_str());
+    ir.replace(pos, from.size(), to);
+    return stable_hash_of(ir.c_str());
+  };
+
+  EXPECT_NE(base, variant("(:b 2)", "(:b 3)")) << "switch case key";
+  EXPECT_NE(base,
+            variant("Ljava/lang/ArithmeticException;",
+                    "Ljava/lang/IllegalStateException;"))
+      << "catch type";
+  EXPECT_NE(base, variant("(goto :loop)", "(return v0)")) << "loop back-edge";
+  EXPECT_NE(base, variant("(const v0 7)", "(const v0 8)"))
+      << "instruction in a block behind the switch";
+}
+
+TEST_F(SourceBlocksTest, stable_hash_does_not_depend_on_block_layout) {
+  // Same CFG, with the join block placed before and after the branch target.
+  auto join_first = stable_hash_of(R"((
+    (load-param v0)
+    (if-eqz v0 :a)
+    (const v1 1)
+    (:join)
+    (return v1)
+    (:a)
+    (const v1 2)
+    (goto :join)
+  ))");
+  auto join_last = stable_hash_of(R"((
+    (load-param v0)
+    (if-eqz v0 :a)
+    (const v1 1)
+    (goto :join)
+    (:a)
+    (const v1 2)
+    (:join)
+    (return v1)
+  ))");
+  EXPECT_EQ(join_first, join_last);
+}
+
+// Two javac-style access methods in one class, with the same access-flag
+// suffix and the same entry block, differing only after the branch. The
+// profile has a hashed row for `access$202` only, so `access$302` must not
+// pick up its values.
+TEST_F(SourceBlocksTest, access_method_profile_row_does_not_match_other_body) {
+  auto* type = DexType::get_type("Lcom/facebook/redextest/SourceBlocksTest;");
+  ASSERT_NE(type, nullptr);
+  auto* cls = type_class(type);
+  ASSERT_NE(cls, nullptr);
+
+  auto make_access_method = [cls](const std::string& name,
+                                  const std::string& fallthrough_literal) {
+    auto* m = DexMethod::make_method(
+                  "Lcom/facebook/redextest/SourceBlocksTest;." + name + ":(I)I")
+                  ->make_concrete(ACC_STATIC | ACC_SYNTHETIC,
+                                  assembler::ircode_from_string(
+                                      "((load-param v0) (if-eqz v0 :zero) "
+                                      "(const v1 " +
+                                      fallthrough_literal +
+                                      ") (return v1) (:zero) (const v1 2) "
+                                      "(return v1))"),
+                                  /*is_virtual=*/false);
+    m->set_deobfuscated_name(show(m));
+    cls->add_method(m);
+    return m;
+  };
+  auto* profiled = make_access_method("access$202", "1");
+  auto* other = make_access_method("access$302", "3");
+
+  auto hash_of = [](DexMethod* m) {
+    m->get_code()->build_cfg();
+    auto hash =
+        insert_source_blocks::testing::stable_hash(m->get_code()->cfg());
+    m->get_code()->clear_cfg();
+    return hash;
+  };
+  auto profiled_hash = hash_of(profiled);
+
+  std::array<char, 17> hex{};
+  snprintf(hex.data(), hex.size(), "%016" PRIx64, profiled_hash);
+  auto profile_path = get_configfiles_out_dir() + "/access_profile.csv";
+  {
+    std::ofstream out(profile_path);
+    out << "interaction,appear#\n"
+        << "ColdStart,4\n"
+        << "name,profiled_srcblks_exprs\n"
+        << "Lcom/facebook/redextest/SourceBlocksTest;.access$redex"
+        << hex.data() << "$02:(I)I,(0.5:0.6 g(0.1:0.2) b(0.3:0.4))\n";
+  }
+
+  InsertSourceBlocksPass isbp{};
+  run_passes({&isbp}, nullptr, Json::nullValue, [&](const auto&) {
+    enable_pass(isbp);
+    enable_always_inject(isbp);
+    set_insert_after_excs(isbp, false);
+    set_profile(isbp, std::string(profile_path));
+  });
+
+  auto blocks_of = [this](DexMethod* m) {
+    cfg::ScopedCFG cfg{m->get_code()};
+    return get_blocks_as_txt(*cfg);
+  };
+  EXPECT_EQ(blocks_of(profiled),
+            "B0: 0(0.5:0.6)\nB1: 1(0.1:0.2)\nB2: 2(0.3:0.4)");
+  // No row of its own: always-inject falls back to the (absent) method profile.
+  EXPECT_EQ(blocks_of(other), "B0: 0(0:0)\nB1: 1(0:0)\nB2: 2(0:0)");
 }
 
 TEST_F(SourceBlocksTest, source_blocks_access_methods) {
