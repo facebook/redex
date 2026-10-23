@@ -12,11 +12,11 @@ import java.util.*;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.os.Bundle;
-import android.test.InstrumentationTestCase;
+import androidx.test.InstrumentationRegistry;
 import org.junit.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class EquivalenceMain extends InstrumentationTestCase {
+public class EquivalenceMain {
 
   // XXX: it would be cool if the C++ test_generator generated a @Test-annotated
   // method for each before-after pair that would do the assertEquals() call.
@@ -49,7 +49,7 @@ public class EquivalenceMain extends InstrumentationTestCase {
   }
 
   private void writeToAdb(String s) {
-    Instrumentation instr = getInstrumentation();
+    Instrumentation instr = InstrumentationRegistry.getInstrumentation();
     Bundle bundle = new Bundle();
     bundle.putString(Instrumentation.REPORT_KEY_STREAMRESULT, s);
     instr.sendStatus(Activity.RESULT_OK, bundle);
