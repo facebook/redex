@@ -553,10 +553,13 @@ void Allocator::select(const cfg::ControlFlowGraph& /*cfg*/,
     auto vreg = vreg_file.alloc(node.width());
     if (vreg <= node.max_vreg()) {
       reg_transform->map.emplace(reg, vreg);
+      // A spilled register is never mapped, so its failed slot must not size
+      // the frame: that would push the parameter window up and can spill a
+      // parameter that fits.
+      vregs_size = std::max(vregs_size, vreg_file.size());
     } else {
       spill_plan->global_spills.emplace(reg, vreg);
     }
-    vregs_size = std::max(vregs_size, vreg_file.size());
   }
   reg_transform->size = vregs_size;
 }

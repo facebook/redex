@@ -590,6 +590,92 @@ TEST_F(RegAllocTest, Simplify) {
   EXPECT_EQ(selected, std::vector<reg_t>({1, 0, 2}));
 }
 
+TEST_F(RegAllocTest, FailedAllocationDoesNotIncreaseFrameSize) {
+  using namespace interference::impl;
+  auto ig = GraphBuilder::create_empty();
+  GraphBuilder::make_node(&ig, 0, RegisterType::NORMAL, /* max_vreg */ 15);
+
+  graph_coloring::RegisterTransform reg_transform;
+  for (reg_t reg = 1; reg <= 16; ++reg) {
+    GraphBuilder::make_node(&ig, reg, RegisterType::NORMAL, /* max_vreg */ 15);
+    GraphBuilder::add_edge(&ig, 0, reg);
+    reg_transform.map.emplace(reg, reg - 1);
+  }
+  reg_transform.size = 16;
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (return-void)
+    )
+  )");
+  code->build_cfg();
+
+  graph_coloring::SpillPlan spill_plan;
+  std::stack<reg_t> select_stack;
+  select_stack.push(0);
+  graph_coloring::Allocator allocator;
+  allocator.select(code->cfg(), ig, &select_stack, &reg_transform, &spill_plan);
+
+  EXPECT_EQ(reg_transform.size, 16);
+  EXPECT_EQ(spill_plan.global_spills, (UnorderedMap<reg_t, vreg_t>{{0, 16}}));
+}
+
+/*
+ * The wide value in v17 finds no free 4-bit pair and is spilled at v16.
+ * Counting that slot would grow the frame to 18 and push v0 into v17, past
+ * the 4-bit limit of its `neg-int`, splitting it with a `move` that is never
+ * coalesced away.
+ */
+TEST_F(RegAllocTest, FailedAllocationDoesNotSpillParam) {
+  auto* method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(I)V"
+     (
+      (load-param v0)
+      (const v1 0)
+      (neg-int v2 v0)
+      (const v3 0)
+      (const-wide v17 0)
+      (const v4 0)
+      (const v5 0)
+      (const v6 0)
+      (const v7 0)
+      (const-wide v19 0)
+      (const v8 0)
+      (const v9 0)
+      (const v10 0)
+      (neg-long v17 v17)
+      (const v11 0)
+      (if-eq v1 v10 :end)
+      (const v12 0)
+      (if-eq v4 v9 :end)
+      (const v13 0)
+      (neg-long v17 v19)
+      (neg-int v14 v5)
+      (neg-int v5 v8)
+      (if-eq v11 v5 :end)
+      (neg-int v15 v2)
+      (neg-long v19 v19)
+      (if-eq v7 v6 :end)
+      (if-eq v12 v3 :end)
+      (neg-int v16 v13)
+      (:end)
+      (if-eqz v4 :ret)
+      (if-eqz v1 :ret)
+      (:ret)
+      (return-void)
+     )
+    )
+  )");
+  auto* code = method->get_code();
+  code->build_cfg();
+  graph_coloring::Allocator::Config config;
+  auto stats = graph_coloring::allocate(config, method);
+
+  EXPECT_EQ(stats.param_spill_moves, 0);
+  EXPECT_EQ(stats.global_spill_moves, 1);
+  EXPECT_EQ(code->cfg().get_registers_size(), 16);
+}
+
 TEST_F(RegAllocTest, SelectRange) {
   auto code = assembler::ircode_from_string(R"(
     (
