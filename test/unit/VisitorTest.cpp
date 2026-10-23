@@ -16,6 +16,7 @@
 #include "ApkResources.h"
 #include "RedexMappedFile.h"
 #include "RedexTest.h"
+#include "RedexTestUtils.h"
 #include "ResourcesTestDefs.h"
 
 namespace {
@@ -249,7 +250,11 @@ TEST(Visitor, VisitXmlStrings) {
 }
 
 TEST(Visitor, VisitOverlayableIds) {
-  auto arsc_path = get_env("test_res_path");
+  // `ResourcesArscFile` maps its file read-write, and the extracted table is a
+  // read-only build output.
+  auto tmp_dir = redex::make_tmp_dir("VisitOverlayableIds%%%%%%%%");
+  auto arsc_path = tmp_dir.path + "/resources.arsc";
+  redex::copy_file(get_env("test_res_path"), arsc_path);
   ResourcesArscFile res_table(arsc_path);
   OverlayableIdsCollector collector;
   auto f = RedexMappedFile::open(arsc_path);
