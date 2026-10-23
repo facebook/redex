@@ -164,6 +164,16 @@ size_t find_num_invoke(const DexMethod* m,
 
 // Given a semicolon delimited list of extracted files from the APK, return a
 // map of the original APK's file path to its path on disk.
+std::string writable_copy(const std::string& path, redex::TempDir& dir) {
+  if (dir.path.empty()) {
+    dir = redex::make_tmp_dir("writable_resources%%%%%%%%");
+  }
+  auto dest =
+      std::filesystem::path(dir.path) / std::filesystem::path(path).filename();
+  redex::copy_file(path, dest.string());
+  return dest.string();
+}
+
 ResourceFiles decode_resource_paths(const char* location) {
   ResourceFiles files;
   std::istringstream input;
