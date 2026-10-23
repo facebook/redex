@@ -26,11 +26,6 @@
 #include "TypeInference.h"
 #include "TypeUtil.h"
 
-namespace constant_propagation_transform_internal {
-// TODO(T263034329): Remove this.
-bool enable_replacing_areequal = true;
-} // namespace constant_propagation_transform_internal
-
 namespace constant_propagation {
 
 // Verify that Intrinsics.areEqual has the expected semantics.
@@ -286,9 +281,6 @@ void Transform::swap_kotlin_areequal(
     bool is_static,
     const DexType* declaring_type,
     DexProto* proto) {
-  if (!constant_propagation_transform_internal::enable_replacing_areequal) {
-    return;
-  }
   auto* kotlin_areequal = method::kotlin_jvm_internal_Intrinsics_areEqual();
   if (kotlin_areequal == nullptr) {
     return;
@@ -346,9 +338,6 @@ void Transform::swap_kotlin_areequal(
 
 bool Transform::replace_kotlin_areequal(
     const ConstantEnvironment& env, const cfg::InstructionIterator& cfg_it) {
-  if (!constant_propagation_transform_internal::enable_replacing_areequal) {
-    return false;
-  }
   auto* insn = cfg_it->insn;
   if (insn->opcode() != OPCODE_INVOKE_STATIC) {
     return false;

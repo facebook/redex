@@ -2172,9 +2172,6 @@ int main(int argc, char* argv[]) {
     keep_reason::Reason::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
-    constant_propagation_transform_internal::enable_replacing_areequal =
-        args.config.get("enable_replacing_areequal", true).asBool();
-
     constant_propagation::enable_check_cast_value_preservation =
         args.config.get("enable_check_cast_value_preservation", false).asBool();
 
@@ -2284,8 +2281,7 @@ int main(int argc, char* argv[]) {
     // refs) and before any parallel walk, because reading areEqual's IRCode
     // is not thread-safe. An input in which areEqual is neither defined nor
     // referenced has nothing to rewrite, so there is nothing to verify.
-    if (constant_propagation_transform_internal::enable_replacing_areequal &&
-        method::kotlin_jvm_internal_Intrinsics_areEqual() != nullptr) {
+    if (method::kotlin_jvm_internal_Intrinsics_areEqual() != nullptr) {
       auto err = constant_propagation::verify_areequal_semantics();
       always_assert_log(!err.has_value(),
                         "Intrinsics.areEqual does not match what the areEqual "

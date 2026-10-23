@@ -20,11 +20,6 @@
 
 class ScopedMetrics;
 
-namespace constant_propagation_transform_internal {
-// TODO(T263034329): Remove this.
-extern bool enable_replacing_areequal;
-} // namespace constant_propagation_transform_internal
-
 namespace constant_propagation {
 // Verify that Intrinsics.areEqual delegates to first.equals(second).
 // Must be called after dex loading, before any parallel walk.
