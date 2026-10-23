@@ -153,6 +153,9 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
     // Handle outgoing edges.
     auto succs = source_blocks::impl::get_sorted_edges(cur);
     for (auto* e : succs) {
+      if (e->type() == EDGE_GHOST) {
+        continue;
+      }
       // Hash the edge type.
       hash = hash * 7 + static_cast<uint64_t>(e->type());
       // Hash edge-specific data (case key for branches, throw info for throws).
@@ -175,6 +178,10 @@ uint64_t stable_hash(ControlFlowGraph& cfg) {
           not_reached();
         }
       }();
+      // Continue the BFS. Without this the queue drains after the entry block
+      // and the "hash of the method" is really just the hash of its first
+      // block plus that block's outgoing edge kinds.
+      push(e->target());
     }
   }
 
@@ -1128,6 +1135,14 @@ struct Injector {
 };
 
 } // namespace
+
+namespace insert_source_blocks::testing {
+
+uint64_t stable_hash(cfg::ControlFlowGraph& cfg) {
+  return hasher::stable_hash(cfg);
+}
+
+} // namespace insert_source_blocks::testing
 
 void InsertSourceBlocksPass::bind_config() {
   bind("always_inject",
