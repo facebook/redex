@@ -13,6 +13,7 @@
 #include "ConstantUses.h"
 #include "ConstructorParams.h"
 #include "Debug.h"
+#include "IPConstantPropagationAnalysis.h"
 #include "LinearScan.h"
 #include "RegisterAllocation.h"
 #include "ScopedMetrics.h"
@@ -236,8 +237,14 @@ void Shrinker::shrink_code(
     auto timer = m_const_prop_timer.scope();
     constant_propagation::Transform::Config config;
     config.pure_methods = &m_pure_methods;
+    // Seed the parameters: an instance method's receiver is non-null.
+    ConstantEnvironment initial_env =
+        constant_propagation::interprocedural::env_with_params(
+            is_static,
+            code,
+            constant_propagation::interprocedural::ArgumentDomain::top());
     const_prop_stats = constant_propagation(is_static, declaring_type, proto,
-                                            code, {}, config);
+                                            code, initial_env, config);
   }
 
   if (m_config.run_cse) {
