@@ -78,6 +78,18 @@ void construct_level_order_traversal(
   }
 }
 
+/**
+ * A cycle in the control flow graph: one strongly connected component of the
+ * weak topological ordering, with nested components as subloops.
+ *
+ * Every cycle is a Loop, including one that can be entered at more than one
+ * block -- a resume label inside a loop in a Kotlin suspend state machine is
+ * the common source. Such a loop runs like any other, so a question about
+ * whether a block repeats ("is it in a loop", "how deep") is answered by every
+ * Loop. A question that needs a single entry -- a header that dominates the
+ * body, a preheader that dominates the header -- holds only when
+ * is_reducible() is true.
+ */
 class Loop {
  public:
   using iterator = std::vector<cfg::Block*>::iterator;
@@ -86,16 +98,13 @@ class Loop {
   // becomes their parent.
   Loop(const std::vector<cfg::Block*>& blocks,
        const UnorderedSet<Loop*>& subloops,
-       cfg::Block* loop_preheader)
-      : Loop(blocks, subloops, loop_preheader, nullptr) {}
-  Loop(const std::vector<cfg::Block*>& blocks,
-       const UnorderedSet<Loop*>& subloops,
        cfg::Block* loop_preheader,
-       Loop* parent_loop)
+       bool is_reducible)
       : m_blocks(blocks),
         m_block_set(blocks.begin(), blocks.end()),
         m_loop_preheader(loop_preheader),
-        m_parent_loop(parent_loop) {
+        m_parent_loop(nullptr),
+        m_is_reducible(is_reducible) {
     // Immediate children only: each gets its parent once, in any order.
     for (auto* sub : UnorderedIterable(subloops)) {
       always_assert(sub->m_parent_loop == nullptr);
@@ -109,6 +118,7 @@ class Loop {
   bool contains(Loop* l) const;
   bool contains(cfg::Block* block) const;
   int get_loop_depth() const;
+  bool is_reducible() const { return m_is_reducible; }
   UnorderedSet<cfg::Block*> get_exit_blocks() const;
   std::vector<cfg::Block*> get_blocks() const;
 
@@ -124,6 +134,7 @@ class Loop {
   UnorderedSet<cfg::Block*> m_block_set;
   cfg::Block* m_loop_preheader;
   Loop* m_parent_loop;
+  bool m_is_reducible;
 };
 
 class LoopInfo {
@@ -132,8 +143,10 @@ class LoopInfo {
   using reverse_iterator = std::deque<Loop>::reverse_iterator;
   explicit LoopInfo(const cfg::ControlFlowGraph& cfg);
   // Analyzes loops AND mutates `cfg`: inserts a dedicated preheader block
-  // before every loop header, redirecting external predecessor edges through
-  // it. For analysis only, use the const-ref constructor above.
+  // before the header of every reducible loop, redirecting external
+  // predecessor edges through it. A loop with more than one entry gets none,
+  // since no single block in front of it could dominate it. For analysis
+  // only, use the const-ref constructor above.
   static LoopInfo make_with_preheaders(cfg::ControlFlowGraph& cfg);
   Loop* get_loop_for(cfg::Block* block);
   size_t num_loops();

@@ -393,28 +393,9 @@ UnorderedMap<const cfg::Block*, double> forward_propagate(
       continue;
     }
     const size_t header_idx = header_it->second;
-    // Reducible iff the loop is single-entry: no block other than the header
-    // has a predecessor from outside the loop. This is the natural-loop
-    // definition, equivalent to header-dominance of every back-edge source but
-    // requiring neither a dominator tree nor the full-reachability
-    // (CFG-mutating) prep it would need -- so the pass stays a pure annotator.
-    bool reducible = true;
-    for (auto* b : loop->get_blocks()) {
-      if (b == header) {
-        continue;
-      }
-      for (auto* pe : b->preds()) {
-        if (!loop->contains(pe->src())) {
-          reducible = false;
-          break;
-        }
-      }
-      if (!reducible) {
-        break;
-      }
-    }
-    if (!reducible) {
-      // Irreducible / multi-entry SCC: treat the header as an ordinary merge.
+    // A loop entered at more than one block has no header to anchor a
+    // geometric multiplier on, so its head is treated as an ordinary merge.
+    if (!loop->is_reducible()) {
       (*irreducible)++;
       loop_mult[header] = 1.0;
       continue;

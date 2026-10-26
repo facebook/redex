@@ -36,6 +36,25 @@ std::unique_ptr<IRCode> loop_code() {
   code->build_cfg();
   return code;
 }
+
+// A loop with two entries: the entry block branches both to :first and to
+// :second, and each branches back to the other.
+std::unique_ptr<IRCode> two_entry_loop_code() {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :second)
+      (:first)
+      (add-int/lit v0 v0 1)
+      (:second)
+      (add-int/lit v0 v0 -1)
+      (if-gtz v0 :first)
+      (return-void)
+    )
+  )");
+  code->build_cfg();
+  return code;
+}
 } // namespace
 
 // Passing a non-const cfg now binds the analysis-only constructor (the mutating
@@ -135,6 +154,73 @@ TEST_F(LoopInfoTest, deepNestReportsEveryLevel) {
     EXPECT_EQ(outermost_first[i]->get_parent_loop(),
               i == 0 ? nullptr : outermost_first[i - 1]);
   }
+}
+
+TEST_F(LoopInfoTest, naturalLoopIsReducible) {
+  auto code = loop_code();
+  loop_impl::LoopInfo info(code->cfg());
+
+  ASSERT_EQ(info.num_loops(), 1);
+  EXPECT_TRUE(info.begin()->is_reducible());
+}
+
+// A cycle with two entries still repeats, so it is a loop -- consumers that
+// ask whether a block is in one (never-compile, the ARMv7 JIT loop checker,
+// block instrumentation) depend on that. Its head is just one of the entries.
+TEST_F(LoopInfoTest, twoEntryCycleIsAnIrreducibleLoop) {
+  auto code = two_entry_loop_code();
+  loop_impl::LoopInfo info(code->cfg());
+
+  ASSERT_EQ(info.num_loops(), 1);
+  auto& loop = *info.begin();
+  EXPECT_FALSE(loop.is_reducible());
+  EXPECT_EQ(loop.get_blocks().size(), 2);
+  for (auto* block : loop.get_blocks()) {
+    EXPECT_EQ(info.get_loop_for(block), &loop);
+  }
+}
+
+// No block in front of one entry can dominate a loop with two, so
+// make_with_preheaders leaves such a loop alone.
+TEST_F(LoopInfoTest, withPreheadersSkipsIrreducibleLoop) {
+  auto code = two_entry_loop_code();
+  auto& cfg = code->cfg();
+  size_t blocks_before = cfg.num_blocks();
+
+  auto info = loop_impl::LoopInfo::make_with_preheaders(cfg);
+
+  ASSERT_EQ(info.num_loops(), 1);
+  EXPECT_EQ(info.begin()->get_preheader(), nullptr);
+  EXPECT_EQ(cfg.num_blocks(), blocks_before);
+}
+
+// Inserting the inner loop's preheader must not make the outer loop look like
+// it has a second entry.
+TEST_F(LoopInfoTest, withPreheadersHandlesNestedLoops) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (:outer)
+      (add-int/lit v0 v0 -1)
+      (:inner)
+      (add-int/lit v0 v0 -2)
+      (if-gtz v0 :inner)
+      (if-gtz v0 :outer)
+      (return-void)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  size_t blocks_before = cfg.num_blocks();
+
+  auto info = loop_impl::LoopInfo::make_with_preheaders(cfg);
+
+  ASSERT_EQ(info.num_loops(), 2);
+  for (auto& loop : info) {
+    EXPECT_TRUE(loop.is_reducible());
+    EXPECT_NE(loop.get_preheader(), nullptr);
+  }
+  EXPECT_EQ(cfg.num_blocks(), blocks_before + 2);
 }
 
 class SimpleGraph final {
