@@ -10,6 +10,7 @@
 #include <sparta/WeakTopologicalOrdering.h>
 
 #include "ControlFlow.h"
+#include "Debug.h"
 
 #include <queue>
 
@@ -81,23 +82,26 @@ class Loop {
  public:
   using iterator = std::vector<cfg::Block*>::iterator;
   using reverse_iterator = std::vector<cfg::Block*>::reverse_iterator;
+  // `subloops` are the loops immediately nested in this one; the new loop
+  // becomes their parent.
   Loop(const std::vector<cfg::Block*>& blocks,
        const UnorderedSet<Loop*>& subloops,
        cfg::Block* loop_preheader)
-      : m_blocks(blocks),
-        m_block_set(blocks.begin(), blocks.end()),
-        m_subloops(subloops),
-        m_loop_preheader(loop_preheader),
-        m_parent_loop(nullptr) {}
+      : Loop(blocks, subloops, loop_preheader, nullptr) {}
   Loop(const std::vector<cfg::Block*>& blocks,
        const UnorderedSet<Loop*>& subloops,
        cfg::Block* loop_preheader,
        Loop* parent_loop)
       : m_blocks(blocks),
         m_block_set(blocks.begin(), blocks.end()),
-        m_subloops(subloops),
         m_loop_preheader(loop_preheader),
-        m_parent_loop(parent_loop) {}
+        m_parent_loop(parent_loop) {
+    // Immediate children only: each gets its parent once, in any order.
+    for (auto* sub : UnorderedIterable(subloops)) {
+      always_assert(sub->m_parent_loop == nullptr);
+      sub->m_parent_loop = this;
+    }
+  }
   cfg::Block* get_header();
   cfg::Block* get_preheader();
   Loop* get_parent_loop();
@@ -107,7 +111,6 @@ class Loop {
   int get_loop_depth() const;
   UnorderedSet<cfg::Block*> get_exit_blocks() const;
   std::vector<cfg::Block*> get_blocks() const;
-  void update_parent_loop_fields();
 
   iterator begin();
   iterator end();
@@ -119,7 +122,6 @@ class Loop {
   const Loop& operator=(const Loop&) = delete;
   std::vector<cfg::Block*> m_blocks;
   UnorderedSet<cfg::Block*> m_block_set;
-  UnorderedSet<Loop*> m_subloops;
   cfg::Block* m_loop_preheader;
   Loop* m_parent_loop;
 };

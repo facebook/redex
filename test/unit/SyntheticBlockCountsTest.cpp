@@ -21,6 +21,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "IRAssembler.h"
+#include "LoopInfo.h"
 #include "MethodProfiles.h"
 #include "RedexContext.h"
 #include "RedexTest.h"
@@ -430,6 +431,46 @@ TEST_F(SyntheticBlockCountsTest, NestedLoopsCompoundMultiplier) {
   // it needs the inner multiplier folded into the outer back-edge frequency.
   EXPECT_FLOAT_EQ(fv(outer), 200.0f);
   EXPECT_FLOAT_EQ(fv(inner), 200.0f);
+}
+
+// A root loop holding two loops that each hold two loops; every loop is a
+// counted loop with a measured 0.5 back-edge. Each header must reach 100 * 2:
+// that needs every inner multiplier computed before the loop around it, i.e.
+// each loop's depth must be its real nesting level whatever order the loop
+// analysis visits loops in. Many copies give that order every chance to vary;
+// run with `-c redex.perturb_unordered=true` as well.
+TEST_F(SyntheticBlockCountsTest, SiblingNestsCountInnermostFirst) {
+  int id = 1;
+  auto counted = [&](const std::string& label, int reg,
+                     const std::string& body) {
+    const std::string v = "v" + std::to_string(reg);
+    const std::string head = std::to_string(id++);
+    const std::string latch = std::to_string(id++);
+    return "(const " + v + " 0)(:H" + label + ")(.src_block \"LD;.f:()V\" " +
+           head + " (1.0 1.0))(if-ge " + v + " v15 :X" + label + ")" + body +
+           "(.src_block \"LD;.f:()V\" " + latch + " (1.0 1.0))(add-int/lit " +
+           v + " " + v + " 1)(goto :H" + label + ")(:X" + label + ")";
+  };
+  const std::string a =
+      counted("A", 1, counted("a1", 2, "") + counted("a2", 2, ""));
+  const std::string b =
+      counted("B", 1, counted("b1", 2, "") + counted("b2", 2, ""));
+  const std::string root = counted("R", 0, a + b);
+  const std::string src =
+      "((load-param v15)(.src_block \"LD;.f:()V\" 0 (1.0 1.0))" + root +
+      "(.src_block \"LD;.f:()V\" " + std::to_string(id) +
+      " (1.0 1.0))(return-void))";
+  for (int copy = 0; copy < 50; ++copy) {
+    auto* m = make(src);
+    auto profiles = profile_with(m, 100.0);
+    run(m, profiles);
+    loop_impl::LoopInfo loops(m->get_code()->cfg());
+    ASSERT_EQ(loops.num_loops(), 7);
+    for (auto& loop : loops) {
+      EXPECT_FLOAT_EQ(fv(loop.get_header()), 200.0f)
+          << "copy " << copy << ", loop at depth " << loop.get_loop_depth();
+    }
+  }
 }
 
 // Coverage support is pinned: a block that is cold (val==0) stays 0, and every

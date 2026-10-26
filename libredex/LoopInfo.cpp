@@ -24,7 +24,8 @@ cfg::Block* Loop::get_header() { return m_blocks.front(); }
 cfg::Block* Loop::get_preheader() { return m_loop_preheader; }
 
 /**
- * Get the loop immediately outside of the current loop, or nullptr
+ * Get the loop immediately outside of the current loop, or nullptr for an
+ * outermost loop.
  */
 Loop* Loop::get_parent_loop() { return m_parent_loop; }
 
@@ -77,16 +78,6 @@ UnorderedSet<cfg::Block*> Loop::get_exit_blocks() const {
  * Returns the blocks that are in the loop
  */
 std::vector<cfg::Block*> Loop::get_blocks() const { return m_blocks; }
-
-/**
- * Recursively updates the parent_loop fields for this loop and all subloops
- */
-void Loop::update_parent_loop_fields() {
-  for (auto* sub : UnorderedIterable(m_subloops)) {
-    sub->m_parent_loop = this;
-    sub->update_parent_loop_fields();
-  }
-}
 
 Loop::iterator Loop::begin() { return m_blocks.begin(); }
 
@@ -167,12 +158,16 @@ void LoopInfo::init(Cfg& cfg, Fn preheader_fn) {
     UnorderedSet<Loop*> subloops;
     const auto& wto_comp = it->get();
 
-    // construct blocks_in_loop, block_set, and subloops
+    // construct blocks_in_loop, block_set, and subloops. Inner loops are
+    // built first, so a nested loop that already has a parent is a deeper
+    // descendant, not an immediate child.
     visit_depth_first<cfg::Block*>(wto_comp, [&](cfg::Block* block) {
       blocks_in_loop.emplace_back(block);
       block_set.emplace(block);
-      if (loop_heads.count(block)) {
-        subloops.emplace(loop_heads.at(block));
+      auto head = loop_heads.find(block);
+      if (head != loop_heads.end() &&
+          head->second->get_parent_loop() == nullptr) {
+        subloops.emplace(head->second);
       }
     });
 
@@ -204,15 +199,6 @@ void LoopInfo::init(Cfg& cfg, Fn preheader_fn) {
     }
 
     loop_heads.emplace(loop_header, &loop);
-  }
-
-  // update parent_loop
-  for (auto& loop : m_loops) {
-    // since we are traversing in level order, if this is true then we are done
-    if (loop.get_parent_loop() != nullptr) {
-      break;
-    }
-    loop.update_parent_loop_fields();
   }
 }
 

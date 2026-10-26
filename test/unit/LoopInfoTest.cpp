@@ -5,6 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
+#include <map>
+#include <string>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include <sparta/WeakTopologicalOrdering.h>
@@ -58,6 +63,78 @@ TEST_F(LoopInfoTest, withPreheadersInsertsPreheader) {
 
   EXPECT_EQ(info.num_loops(), 1);
   EXPECT_EQ(cfg.num_blocks(), blocks_before + 1);
+}
+
+namespace {
+// `for (v<reg> = 0; v<reg> < v15; ++v<reg>) { body }`
+std::string counted_loop(const std::string& label,
+                         int reg,
+                         const std::string& body) {
+  const std::string v = "v" + std::to_string(reg);
+  return "(const " + v + " 0)(:H" + label + ")(if-ge " + v + " v15 :X" + label +
+         ")" + body + "(add-int/lit " + v + " " + v + " 1)(goto :H" + label +
+         ")(:X" + label + ")";
+}
+} // namespace
+
+// A root loop holding two loops that each hold two loops. Each of the four
+// innermost loops must have its own depth-2 loop as parent, never the root,
+// whatever order the analysis visits loops in. Many copies give that order
+// every chance to vary; run with `-c redex.perturb_unordered=true` as well.
+TEST_F(LoopInfoTest, nestedLoopsHaveTheirImmediateParent) {
+  const std::string a = counted_loop(
+      "A", 1, counted_loop("a1", 2, "") + counted_loop("a2", 2, ""));
+  const std::string b = counted_loop(
+      "B", 1, counted_loop("b1", 2, "") + counted_loop("b2", 2, ""));
+  const std::string src =
+      "((load-param v15)" + counted_loop("R", 0, a + b) + "(return-void))";
+  for (int copy = 0; copy < 200; ++copy) {
+    auto code = assembler::ircode_from_string(src);
+    code->build_cfg();
+    loop_impl::LoopInfo info(code->cfg());
+    ASSERT_EQ(info.num_loops(), 7);
+    std::map<int, int> per_depth;
+    for (auto& loop : info) {
+      ++per_depth[loop.get_loop_depth()];
+      auto* parent = loop.get_parent_loop();
+      if (parent != nullptr) {
+        EXPECT_EQ(parent->get_loop_depth(), loop.get_loop_depth() - 1);
+        EXPECT_TRUE(parent->contains(loop.get_header()));
+      }
+      EXPECT_EQ(info.get_loop_for(loop.get_header()), &loop);
+    }
+    EXPECT_EQ(per_depth, (std::map<int, int>{{1, 1}, {2, 2}, {3, 4}}))
+        << "copy " << copy;
+  }
+}
+
+// A chain of 28 loops, each nested in the previous one: every level is
+// reported, and each loop's parent is the next larger loop.
+TEST_F(LoopInfoTest, deepNestReportsEveryLevel) {
+  constexpr int kDepth = 28;
+  std::string body;
+  for (int d = kDepth - 1; d >= 0; --d) {
+    body = counted_loop("d" + std::to_string(d), d % 15, body);
+  }
+  auto code = assembler::ircode_from_string("((load-param v15)" + body +
+                                            "(return-void))");
+  code->build_cfg();
+  loop_impl::LoopInfo info(code->cfg());
+
+  std::vector<loop_impl::Loop*> outermost_first;
+  for (auto& loop : info) {
+    outermost_first.push_back(&loop);
+  }
+  ASSERT_EQ(outermost_first.size(), kDepth);
+  std::sort(outermost_first.begin(), outermost_first.end(),
+            [](auto* a, auto* b) {
+              return a->get_blocks().size() > b->get_blocks().size();
+            });
+  for (int i = 0; i < kDepth; ++i) {
+    EXPECT_EQ(outermost_first[i]->get_loop_depth(), i + 1);
+    EXPECT_EQ(outermost_first[i]->get_parent_loop(),
+              i == 0 ? nullptr : outermost_first[i - 1]);
+  }
 }
 
 class SimpleGraph final {
