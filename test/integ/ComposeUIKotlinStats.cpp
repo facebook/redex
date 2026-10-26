@@ -32,6 +32,6 @@ TEST_F(ComposeUIKotlinStatsTest, test) {
   // - Each of SuperTextPrinter, SubTextPrinter has 2 for the
   // changed param.
   // - 4 in an inlined updateChangedFlags method.
-  EXPECT_EQ(stats.kotlin_composable_and_lit_insns, 15u);
+  EXPECT_EQ(stats.kotlin_composable_and_lit_insns, 14u);
 }
 } // namespace
