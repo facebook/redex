@@ -1088,9 +1088,13 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   // Load classes from input.
   manual_profile.load_classes(scope, conf, "manual");
   manual_profile.mark = manual_profile.classes.size();
-  for (const auto& [config_name, baseline_profile_config] :
-       UnorderedIterable(conf.get_baseline_profile_configs())) {
-    auto& baseline_profile = baseline_profiles[config_name];
+  // Only configs that get_baseline_profiles actually generated a profile for
+  // are of interest here. It deliberately omits the default config when
+  // use_final_redex_generated_profile is false, and looking that config up with
+  // operator[] would resurrect it as an empty profile that then gets emitted
+  // and shadows the preprocessed one.
+  for (auto& [config_name, baseline_profile] :
+       UnorderedIterable(baseline_profiles)) {
     baseline_profile.load_classes(scope, conf, config_name);
     baseline_profile.mark = baseline_profile.classes.size();
   }
@@ -1099,9 +1103,12 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
     manual_profile.classes.insert(cls);
     for (const auto& [config_name, baseline_profile_config] :
          UnorderedIterable(conf.get_baseline_profile_configs())) {
-      if (baseline_profile_config.options.use_final_redex_generated_profile) {
-        auto& baseline_profile = baseline_profiles[config_name];
-        baseline_profile.classes.insert(cls);
+      if (!baseline_profile_config.options.use_final_redex_generated_profile) {
+        continue;
+      }
+      auto it = baseline_profiles.find(config_name);
+      if (it != baseline_profiles.end()) {
+        it->second.classes.insert(cls);
       }
     }
   };
@@ -1109,11 +1116,15 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   for (const auto& [config_name, baseline_profile_config] :
        UnorderedIterable(conf.get_baseline_profile_configs())) {
 
+    auto baseline_profiles_it = baseline_profiles.find(config_name);
+    if (baseline_profiles_it == baseline_profiles.end()) {
+      continue;
+    }
     if (baseline_profile_config.options.include_all_startup_classes) {
       const std::vector<std::string>& interdexorder =
           conf.get_coldstart_classes();
       std::vector<DexClass*> coldstart_classes;
-      auto& baseline_profile = baseline_profiles[config_name];
+      auto& baseline_profile = baseline_profiles_it->second;
       for (const auto& entry : interdexorder) {
         // Limit to just the 20% cold start set
         if (entry.find("ColdStart20PctEnd") != std::string::npos) {
