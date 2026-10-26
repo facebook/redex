@@ -171,6 +171,32 @@ const DexMethod* find_method(DexClass* cls, const std::string& needle) {
   return nullptr;
 }
 
+// A try region whose last throwing instruction falls through into code that
+// cannot throw. Building a CFG and linearizing it moves that code behind the
+// catch handler, and doing it again moves it back, so the layout depends on how
+// many round trips the method went through.
+DexClass* create_round_trip_class() {
+  ClassCreator cc(DexType::make_type("LFlip;"));
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LFlip;.m:(I)V"
+      (
+        (load-param v1)
+        (invoke-static (v1) "LFoo;.f0:(I)V")
+        (.try_start c0)
+        (invoke-static (v1) "LFoo;.f1:(I)V")
+        (add-int/lit v1 v1 5)
+        (return-void)
+        (.try_end c0)
+        (.catch (c0))
+        (move-exception v2)
+        (throw v2)
+      )
+    )
+  )"));
+  return cc.create();
+}
+
 } // namespace
 
 class DexVtTest : public RedexTest {};
@@ -500,5 +526,31 @@ TEST_F(DexVtTest, emitsBlockOffsets) {
     EXPECT_EQ(min_cu, 0u) << name << ": lowest block_offsets start_cu is "
                           << min_cu << ", so the entry block has no offset";
   }
+  block_offset_sink::clear();
+}
+
+// Capturing must not touch the code it describes: one more CFG round trip
+// would ship the other layout of a method like this one, and only in builds
+// that emit dexvt.
+TEST_F(DexVtTest, captureLeavesCodeUntouched) {
+  auto* cls = create_round_trip_class();
+  auto* code = cls->get_dmethods().front()->get_code();
+  const auto before = assembler::to_string(code);
+
+  // The fixture is armed: a bare round trip does change its layout.
+  {
+    IRCode probe(*code);
+    probe.build_cfg();
+    probe.clear_cfg();
+    ASSERT_NE(assembler::to_string(&probe), before);
+  }
+
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  EXPECT_EQ(assembler::to_string(code), before);
+  EXPECT_FALSE(code->cfg_built());
   block_offset_sink::clear();
 }

@@ -104,9 +104,10 @@ struct ClassRecord {
  * RedexOptions::emit_dexvt and driven from redex_backend:
  *
  *   - capture_pre_lowering() runs BEFORE instruction_lowering::run. The CFG has
- *     been cleared by PassManager before the backend, so this phase rebuilds it
- *     per method (ScopedCFG) to read per-block SourceBlocks, and assigns each
- *     method a stable monotonic id reused by emit().
+ *     been cleared by PassManager before the backend, so this phase builds one
+ *     per method, on a copy of its code so the code itself is left exactly as
+ *     it was, to read per-block SourceBlocks, and assigns each method a stable
+ *     monotonic id reused by emit().
  *   - emit() runs AFTER the dex write loop with the accumulated output_totals,
  *     joins the authoritative sizes onto the captured records, and streams the
  *     NDJSON artifact.

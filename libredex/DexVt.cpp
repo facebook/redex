@@ -32,13 +32,13 @@
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "IRInstruction.h"
 #include "IRList.h"
 #include "IROpcode.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "RedexContext.h"
-#include "ScopedCFG.h"
 #include "Show.h"
 #include "SourceBlocks.h"
 #include "Trace.h"
@@ -255,19 +255,43 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
   auto callgraph = call_graph::complete_call_graph(*override_graph, scope);
 
   // 4) Parallel per-method capture. The CFG was cleared by PassManager before
-  // the backend, so ScopedCFG rebuilds it here and tears it back down on scope
-  // exit, leaving the linear IR as instruction_lowering expects it.
+  // the backend. It is rebuilt on a copy of the code, never on the code
+  // itself: building and linearizing a CFG is not idempotent -- some methods
+  // come out of every round trip in the other of two layouts -- so a round
+  // trip here would change the DEX that ships, and only in builds that emit
+  // dexvt. Anchors found in the copy are mapped back to the code's own entries.
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     MethodRecord rec;
     rec.id = m_ids.at(method);
 
-    cfg::ScopedCFG scoped_cfg(&code);
+    std::unique_ptr<IRCode> copy;
+    UnorderedMap<const MethodItemEntry*, const MethodItemEntry*> to_code;
+    const cfg::ControlFlowGraph* cfg = nullptr;
+    if (code.cfg_built()) {
+      cfg = &code.cfg();
+    } else {
+      copy = std::make_unique<IRCode>(code);
+      // The copy holds one entry per entry of the code, in the same order.
+      auto it = code.begin();
+      for (const auto& copied : *copy) {
+        always_assert(it != code.end());
+        to_code.emplace(&copied, &*it);
+        ++it;
+      }
+      always_assert(it == code.end());
+      copy->build_cfg();
+      cfg = &copy->cfg();
+    }
+    auto entry_in_code = [&](const MethodItemEntry* mie) {
+      return copy == nullptr ? mie : to_code.at(mie);
+    };
+
     // Deterministic in-house CFG text (see render_disasm); hotness is captured
     // structurally in rec.blocks rather than double-encoded in the text.
-    rec.disasm = render_disasm(code.cfg());
+    rec.disasm = render_disasm(*cfg);
 
     UnorderedMap<const MethodItemEntry*, uint32_t> leaders;
-    for (auto* block : code.cfg().blocks()) {
+    for (auto* block : cfg->blocks()) {
       // Anchor each block by its first DEX-EMITTING opcode MethodItemEntry ->
       // cfg block id. An instruction entry lowers in place (dex_insn set on the
       // SAME object) and splices through CFG teardown with stable pointer
@@ -320,7 +344,8 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
         }
       }
       if (first_op != nullptr) {
-        leaders.emplace(first_op, static_cast<uint32_t>(block->id()));
+        leaders.emplace(entry_in_code(first_op),
+                        static_cast<uint32_t>(block->id()));
       }
       // Source-blocked blocks additionally carry hotness.
       const auto* sb = source_blocks::get_first_source_block(block);
