@@ -49,6 +49,16 @@ struct MethodPgoStat {
 };
 
 /*
+ * One loop of a method's CFG (a libredex/LoopInfo loop). `parent` is the index
+ * of the immediately enclosing loop in MethodRecord::loops, or -1 for an
+ * outermost loop.
+ */
+struct LoopRecord {
+  uint32_t header_blk{0};
+  int32_t parent{-1};
+};
+
+/*
  * Everything captured for a single method. Assembled pre-lowering (disasm,
  * block hotness, PGO) and completed at emit time with the authoritative
  * code_item size and symbolication. Keyed by the interned DexMethod*.
@@ -57,6 +67,11 @@ struct MethodRecord {
   uint32_t id{0};
   std::string disasm; // show(cfg, code_only=true)
   std::vector<BlockHotness> blocks; // sparse; default (0,0) omitted
+  // Loops, outermost first (a parent always precedes its children), and each
+  // looping block's innermost loop as (cfg block id, index into `loops`),
+  // block id ascending. Both empty for a method without loops.
+  std::vector<LoopRecord> loops;
+  std::vector<std::pair<uint32_t, uint32_t>> block_loop;
   std::vector<MethodPgoStat> pgo;
   // Betamap coldstart order position of the owning class (-1 if absent); coarse
   // InterDex group (-1 if grouping disabled/absent); ART baseline membership.

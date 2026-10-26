@@ -36,6 +36,7 @@
 #include "IRInstruction.h"
 #include "IRList.h"
 #include "IROpcode.h"
+#include "LoopInfo.h"
 #include "MethodOverrideGraph.h"
 #include "MethodProfiles.h"
 #include "RedexContext.h"
@@ -137,6 +138,51 @@ std::string render_disasm(const cfg::ControlFlowGraph& cfg) {
     }
   }
   return ss.str();
+}
+
+// The method's loops: LoopInfo's loops (its WTO components) on this CFG, with
+// LoopInfo's nesting. Every edge counts, throw edges included, so a retry loop
+// that only returns to its header through a catch handler is a loop, exactly
+// as it is for SyntheticBlockCountsPass.
+//
+// Output order is (depth, header id): deterministic, and a parent always
+// precedes its children.
+void capture_loops(const cfg::ControlFlowGraph& cfg, MethodRecord* rec) {
+  loop_impl::LoopInfo loop_info(cfg);
+  if (loop_info.num_loops() == 0) {
+    return;
+  }
+  struct Found {
+    loop_impl::Loop* loop;
+    uint32_t header;
+    int depth;
+  };
+  std::vector<Found> order;
+  order.reserve(loop_info.num_loops());
+  for (auto& loop : loop_info) {
+    order.push_back(Found{&loop, static_cast<uint32_t>(loop.get_header()->id()),
+                          loop.get_loop_depth()});
+  }
+  std::sort(order.begin(), order.end(), [](const Found& a, const Found& b) {
+    return a.depth != b.depth ? a.depth < b.depth : a.header < b.header;
+  });
+  UnorderedMap<const loop_impl::Loop*, int32_t> position;
+  for (size_t pos = 0; pos < order.size(); ++pos) {
+    position.emplace(order[pos].loop, static_cast<int32_t>(pos));
+  }
+  rec->loops.reserve(order.size());
+  for (const auto& found : order) {
+    const auto* parent = found.loop->get_parent_loop();
+    rec->loops.push_back(
+        LoopRecord{found.header, parent == nullptr ? -1 : position.at(parent)});
+  }
+  for (auto* block : cfg.blocks()) {
+    if (const auto* loop = loop_info.get_loop_for(block)) {
+      rec->block_loop.emplace_back(static_cast<uint32_t>(block->id()),
+                                   static_cast<uint32_t>(position.at(loop)));
+    }
+  }
+  std::sort(rec->block_loop.begin(), rec->block_loop.end());
 }
 } // namespace
 
@@ -289,6 +335,7 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
     // Deterministic in-house CFG text (see render_disasm); hotness is captured
     // structurally in rec.blocks rather than double-encoded in the text.
     rec.disasm = render_disasm(*cfg);
+    capture_loops(*cfg, &rec);
 
     UnorderedMap<const MethodItemEntry*, uint32_t> leaders;
     for (auto* block : cfg->blocks()) {
@@ -511,7 +558,8 @@ void Exporter::emit(ConfigFiles& conf,
       // This is the on-disk EXPORT format version, independent of the derived
       // SQLite catalog's `sqlite._USER_VERSION` -- the two count separately and
       // are expected to differ (see facebook/dexvt/ARCHITECTURE.md).
-      8; // v8 carries block_offsets for every block with code, entry block
+      9; // v9 adds per-method `loops` and `block_loop`; v8 carries
+         // block_offsets for every block with code, entry block
          // included, so a block's three levels slice to the same region; v7
          // and v6 carry them for a narrower set of blocks; v5 adds
          // kind:"class" records (super + interfaces); v4 interns caller lists
@@ -626,6 +674,31 @@ void Exporter::emit(ConfigFiles& conf,
       if (!block_offsets.empty()) {
         r["block_offsets"] = block_offsets;
       }
+    }
+    if (!rec.loops.empty()) {
+      // Columnar like `blocks`: loop i is (header[i], parent[i]), the parent
+      // null for an outermost loop. Depth and loop sizes follow from these and
+      // block_loop, so the read side derives them instead of the artifact
+      // carrying a second copy that could disagree.
+      Json::Value header(Json::arrayValue), parent(Json::arrayValue);
+      for (const auto& loop : rec.loops) {
+        header.append(static_cast<Json::UInt>(loop.header_blk));
+        parent.append(loop.parent < 0
+                          ? Json::Value(Json::nullValue)
+                          : Json::Value(static_cast<Json::UInt>(loop.parent)));
+      }
+      Json::Value loops(Json::objectValue);
+      loops["header"] = header;
+      loops["parent"] = parent;
+      r["loops"] = loops;
+      Json::Value block_loop(Json::arrayValue);
+      for (const auto& [blk, loop_id] : rec.block_loop) {
+        Json::Value pair(Json::arrayValue);
+        pair.append(static_cast<Json::UInt>(blk));
+        pair.append(static_cast<Json::UInt>(loop_id));
+        block_loop.append(pair);
+      }
+      r["block_loop"] = block_loop;
     }
     if (!rec.pgo.empty()) {
       Json::Value pgo(Json::objectValue);

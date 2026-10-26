@@ -157,6 +157,85 @@ DexClass* create_sb_class() {
   return cc.create();
 }
 
+// Three looping shapes plus a straight-line method:
+//  - nested: an outer counted loop around an inner one;
+//  - retry: returns to its header only through a catch handler, so the cycle
+//    exists only via a throw edge;
+//  - irreducible: a two-block cycle entered at both blocks;
+//  - straight: no loop at all.
+DexClass* create_loops_class() {
+  ClassCreator cc(DexType::make_type("LLoops;"));
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LLoops;.nested:(I)V"
+      (
+        (load-param v2)
+        (const v0 0)
+        (:outer)
+        (if-ge v0 v2 :done)
+        (const v1 0)
+        (:inner)
+        (if-ge v1 v2 :inner_done)
+        (add-int/lit v1 v1 1)
+        (goto :inner)
+        (:inner_done)
+        (add-int/lit v0 v0 1)
+        (goto :outer)
+        (:done)
+        (return-void)
+      )
+    )
+  )"));
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LLoops;.retry:()V"
+      (
+        (const v0 0)
+        (:again)
+        (.try_start t)
+        (invoke-static () "LLoops;.straight:()V")
+        (.try_end t)
+        (return-void)
+        (.catch (t))
+        (add-int/lit v0 v0 1)
+        (goto :again)
+      )
+    )
+  )"));
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LLoops;.irreducible:(I)V"
+      (
+        (load-param v2)
+        (if-eqz v2 :b)
+        (:a)
+        (add-int/lit v2 v2 1)
+        (if-eqz v2 :end)
+        (:b)
+        (add-int/lit v2 v2 -1)
+        (if-nez v2 :a)
+        (:end)
+        (return-void)
+      )
+    )
+  )"));
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LLoops;.straight:()V"
+      (
+        (return-void)
+      )
+    )
+  )"));
+  return cc.create();
+}
+
+// Blocks per loop index, from a record's innermost-loop pairs.
+std::map<uint32_t, size_t> blocks_per_loop(const dexvt::MethodRecord& rec) {
+  std::map<uint32_t, size_t> out;
+  for (const auto& [blk, loop] : rec.block_loop) {
+    ++out[loop];
+  }
+  return out;
+}
+
 const DexMethod* find_method(DexClass* cls, const std::string& needle) {
   for (auto* m : cls->get_dmethods()) {
     if (show(m).find(needle) != std::string::npos) {
@@ -344,10 +423,10 @@ TEST_F(DexVtTest, capturesCallGraphCallers) {
             callee_rec->callers.end());
 }
 
-// emit() writes schema_version 8, references caller-sets by a `caller_set` int,
+// emit() writes schema_version 9, references caller-sets by a `caller_set` int,
 // resolves each set through the redex-dexvt.callersets.tsv sidecar, emits
-// kind:"class" inheritance records (v5), and per-method block_offsets for every
-// block including the entry block (v8).
+// kind:"class" inheritance records (v5), and omits the loop fields on
+// methods without loops (v9).
 TEST_F(DexVtTest, emitInternsCallerSets) {
   auto* cls = create_caller_class();
   auto stores = make_stores(cls);
@@ -369,7 +448,7 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
   ASSERT_TRUE(static_cast<bool>(std::getline(nd, line)));
   Json::Value manifest;
   ASSERT_TRUE(Json::Reader().parse(line, manifest));
-  EXPECT_EQ(manifest["schema_version"].asInt(), 8);
+  EXPECT_EQ(manifest["schema_version"].asInt(), 9);
   EXPECT_GE(manifest["callerset_count"].asUInt(), 1u);
   EXPECT_GE(manifest["class_count"].asUInt(), 1u);
 
@@ -379,6 +458,8 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
     Json::Value r;
     ASSERT_TRUE(Json::Reader().parse(line, r));
     EXPECT_FALSE(r.isMember("callers")); // callers are interned, not inlined
+    EXPECT_FALSE(r.isMember("loops")); // no loops in this class
+    EXPECT_FALSE(r.isMember("block_loop"));
     if (r.isMember("caller_set")) {
       caller_set = r["caller_set"].asInt();
     }
@@ -553,4 +634,260 @@ TEST_F(DexVtTest, captureLeavesCodeUntouched) {
   EXPECT_EQ(assembler::to_string(code), before);
   EXPECT_FALSE(code->cfg_built());
   block_offset_sink::clear();
+}
+
+// The outer loop encloses the inner one: the outer is listed first with no
+// parent, the inner names it as parent, and each looping block maps to its
+// INNERMOST loop -- the two inner blocks to the inner loop, the outer header,
+// the inner loop's preheader and the outer latch to the outer loop.
+TEST_F(DexVtTest, capturesNestedLoops) {
+  auto* cls = create_loops_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec = exporter.get_record(find_method(cls, "LLoops;.nested"));
+  ASSERT_NE(rec, nullptr);
+  ASSERT_EQ(rec->loops.size(), 2u) << rec->disasm;
+  EXPECT_EQ(rec->loops[0].parent, -1);
+  EXPECT_EQ(rec->loops[1].parent, 0);
+  EXPECT_NE(rec->loops[0].header_blk, rec->loops[1].header_blk);
+  auto per_loop = blocks_per_loop(*rec);
+  EXPECT_EQ(per_loop[0], 3u) << rec->disasm;
+  EXPECT_EQ(per_loop[1], 2u) << rec->disasm;
+  // Each header is a block of its own loop, not of a deeper one.
+  for (uint32_t i = 0; i < rec->loops.size(); ++i) {
+    auto it = std::find_if(
+        rec->block_loop.begin(), rec->block_loop.end(),
+        [&](const auto& p) { return p.first == rec->loops[i].header_blk; });
+    ASSERT_NE(it, rec->block_loop.end());
+    EXPECT_EQ(it->second, i);
+  }
+  EXPECT_TRUE(std::is_sorted(rec->block_loop.begin(), rec->block_loop.end()));
+}
+
+// A retry loop cycles only through the throw edge into its catch handler. It
+// re-executes code, so it is a loop -- the same answer SyntheticBlockCountsPass
+// gets from LoopInfo.
+TEST_F(DexVtTest, capturesLoopThroughThrowEdge) {
+  auto* cls = create_loops_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec = exporter.get_record(find_method(cls, "LLoops;.retry"));
+  ASSERT_NE(rec, nullptr);
+  ASSERT_EQ(rec->loops.size(), 1u) << rec->disasm;
+  EXPECT_EQ(rec->loops[0].parent, -1);
+  EXPECT_NE(rec->disasm.find("throw"), std::string::npos) << rec->disasm;
+}
+
+// A cycle entered at two blocks has no dominating header. LoopInfo still
+// reports it as one loop, so dexvt does too.
+TEST_F(DexVtTest, capturesIrreducibleCycleAsOneLoop) {
+  auto* cls = create_loops_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec =
+      exporter.get_record(find_method(cls, "LLoops;.irreducible"));
+  ASSERT_NE(rec, nullptr);
+  ASSERT_EQ(rec->loops.size(), 1u) << rec->disasm;
+  EXPECT_EQ(blocks_per_loop(*rec)[0], 2u) << rec->disasm;
+}
+
+TEST_F(DexVtTest, straightLineMethodHasNoLoops) {
+  auto* cls = create_loops_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec = exporter.get_record(find_method(cls, "LLoops;.straight"));
+  ASSERT_NE(rec, nullptr);
+  EXPECT_TRUE(rec->loops.empty());
+  EXPECT_TRUE(rec->block_loop.empty());
+}
+
+// Two independent captures record identical loops, and emit() writes them in
+// the columnar shape: `loops.header` / `loops.parent` (null for an outermost
+// loop) and `block_loop` pairs, matching the record.
+TEST_F(DexVtTest, emitsLoopsDeterministically) {
+  auto* cls = create_loops_class();
+  auto stores = make_stores(cls);
+
+  auto conf1 = make_config();
+  dexvt::Exporter e1;
+  e1.capture_pre_lowering(stores, conf1);
+  auto conf2 = make_config();
+  dexvt::Exporter e2;
+  e2.capture_pre_lowering(stores, conf2);
+  for (auto* m : cls->get_all_methods()) {
+    const auto* r1 = e1.get_record(m);
+    const auto* r2 = e2.get_record(m);
+    ASSERT_NE(r1, nullptr);
+    ASSERT_NE(r2, nullptr);
+    ASSERT_EQ(r1->loops.size(), r2->loops.size());
+    for (size_t i = 0; i < r1->loops.size(); ++i) {
+      EXPECT_EQ(r1->loops[i].header_blk, r2->loops[i].header_blk);
+      EXPECT_EQ(r1->loops[i].parent, r2->loops[i].parent);
+    }
+    EXPECT_EQ(r1->block_loop, r2->block_loop);
+  }
+
+  namespace fs = std::filesystem;
+  auto tmp = redex::make_tmp_dir("dexvt_emit_loops%%%%%%%%");
+  fs::path dir(tmp.path);
+  conf1.set_outdir(tmp.path);
+  enhanced_dex_stats_t totals;
+  e1.emit(conf1, totals);
+
+  const auto* nested = e1.get_record(find_method(cls, "LLoops;.nested"));
+  ASSERT_NE(nested, nullptr);
+  std::ifstream nd((dir / "meta" / "redex-dexvt.ndjson").string());
+  ASSERT_TRUE(nd.is_open());
+  std::string line;
+  bool found = false;
+  while (std::getline(nd, line)) {
+    Json::Value r;
+    ASSERT_TRUE(Json::Reader().parse(line, r));
+    if (r["obfuscated_name"].asString().find("LLoops;.nested:") ==
+        std::string::npos) {
+      continue;
+    }
+    found = true;
+    const Json::Value& header = r["loops"]["header"];
+    const Json::Value& parent = r["loops"]["parent"];
+    ASSERT_EQ(header.size(), nested->loops.size());
+    ASSERT_EQ(parent.size(), nested->loops.size());
+    EXPECT_TRUE(parent[0u].isNull());
+    EXPECT_EQ(parent[1u].asInt(), 0);
+    for (Json::ArrayIndex i = 0; i < header.size(); ++i) {
+      EXPECT_EQ(header[i].asUInt(), nested->loops[i].header_blk);
+    }
+    const Json::Value& bl = r["block_loop"];
+    ASSERT_EQ(bl.size(), nested->block_loop.size());
+    for (Json::ArrayIndex i = 0; i < bl.size(); ++i) {
+      EXPECT_EQ(bl[i][0u].asUInt(), nested->block_loop[i].first);
+      EXPECT_EQ(bl[i][1u].asUInt(), nested->block_loop[i].second);
+    }
+  }
+  EXPECT_TRUE(found);
+}
+
+namespace {
+// `(:H<l>) if-ge -> exit; <body>; inc; goto H<l>; (:X<l>)` with counter v<reg>.
+std::string counted_loop(const std::string& label,
+                         int reg,
+                         const std::string& body) {
+  const std::string v = "v" + std::to_string(reg);
+  return "(const " + v + " 0)(:H" + label + ")(if-ge " + v + " v15 :X" + label +
+         ")" + body + "(add-int/lit " + v + " " + v + " 1)(goto :H" + label +
+         ")(:X" + label + ")";
+}
+} // namespace
+
+// A root loop holding two loops that each hold two loops: seven loops, depths
+// 1/2/2/3/3/3/3, each depth-3 loop parented by its own depth-2 loop, and every
+// parent listed before its children. Many identical methods give hash order
+// every chance to differ (as it does under -c redex.perturb_unordered=true).
+TEST_F(DexVtTest, nestsSiblingLoopsUnderTheirOwnParent) {
+  ClassCreator cc(DexType::make_type("LSiblings;"));
+  cc.set_super(type::java_lang_Object());
+  const std::string a = counted_loop(
+      "A", 1, counted_loop("a1", 2, "") + counted_loop("a2", 2, ""));
+  const std::string b = counted_loop(
+      "B", 1, counted_loop("b1", 2, "") + counted_loop("b2", 2, ""));
+  constexpr int kMethods = 200;
+  for (int i = 0; i < kMethods; ++i) {
+    cc.add_method(assembler::method_from_string(
+        "(method (public static) \"LSiblings;.m" + std::to_string(i) +
+        ":(I)V\" ((load-param v15)" + counted_loop("R", 0, a + b) +
+        "(return-void)))"));
+  }
+  auto* cls = cc.create();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  for (auto* m : cls->get_all_methods()) {
+    const auto* rec = exporter.get_record(m);
+    ASSERT_NE(rec, nullptr);
+    ASSERT_EQ(rec->loops.size(), 7u) << rec->disasm;
+    std::vector<int> depth(rec->loops.size());
+    std::map<int, int> per_depth;
+    for (size_t i = 0; i < rec->loops.size(); ++i) {
+      const int parent = rec->loops[i].parent;
+      ASSERT_LT(parent, static_cast<int>(i)) << "parent must precede child";
+      depth[i] = parent < 0 ? 1 : depth[parent] + 1;
+      ++per_depth[depth[i]];
+    }
+    EXPECT_EQ(per_depth, (std::map<int, int>{{1, 1}, {2, 2}, {3, 4}}))
+        << show(m);
+    // The root and each depth-2 loop have exactly two children; leaves none.
+    std::map<int, int> children;
+    for (const auto& loop : rec->loops) {
+      if (loop.parent >= 0) {
+        ++children[loop.parent];
+      }
+    }
+    for (size_t i = 0; i < rec->loops.size(); ++i) {
+      EXPECT_EQ(children[static_cast<int>(i)], depth[i] == 3 ? 0 : 2)
+          << show(m) << " loop " << i;
+    }
+  }
+}
+
+// The inner loop's header comes first in the code (lower block id) but is
+// still nested inside the outer loop, which is entered by a forward goto.
+// Ordering must follow depth, not header id.
+TEST_F(DexVtTest, ordersLoopsByDepthNotHeaderId) {
+  ClassCreator cc(DexType::make_type("LBackwards;"));
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(assembler::method_from_string(R"(
+    (method (public static) "LBackwards;.m:(I)V"
+      (
+        (load-param v2)
+        (const v0 0)
+        (goto :outer)
+        (:inner)
+        (if-ge v1 v2 :inner_done)
+        (add-int/lit v1 v1 1)
+        (goto :inner)
+        (:inner_done)
+        (add-int/lit v0 v0 1)
+        (:outer)
+        (if-ge v0 v2 :done)
+        (const v1 0)
+        (goto :inner)
+        (:done)
+        (return-void)
+      )
+    )
+  )"));
+  auto* cls = cc.create();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+
+  const auto* rec = exporter.get_record(find_method(cls, "LBackwards;.m"));
+  ASSERT_NE(rec, nullptr);
+  ASSERT_EQ(rec->loops.size(), 2u) << rec->disasm;
+  EXPECT_EQ(rec->loops[0].parent, -1);
+  EXPECT_EQ(rec->loops[1].parent, 0);
+  EXPECT_LT(rec->loops[1].header_blk, rec->loops[0].header_blk)
+      << "fixture must put the inner header first\n"
+      << rec->disasm;
 }
