@@ -652,6 +652,11 @@ void MultiMethodInliner::make_partial(const DexMethod* method,
         m_config.max_partially_inlined_code_units);
   }
   inlined_cost->reduced_code.reset();
+  // `insn_size` was measured on the reduced cfg. Without that cfg the *full*
+  // callee body is what gets copied into the caller, so keeping the reduced
+  // number would make `inline_inlinables` under-charge `estimated_caller_size`
+  // and under-state the size passed to `is_inlinable`.
+  inlined_cost->insn_size = get_callee_insn_size(method);
 }
 
 const DexType* MultiMethodInliner::get_needs_init_class(
