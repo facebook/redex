@@ -9,6 +9,7 @@
 
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
+#include "IPConstantPropagationAnalysis.h"
 
 #include "ScopedCFG.h"
 #include "Trace.h"
@@ -32,7 +33,9 @@ Transform::Stats ConstantPropagation::run(DexMethod* method,
     intraprocedural::FixpointIterator fp_iter(
         *cfg, ConstantPrimitiveAnalyzer(),
         intraprocedural::make_default_no_throw_analyzer(&state));
-    fp_iter.run({});
+    // Seed the parameters: an instance method's receiver is non-null.
+    fp_iter.run(interprocedural::env_with_params(
+        is_static(method), code, interprocedural::ArgumentDomain::top()));
     constant_propagation::Transform tf(m_config.transform, state);
     tf.apply(fp_iter, WholeProgramState(), code->cfg(), xstores,
              is_static(method), method->get_class(), method->get_proto());
