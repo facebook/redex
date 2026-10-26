@@ -76,6 +76,26 @@ constexpr const char* kNothingCarried = R"(
   )
 )";
 
+// A cycle that can be entered at either of its two blocks, the shape of a loop
+// in a Kotlin suspend function whose resume label sits inside the loop body. It
+// repeats like any other loop, so the checker has to score it. v2 and v5 are
+// written in the cycle and live into both of its blocks, and each block is
+// jumped to from the entry and from the other block.
+constexpr const char* kTwoEntryCycle = R"(
+  (
+    (load-param v5)
+    (const v2 0)
+    (if-eqz v5 :second)
+    (:first)
+    (add-int/lit v2 v2 1)
+    (:second)
+    (add-int/lit v5 v5 -1)
+    (if-gtz v5 :first)
+    (invoke-static (v2) "LFoo;.use:(I)V")
+    (return-void)
+  )
+)";
+
 constexpr const char* kNoLoop = R"(
   (
     (load-param v0)
@@ -112,6 +132,14 @@ TEST_F(Armv7JitLoopCheckerTest, valuesNotReadAfterTheLoopAreNotCarried) {
 
 TEST_F(Armv7JitLoopCheckerTest, methodWithoutLoopHasNoScore) {
   EXPECT_FALSE(score(kNoLoop));
+}
+
+TEST_F(Armv7JitLoopCheckerTest, cycleWithTwoEntriesIsScored) {
+  auto s = score(kTwoEntryCycle);
+  ASSERT_TRUE(s);
+  EXPECT_EQ(s->carried_values, 2);
+  EXPECT_EQ(s->merge_in_degree, 2);
+  EXPECT_EQ(s->score, 4);
 }
 
 // Past large_frame_carried_values, the score grows by one extra copy per copy

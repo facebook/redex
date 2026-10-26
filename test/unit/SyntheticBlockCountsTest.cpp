@@ -378,6 +378,34 @@ TEST_F(SyntheticBlockCountsTest,
   EXPECT_NEAR(fv(head), 1000.0f, 1.0f);
 }
 
+// A cycle entered at either of its two blocks has no header to anchor a
+// geometric multiplier on, so the solve treats it as plain merges -- no block
+// exceeds the entry count -- and reports it in `solve_fallback_irreducible`.
+TEST_F(SyntheticBlockCountsTest, TwoEntryCycleFallsBackToMerges) {
+  auto* m = make(R"((
+      (.src_block "LD;.f:()V" 0 (1.0 1.0))
+      (const v0 3)
+      (if-eqz v0 :second)
+      (:first)
+      (.src_block "LD;.f:()V" 1 (1.0 1.0))
+      (add-int/lit v0 v0 1)
+      (:second)
+      (.src_block "LD;.f:()V" 2 (1.0 1.0))
+      (add-int/lit v0 v0 -1)
+      (if-gtz v0 :first)
+      (.src_block "LD;.f:()V" 3 (1.0 1.0))
+      (return-void)
+    ))");
+  auto profiles = profile_with(m, 100.0);
+  auto res = run(m, profiles);
+  EXPECT_EQ(res.solve_fallback_irreducible, 1u);
+  auto& cfg = m->get_code()->cfg();
+  EXPECT_FLOAT_EQ(fv(cfg.entry_block()), 100.0f);
+  for (auto* b : cfg.blocks()) {
+    EXPECT_LE(fv(b), 100.0f) << show(b);
+  }
+}
+
 // Nested loops: an inner loop inside an outer loop, each a 2-way header with a
 // measured 0.5 back-edge (-> x2). The inner multiplier must compound into the
 // outer solve: as the outer's local frequency propagation reaches the inner
