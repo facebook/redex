@@ -570,7 +570,11 @@ IROpcode last_opcode(cfg::Block* block) {
 
 // The opcode of a block's first instruction (or a NOP sentinel if empty).
 IROpcode first_opcode(cfg::Block* block) {
-  for (auto& mie : InstructionIterable(block)) {
+  auto&& instructions = InstructionIterable(block);
+  auto first = instructions.begin();
+  auto end = instructions.end();
+  if (first != end) {
+    auto& mie = *first;
     return mie.insn->opcode();
   }
   return OPCODE_NOP;
