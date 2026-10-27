@@ -358,7 +358,8 @@ TEST(Dex038Test, ReadWriteDex038) {
     EXPECT_EQ(EEXIST, errno);
   }
 
-  instruction_lowering::run(stores, true);
+  instruction_lowering::normalize_cfg(stores);
+  instruction_lowering::run(stores);
 
   std::string output_dex = tmpdir.path + "/output.dex";
   auto gtypes = std::make_shared<GatheredTypes>(&classes);

@@ -1723,8 +1723,10 @@ void redex_backend(ConfigFiles& conf,
     bool lower_with_cfg = true;
     conf.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
     Timer t("Instruction lowering");
-    instruction_lowering_stats =
-        instruction_lowering::run(stores, lower_with_cfg, &conf);
+    if (lower_with_cfg) {
+      instruction_lowering::normalize_cfg(stores);
+    }
+    instruction_lowering_stats = instruction_lowering::run(stores, &conf);
   }
 
   sanitizers::lsan_do_recoverable_leak_check();

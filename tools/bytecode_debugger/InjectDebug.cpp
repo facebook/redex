@@ -170,7 +170,8 @@ void InjectDebug::inject_all() {
 
 void InjectDebug::write_dex() {
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
-  instruction_lowering::run(m_stores, true);
+  instruction_lowering::normalize_cfg(m_stores);
+  instruction_lowering::run(m_stores);
 
   for (size_t store_num = 0; store_num < m_stores.size(); ++store_num) {
     DexStore& store = m_stores[store_num];

@@ -43,8 +43,9 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,
@@ -104,8 +105,9 @@ TEST_F(DexOutputTest, TEST_SIMILARITY_ORDERER_PERF_SENSITIVE) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,
@@ -161,8 +163,9 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,
@@ -223,8 +226,9 @@ TEST_F(DexOutputTest, TEST_COMPRESSION_ORDERER_PERF_SENSITIVE) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,
@@ -287,8 +291,9 @@ TEST_F(DexOutputTest, TEST_COLDSTART_ORDER) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,
@@ -342,8 +347,9 @@ TEST_F(DexOutputTest, TEST_COLDSTART_ORDER_EMPTY_FILE) {
   auto scope = build_class_scope(stores);
 
   // Lower the code
+  instruction_lowering::normalize_cfg(stores);
   walk::parallel::methods<>(
-      scope, [](DexMethod* m) { instruction_lowering::lower(m, true); });
+      scope, [](DexMethod* m) { instruction_lowering::lower(m); });
 
   auto gtypes = std::make_shared<GatheredTypes>(&*classes);
   DexOutput dout("", &*classes, std::move(gtypes), true, 0, nullptr, 0,

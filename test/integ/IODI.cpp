@@ -62,7 +62,8 @@ class IODITest : public ::testing::Test {
         load_classes_from_dex(DexLocation::make_location("dex", dexfile)));
     stores.emplace_back(std::move(root_store));
 
-    instruction_lowering::run(stores, true);
+    instruction_lowering::normalize_cfg(stores);
+    instruction_lowering::run(stores);
 
     std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("tmp"));
     UnorderedMap<DexMethod*, uint64_t> method_to_id;

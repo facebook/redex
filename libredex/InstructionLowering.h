@@ -72,13 +72,17 @@ struct Stats {
  *   - Record the number of instructions converted to /2addr form, and the
  *     number of move instructions inserted because of check-casts.
  */
-Stats lower(DexMethod*,
-            bool lower_with_cfg = false,
-            ConfigFiles* conf = nullptr);
+Stats lower(DexMethod*, ConfigFiles* conf = nullptr);
 
-Stats run(DexStoresVector&,
-          bool lower_with_cfg = false,
-          ConfigFiles* conf = nullptr);
+Stats run(DexStoresVector&, ConfigFiles* conf = nullptr);
+
+/*
+ * Build every method's CFG and linearize it again, in parallel. This removes,
+ * among others, empty blocks (a block with only a goto in it), on which
+ * dex2oat 6.0.0_r1 generates bogus machine code. Call it before run() where
+ * that matters.
+ */
+void normalize_cfg(DexStoresVector&);
 
 namespace impl {
 

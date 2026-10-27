@@ -436,18 +436,10 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
 
 } // namespace
 
-Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
+Stats lower(DexMethod* method, ConfigFiles* conf) {
   Stats stats;
   auto* code = method->get_code();
   always_assert(code != nullptr);
-
-  // There's a bug in dex2oat (version 6.0.0_r1) that generates bogus machine
-  // code when there is an empty block (a block with only a goto in it). To
-  // avoid this bug, we use the CFG to remove empty blocks.
-  if (lower_with_cfg) {
-    code->build_cfg();
-    code->clear_cfg();
-  }
 
   // Check the load-param opcodes make sense before removing them
   check_load_params(method);
@@ -530,16 +522,22 @@ Stats lower(DexMethod* method, bool lower_with_cfg, ConfigFiles* conf) {
   return stats;
 }
 
-Stats run(DexStoresVector& stores, bool lower_with_cfg, ConfigFiles* conf) {
+Stats run(DexStoresVector& stores, ConfigFiles* conf) {
   auto scope = build_class_scope(stores);
-  return walk::parallel::methods<Stats>(scope,
-                                        [lower_with_cfg, conf](DexMethod* m) {
-                                          Stats stats;
-                                          if (m->get_code() == nullptr) {
-                                            return stats;
-                                          }
-                                          return lower(m, lower_with_cfg, conf);
-                                        });
+  return walk::parallel::methods<Stats>(scope, [conf](DexMethod* m) {
+    Stats stats;
+    if (m->get_code() == nullptr) {
+      return stats;
+    }
+    return lower(m, conf);
+  });
+}
+
+void normalize_cfg(DexStoresVector& stores) {
+  walk::parallel::code(build_class_scope(stores), [](DexMethod*, IRCode& code) {
+    code.build_cfg();
+    code.clear_cfg();
+  });
 }
 
 CaseKeysExtent CaseKeysExtent::from_ordered(
