@@ -169,6 +169,70 @@ TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
   EXPECT_EQ(arg1, get_type_domain("LO;"));
 }
 
+TEST_F(GlobalTypeAnalysisTest, CaughtExceptionArgumentTest) {
+  Scope scope;
+  prepare_scope(scope);
+
+  auto* cls_a = DexType::make_type("LA;");
+  ClassCreator creator(cls_a);
+  creator.set_super(type::java_lang_Object());
+
+  auto* meth_may_throw = assembler::method_from_string(R"(
+    (method (public static) "LA;.mayThrow:()V"
+     (
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(meth_may_throw);
+
+  auto* meth_bar = assembler::method_from_string(R"(
+    (method (public static) "LA;.bar:(Ljava/lang/Throwable;)V"
+     (
+      (load-param-object v0)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(meth_bar);
+
+  auto* meth_foo = assembler::method_from_string(R"(
+    (method (public static) "LA;.foo:()V"
+     (
+      (.try_start t)
+      (invoke-static () "LA;.mayThrow:()V")
+      (.try_end t)
+      (return-void)
+      (.catch (t))
+      (move-exception v0)
+      (invoke-static (v0) "LA;.bar:(Ljava/lang/Throwable;)V")
+      (return-void)
+     )
+    )
+  )");
+  meth_foo->rstate.set_root();
+  creator.add_method(meth_foo);
+  scope.push_back(creator.create());
+
+  auto cg = std::make_shared<call_graph::Graph>(call_graph::single_callee_graph(
+      *method_override_graph::build_graph(scope), scope));
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  GlobalTypeAnalyzer gta(cg);
+  gta.run(ArgumentTypePartition{
+      {CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+
+  const auto& graph = gta.get_call_graph();
+  auto bar_arg_env =
+      gta.get_entry_state_at(graph.node(meth_bar)).get(CURRENT_PARTITION_LABEL);
+  auto arg0 = bar_arg_env.get(0);
+  EXPECT_TRUE(arg0.is_not_null());
+  EXPECT_EQ(arg0.get_dex_type(),
+            std::optional<const DexType*>(type::java_lang_Throwable()));
+  // The handler can catch any subclass, so j.l.Throwable must not become the
+  // exact class set that TypeAnalysisAwareRemoveUnreachable prunes with.
+  EXPECT_TRUE(arg0.get_set_domain().is_top());
+}
+
 TEST_F(GlobalTypeAnalysisTest, ReturnTypeTest) {
   Scope scope;
   prepare_scope(scope);

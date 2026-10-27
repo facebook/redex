@@ -115,10 +115,15 @@ bool RegisterTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
 
 bool RegisterTypeAnalyzer::analyze_move_exception(const IRInstruction* insn,
                                                   DexTypeEnvironment* env) {
-  // We don't know where to grab the type of the just-caught exception.
-  // Simply set to j.l.Throwable here.
-  env->set(insn->dest(),
-           DexTypeDomain::create_nullable(type::java_lang_Throwable()));
+  // We don't know where to grab the exact type of the just-caught exception,
+  // so fall back to j.l.Throwable. The runtime never stores a null reference
+  // into the handler register, so narrow the nullness. Note that
+  // create_not_null cannot be used here: it would additionally record
+  // j.l.Throwable as the *exact* runtime class in the SmallSetDexTypeDomain,
+  // while the real class is a subclass.
+  auto domain = DexTypeDomain::create_nullable(type::java_lang_Throwable());
+  domain.apply<0>([](auto* val) { *val = NullnessDomain(Nullness::NOT_NULL); });
+  env->set(insn->dest(), domain);
   return true;
 }
 
