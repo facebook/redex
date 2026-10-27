@@ -9,8 +9,6 @@
 
 #include <queue>
 
-#include <sparta/MonotonicFixpointIterator.h>
-
 #include "ConcurrentContainers.h"
 #include "DeterministicContainers.h"
 #include "DexClass.h"
