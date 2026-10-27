@@ -121,15 +121,16 @@ class MoveGains {
     m_gains_size = 0;
     std::mutex mutex;
     walk::parallel::classes(m_movable_classes, [&](DexClass* cls) {
+      if (removal_dex != 0 && (m_moved_classes.count(cls) != 0u)) {
+        // In DexRemovalPass, if a class is already moved from the dex which
+        // is going to be eliminated, we won't move it again. The reshuffle
+        // flow, in contrast, deliberately revisits classes across epochs.
+        return;
+      }
       for (size_t dex_index = m_first_dex_index; dex_index < m_dexen.size();
            ++dex_index) {
         if (m_dynamically_dead_dexes.count(dex_index) != 0) {
           // m_dynamically_dead_dexes should not be involved during reshuffle.
-          continue;
-        }
-        if (!m_moved_classes.empty() && (m_moved_classes.count(cls) != 0u)) {
-          // In DexRemovalPass, if a class is already moved from the dex which
-          // is going to be eliminated, we won't move it again.
           continue;
         }
 
