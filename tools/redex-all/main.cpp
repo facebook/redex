@@ -1709,6 +1709,16 @@ void redex_backend(ConfigFiles& conf,
   finalize_resource_table(conf);
   check_required_resources(conf, false);
 
+  // Before the dexvt capture: normalizing disposes and recreates branch
+  // targets and gotos, so the code dexvt captures must already be the list
+  // IRCode::sync emits.
+  bool lower_with_cfg = true;
+  conf.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
+  if (lower_with_cfg) {
+    Timer t("Normalize CFG");
+    instruction_lowering::normalize_cfg(stores);
+  }
+
   // dexvt: pre-lowering capture (disasm + per-block SourceBlocks + PGO + xref).
   // Must run before instruction_lowering::run — the CFG is cleared by
   // PassManager before the backend, so the capture rebuilds it per method.
@@ -1720,12 +1730,7 @@ void redex_backend(ConfigFiles& conf,
 
   instruction_lowering::Stats instruction_lowering_stats;
   {
-    bool lower_with_cfg = true;
-    conf.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
     Timer t("Instruction lowering");
-    if (lower_with_cfg) {
-      instruction_lowering::normalize_cfg(stores);
-    }
     instruction_lowering_stats = instruction_lowering::run(stores, &conf);
   }
 
