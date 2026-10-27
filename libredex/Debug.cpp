@@ -45,7 +45,9 @@
 #include <sys/syscall.h>
 #endif
 
-#include <boost/exception/all.hpp>
+#include <boost/exception/exception.hpp>
+#include <boost/exception/get_error_info.hpp>
+#include <boost/exception/info.hpp>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
 #endif
