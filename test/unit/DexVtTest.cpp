@@ -15,12 +15,17 @@
 #include <json/reader.h>
 #include <json/value.h>
 #include <map>
+#include <memory>
+#include <set>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "BlockOffsetSink.h"
 #include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexClass.h"
+#include "DexInstruction.h"
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "IRAssembler.h"
@@ -608,6 +613,152 @@ TEST_F(DexVtTest, emitsBlockOffsets) {
                           << min_cu << ", so the entry block has no offset";
   }
   block_offset_sink::clear();
+}
+
+// Exports `method_body` the way redex_backend does -- optionally
+// instruction_lowering::normalize_cfg (lower_with_cfg), the dexvt capture,
+// instruction lowering, sync, emit -- and checks that every goto / if-* target
+// in the emitted DEX is a recorded block start, which is what `dexvt
+// check-anchors` gates publishing on. Returns the emitted instructions.
+namespace {
+
+struct EmittedInsn {
+  DexOpcode op;
+  int32_t offset; // branch offset in code units; 0 for a non-branch
+};
+
+std::vector<EmittedInsn> export_and_check_branch_targets(
+    const std::string& cls_name,
+    const std::string& method_body,
+    bool normalize) {
+  block_offset_sink::clear();
+  ClassCreator cc(DexType::make_type(cls_name));
+  cc.set_super(type::java_lang_Object());
+  cc.add_method(assembler::method_from_string(method_body));
+  auto* cls = cc.create();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+  auto tmp = redex::make_tmp_dir("dexvt_branch_targets%%%%%%%%");
+  conf.set_outdir(tmp.path);
+
+  if (normalize) {
+    instruction_lowering::normalize_cfg(stores);
+  }
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+  instruction_lowering::run(stores);
+  std::unique_ptr<DexCode> dex;
+  for (auto* m : cls->get_all_methods()) {
+    dex = m->get_code()->sync(m);
+  }
+  enhanced_dex_stats_t totals;
+  exporter.emit(conf, totals);
+
+  std::set<unsigned> starts;
+  std::ifstream nd(
+      (std::filesystem::path(tmp.path) / "meta" / "redex-dexvt.ndjson")
+          .string());
+  EXPECT_TRUE(nd.is_open());
+  std::string line;
+  while (std::getline(nd, line)) {
+    Json::Value r;
+    EXPECT_TRUE(Json::Reader().parse(line, r));
+    if (r["kind"] == "method" && r.isMember("block_offsets")) {
+      for (const auto& pair : r["block_offsets"]) {
+        starts.insert(pair[1u].asUInt());
+      }
+    }
+  }
+
+  std::vector<EmittedInsn> emitted;
+  unsigned addr = 0;
+  for (auto* insn : dex->get_instructions()) {
+    const auto op = insn->opcode();
+    const bool is_branch =
+        dex_opcode::is_goto(op) || dex_opcode::is_conditional_branch(op);
+    if (is_branch) {
+      const auto target =
+          static_cast<unsigned>(static_cast<int32_t>(addr) + insn->offset());
+      EXPECT_TRUE(starts.count(target) != 0)
+          << "normalize_cfg=" << normalize << ": " << SHOW(insn) << " at "
+          << addr << " targets " << target
+          << ", which is no recorded block start";
+    }
+    emitted.push_back({op, is_branch ? insn->offset() : 0});
+    addr += insn->size();
+  }
+  block_offset_sink::clear();
+  return emitted;
+}
+
+} // namespace
+
+// A block that branches to itself ships as `nop; if-nez -1`: DEX cannot encode
+// a zero branch offset, so IRCode::sync inserts the nop in front of the branch.
+// Both branches into the block land on the nop, so the block's start must be
+// the nop, not the branch.
+TEST_F(DexVtTest, selfBranchingBlockStartsAtTheNopSyncInserts) {
+  for (bool normalize : {false, true}) {
+    const std::string cls = normalize ? "LSelfCfg;" : "LSelf;";
+    auto insns = export_and_check_branch_targets(
+        cls,
+        "(method (public static) \"" + cls +
+            R"(.m:(Ljava/lang/Object;Ljava/lang/Object;)V"
+              (
+                (load-param-object v1)
+                (load-param-object v2)
+                (if-eqz v1 :spin)
+                (return-void)
+                (:spin)
+                (if-nez v2 :spin)
+                (return-void)
+              )
+            ))",
+        normalize);
+    bool saw_nop_before_self_branch = false;
+    for (size_t i = 0; i + 1 < insns.size(); ++i) {
+      saw_nop_before_self_branch |= insns[i].op == DOPCODE_NOP &&
+                                    insns[i + 1].op == DOPCODE_IF_NEZ &&
+                                    insns[i + 1].offset == -1;
+    }
+    EXPECT_TRUE(saw_nop_before_self_branch)
+        << "normalize_cfg=" << normalize
+        << ": fixture did not produce `nop; if-nez -1`";
+  }
+}
+
+// An if-* whose target is out of 16-bit range ships as
+// `if-<inverted> skip; goto/32 target`, with the inverted if-* inserted in
+// front. When that if-* leads a block something branches to, the block starts
+// at the inverted if-*.
+TEST_F(DexVtTest, blockLedByALongConditionalBranchStartsAtItsFirstInstruction) {
+  for (bool normalize : {false, true}) {
+    const std::string cls = normalize ? "LLongCfg;" : "LLong;";
+    std::string body = "(method (public static) \"" + cls + R"(.m:(I)V"
+      (
+        (load-param v1)
+        (const v0 1)
+        (:back)
+        (if-eqz v0 :far)
+    )";
+    // Each `const v0 <32-bit literal>` is 3 code units; 12000 of them put
+    // `:far` beyond the 32767 code units an if-* can reach.
+    for (int i = 0; i < 12000; ++i) {
+      body += "(const v0 305419896)\n";
+    }
+    body += R"(
+        (return-void)
+        (:far)
+        (if-nez v1 :back)
+        (return-void)
+      )
+    ))";
+    auto insns = export_and_check_branch_targets(cls, body, normalize);
+    EXPECT_TRUE(std::any_of(
+        insns.begin(), insns.end(),
+        [](const auto& insn) { return insn.op == DOPCODE_GOTO_32; }))
+        << "normalize_cfg=" << normalize << ": fixture did not need a goto/32";
+  }
 }
 
 // Capturing must not touch the code it describes: one more CFG round trip

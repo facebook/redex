@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <unordered_map>
 
@@ -328,8 +329,34 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
       copy->build_cfg();
       cfg = &copy->cfg();
     }
-    auto entry_in_code = [&](const MethodItemEntry* mie) {
-      return copy == nullptr ? mie : to_code.at(mie);
+    // Where a block begins in the code itself, given its first DEX-emitting
+    // opcode in the copy: the first entry after the previous DEX-emitting
+    // opcode, skipping load-params (instruction lowering disposes the `this`
+    // one). IRCode::sync gives that entry the address of whatever it emits
+    // first for the block -- including an instruction it inserts in front of
+    // the opcode, such as the nop before a branch to itself, which would put
+    // the opcode's own entry one code unit late.
+    auto block_start_in_code =
+        [&](const MethodItemEntry* first_op) -> const MethodItemEntry* {
+      if (copy == nullptr) {
+        return first_op;
+      }
+      auto op =
+          code.iterator_to(const_cast<MethodItemEntry&>(*to_code.at(first_op)));
+      auto start = op;
+      while (start != code.begin()) {
+        auto prev = std::prev(start);
+        if (prev->type == MFLOW_OPCODE &&
+            !opcode::is_an_internal(prev->insn->opcode())) {
+          break;
+        }
+        start = prev;
+      }
+      while (start != op && start->type == MFLOW_OPCODE &&
+             opcode::is_a_load_param(start->insn->opcode())) {
+        ++start;
+      }
+      return &*start;
     };
 
     // Deterministic in-house CFG text (see render_disasm); hotness is captured
@@ -339,49 +366,19 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
 
     UnorderedMap<const MethodItemEntry*, uint32_t> leaders;
     for (auto* block : cfg->blocks()) {
-      // Anchor each block by its first DEX-EMITTING opcode MethodItemEntry ->
-      // cfg block id. An instruction entry lowers in place (dex_insn set on the
-      // SAME object) and splices through CFG teardown with stable pointer
-      // identity, so IRCode::sync resolves it to the block's final code-unit
-      // offset.
+      // Anchor each block that emits DEX in the code (block_start_in_code
+      // above). The anchor is a raw MethodItemEntry* of the code, and the sink
+      // only compares pointers, so it relies on nothing between here and
+      // DexOutput's sync pass disposing an anchored entry. That holds because
+      // redex_backend runs instruction_lowering::normalize_cfg before this
+      // capture, and instruction lowering then rewrites entries in place and
+      // disposes only the `this` load-param, which is never an anchor. A
+      // disposed anchor would not crash: a later allocation can reuse its
+      // address, which then resolves to a wrong offset.
       //
-      // Two entry kinds must NOT be the anchor, both because they fail to reach
-      // sync -- leaving the block with no offset at all:
-      //
-      //  - &*block->begin(): for a source-blocked block that is a leading
-      //    MFLOW_SOURCE_BLOCK, whose MIE does not survive to sync (exactly the
-      //    hot, source-blocked blocks we care most about).
-      //  - any INTERNAL opcode (IOPCODE_*): these emit no DEX, so anchoring on
-      //    one records the address of whatever follows. A block whose only
-      //    opcodes are internal then aliases the next block's start_cu, and the
-      //    dex-pc -> block lookup resolves the tie arbitrarily. In particular:
-      //  - a load-param (IOPCODE_LOAD_PARAM*): for a NON-STATIC method,
-      //    instruction_lowering's check_load_params erase_and_dispose()s the
-      //    leading `this` load-param outright, so the captured pointer dangles
-      //    and its block -- always the ENTRY block -- silently loses its
-      //    offset. (A static method's load-params are merely retyped in place
-      //    to MFLOW_FALLTHROUGH by remove_opcode, so anchoring one happens to
-      //    work there -- an accident we must not rely on. Worse, a disposed
-      //    MIE's address can be reused by a later allocation and produce a
-      //    WRONG match.) Load-params emit no DEX, so the block's true start_cu
-      //    is its first real opcode either way.
-      //
-      // INVARIANT this relies on: nothing runs between here and DexOutput's
-      // sync pass except instruction lowering. An anchor is a raw
-      // MethodItemEntry*, so a pass that DISPOSED an anchored opcode would
-      // leave it dangling -- and because the lookup only compares the pointer,
-      // a reused address yields a wrong offset rather than a crash. Lowering is
-      // the only such pass today and load-params are the only entries it
-      // disposes, which is why they are skipped above. Anything inserted into
-      // that window must either preserve anchored opcodes or re-run the
-      // capture.
-      //
-      // Non-opcode entries before the first opcode share its code-unit address,
-      // so the recorded start_cu is still the true block start. Anchoring every
-      // block -- not only source-blocked ones -- lets a block's three levels
-      // (IR/true-DEX/native) slice to exactly the same region. A block with no
-      // DEX-emitting opcode is skipped: it has no DEX to show and its offset
-      // would alias the next block's start_cu.
+      // A block whose only DEX in the code is a goto the copy's CFG absorbed
+      // into an edge (`while (true) {}`, or an entry block of only
+      // load-params) has no DEX-emitting opcode here and gets no anchor.
       const MethodItemEntry* first_op = nullptr;
       for (const auto& mie : *block) {
         if (mie.type == MFLOW_OPCODE &&
@@ -391,7 +388,7 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
         }
       }
       if (first_op != nullptr) {
-        leaders.emplace(entry_in_code(first_op),
+        leaders.emplace(block_start_in_code(first_op),
                         static_cast<uint32_t>(block->id()));
       }
       // Source-blocked blocks additionally carry hotness.
