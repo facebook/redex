@@ -115,7 +115,10 @@ TEST_F(CFGMutationTest, RetainParentWhenRemovingBlock) {
 TEST_F(CFGMutationTest, RetainParentWhenReplacingBlock) {
   EXPECT_MUTATION(
       [](IRCode&, ControlFlowGraph& cfg) {
-        cfg.replace_block(cfg.blocks().at(0), cfg.create_block());
+        auto* entry = cfg.entry_block();
+        auto* replacement = cfg.create_block();
+        cfg.add_edge(replacement, entry->goes_to(), EDGE_GOTO);
+        cfg.replace_block(entry, replacement);
       },
       /* ACTUAL */ R"((
         (.pos:dbg_parent method_name RedexGenerated 0)

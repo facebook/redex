@@ -645,6 +645,48 @@ TEST_F(DedupBlocksTest, diamond) {
   EXPECT_CODE_EQ(expected_code.get(), code);
 }
 
+// The entry block (:start) duplicates the lower-id :other block, so it is the
+// block that gets replaced. The method must still define v0 before use().
+TEST_F(DedupBlocksTest, dedupEntryBlock) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (goto :start)
+
+      (:other)
+      (const v0 1)
+      (goto :join)
+
+      (:start)
+      (const v0 1)
+
+      (:join)
+      (invoke-static (v0) "LFoo;.use:(I)Z")
+      (move-result v1)
+      (if-eqz v1 :other)
+      (return-void)
+    )
+  )");
+
+  auto* method = get_fresh_method("dedupEntryBlock");
+  method->set_code(std::move(input_code));
+  auto* code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:other)
+      (const v0 1)
+      (invoke-static (v0) "LFoo;.use:(I)Z")
+      (move-result v1)
+      (if-eqz v1 :other)
+      (return-void)
+    )
+  )");
+
+  EXPECT_CODE_EQ(expected_code.get(), code);
+}
+
 // in Code:  A B C (where B == C,
 //      and they contain a pair of new-instance and constructor instructions)
 // in CFG:   A -> B

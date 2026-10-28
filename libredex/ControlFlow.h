@@ -896,6 +896,7 @@ class ControlFlowGraph {
 
   // delete old blocks and reroute its predecessors to new blocks
   // Returns number of removed instructions.
+  // If the entry block is replaced, its new block becomes the entry block.
   // May reset exit_block if it is replaced.
   uint32_t replace_blocks(
       const std::vector<std::pair<Block*, Block*>>& old_new_blocks);
@@ -904,6 +905,7 @@ class ControlFlowGraph {
   // Note that replacing blocks is relatively expensive as it scans and fixes up
   // dangling parent positions in all other blocks; consider calling
   // remove_blocks to remove multiple blocks at once.
+  // If the entry block is replaced, its new block becomes the entry block.
   // May reset exit_block if it is replaced.
   // Returns number of removed instructions.
   uint32_t replace_block(Block* old_block, Block* new_block) {

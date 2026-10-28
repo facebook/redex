@@ -1029,6 +1029,51 @@ TEST_F(ControlFlowTest, remove_real_exit_block) {
   code->clear_cfg();
 }
 
+TEST_F(ControlFlowTest, replace_entry_block) {
+  // The leading goto makes the entry block (:start) have a higher id than the
+  // identical :other block.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (goto :start)
+      (:other)
+      (const v0 1)
+      (goto :join)
+      (:start)
+      (const v0 1)
+      (:join)
+      (invoke-static (v0) "LFoo;.use:(I)Z")
+      (move-result v1)
+      (if-eqz v1 :other)
+      (return-void)
+    )
+)");
+
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto* entry = cfg.entry_block();
+  auto* join = entry->goes_to();
+  ASSERT_NE(join, nullptr);
+  auto* other = join->preds()[0]->src() == entry ? join->preds()[1]->src()
+                                                 : join->preds()[0]->src();
+  ASSERT_LT(other->id(), entry->id());
+
+  cfg.replace_block(entry, other);
+  EXPECT_EQ(cfg.entry_block(), other);
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (:other)
+      (const v0 1)
+      (invoke-static (v0) "LFoo;.use:(I)Z")
+      (move-result v1)
+      (if-eqz v1 :other)
+      (return-void)
+    )
+)");
+  EXPECT_CODE_EQ(code.get(), expected.get());
+}
+
 TEST_F(ControlFlowTest, deep_copy1) {
   auto code = assembler::ircode_from_string(R"(
     (

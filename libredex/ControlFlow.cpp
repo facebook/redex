@@ -3083,6 +3083,9 @@ uint32_t ControlFlowGraph::replace_blocks(
     for (auto* e : to_redirect) {
       set_edge_target(e, new_block);
     }
+    if (old_block == entry_block()) {
+      set_entry_block(new_block);
+    }
     blocks_to_remove.push_back(old_block);
   }
   return remove_blocks(blocks_to_remove);
