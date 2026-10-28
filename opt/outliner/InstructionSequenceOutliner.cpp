@@ -815,8 +815,7 @@ static bool explore_candidates_from(
       return false;
     }
     auto* insn = it->insn;
-    if (pcn->insns.size() + 1 < MIN_INSNS_SIZE &&
-        !can_outline_insn(ref_checker, reaching_initialized_init_first_param,
+    if (!can_outline_insn(ref_checker, reaching_initialized_init_first_param,
                           insn, config.outline_control_flow)) {
       return false;
     }

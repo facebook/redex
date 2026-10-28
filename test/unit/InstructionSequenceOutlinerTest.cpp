@@ -201,6 +201,67 @@ TEST_F(InstructionSequenceOutlinerTest, iputsBeforeBaseInitInvocation) {
   EXPECT_CODE_EQ(expected_init_code.get(), outlined_init_code);
 }
 
+// Tests that a candidate which starts with instructions that do not touch the
+// new instance does not extend into iputs on it before the base constructor
+// call. The (const, const, iput...) sequence recurs in the `other` methods,
+// where it can be outlined.
+TEST_F(InstructionSequenceOutlinerTest,
+       candidateDoesNotExtendIntoIputsBeforeBaseInitInvocation) {
+  create();
+
+  const auto* body = R"(
+      (load-param-object v0)
+      (const v1 0)
+      (const v2 0)
+      (iput-object v1 v0 "LC;.f:Ljava/lang/Object;")
+      (iput-object v2 v0 "LC;.f:Ljava/lang/Object;")
+      (iput-object v1 v0 "LC;.f:Ljava/lang/Object;")
+      (iput-object v2 v0 "LC;.f:Ljava/lang/Object;")
+      (iput-object v1 v0 "LC;.f:Ljava/lang/Object;")
+      (iput-object v2 v0 "LC;.f:Ljava/lang/Object;")
+  )";
+  const std::string init_str =
+      std::string("(") + body +
+      R"((invoke-direct (v0) "Ljava/lang/Object;.<init>:()V")
+      (return-void)
+    ))";
+  const std::string other_str = std::string("(") + body + "(return-void))";
+
+  m_init->set_code(assembler::ircode_from_string(init_str));
+  m_other->set_code(assembler::ircode_from_string(other_str));
+  for (const char* name : {"other2", "other3", "other4", "other5"}) {
+    auto* method = DexMethod::make_method(std::string("LC;.") + name + ":()V")
+                       ->make_concrete(ACC_PUBLIC, false);
+    method->set_code(assembler::ircode_from_string(other_str));
+    m_classes.front()->add_method(method);
+  }
+
+  run();
+
+  auto has_invoke_static = [](IRCode* code) {
+    for (const auto& mie : InstructionIterable(*code)) {
+      if (mie.insn->opcode() == OPCODE_INVOKE_STATIC) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(has_invoke_static(m_other->get_code()));
+
+  auto expected_init_code = assembler::ircode_from_string(init_str);
+  auto* outlined_init_code = m_init->get_code();
+  // remove positions, we are not testing that here
+  for (auto it = outlined_init_code->begin();
+       it != outlined_init_code->end();) {
+    if (it->type == MFLOW_POSITION) {
+      it = outlined_init_code->erase(it);
+    } else {
+      it++;
+    }
+  }
+  EXPECT_CODE_EQ(expected_init_code.get(), outlined_init_code);
+}
+
 // Regression for the inverted null-check in throughput detection
 // (OutliningProfileGuidanceImpl `if (!val_pair && val_pair->val > ...)`): a
 // warm, non-loop big block that carries a throughput-interaction source block
