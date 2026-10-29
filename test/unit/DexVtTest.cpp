@@ -727,6 +727,38 @@ TEST_F(DexVtTest, selfBranchingBlockStartsAtTheNopSyncInserts) {
   }
 }
 
+// An empty loop (`while (true) {}`) is a block with no IR instruction: the CFG
+// turns its goto into an edge. It still ships as code -- `nop; goto -1`, the
+// nop because DEX cannot encode a zero branch offset -- so it must be a block
+// start, and branches into it land on the nop.
+TEST_F(DexVtTest, emptyLoopBlockStartsAtTheNopSyncInserts) {
+  for (bool normalize : {false, true}) {
+    const std::string cls = normalize ? "LSpinCfg;" : "LSpin;";
+    auto insns =
+        export_and_check_branch_targets(cls,
+                                        "(method (public static) \"" + cls +
+                                            R"(.m:(Ljava/lang/Object;)V"
+              (
+                (load-param-object v1)
+                (if-eqz v1 :spin)
+                (return-void)
+                (:spin)
+                (goto :spin)
+              )
+            ))",
+                                        normalize);
+    bool saw_nop_before_self_goto = false;
+    for (size_t i = 0; i + 1 < insns.size(); ++i) {
+      saw_nop_before_self_goto |= insns[i].op == DOPCODE_NOP &&
+                                  insns[i + 1].op == DOPCODE_GOTO &&
+                                  insns[i + 1].offset == -1;
+    }
+    EXPECT_TRUE(saw_nop_before_self_goto)
+        << "normalize_cfg=" << normalize
+        << ": fixture did not produce `nop; goto -1`";
+  }
+}
+
 // An if-* whose target is out of 16-bit range ships as
 // `if-<inverted> skip; goto/32 target`, with the inverted if-* inserted in
 // front. When that if-* leads a block something branches to, the block starts

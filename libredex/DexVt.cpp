@@ -32,6 +32,7 @@
 #include "DeterministicContainers.h"
 #include "DexClass.h"
 #include "DexOutput.h"
+#include "DexPosition.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -307,12 +308,20 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
   // come out of every round trip in the other of two layouts -- so a round
   // trip here would change the DEX that ships, and only in builds that emit
   // dexvt. Anchors found in the copy are mapped back to the code's own entries.
+  // The file of the position entries that mark gotos in a method's copy.
+  const DexString* goto_mark_file = DexString::make_string("dexvt goto mark");
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     MethodRecord rec;
     rec.id = m_ids.at(method);
 
     std::unique_ptr<IRCode> copy;
     UnorderedMap<const MethodItemEntry*, const MethodItemEntry*> to_code;
+    // The copy's CFG turns every goto into an edge, so a block whose only DEX
+    // in the code is a goto -- an empty loop, `while (true) {}` -- keeps no
+    // entry of its own. Each goto's place in the copy is marked with a position
+    // entry before the CFG is built; the mark stays in the goto's block and
+    // maps back to the code's goto.
+    UnorderedMap<const DexPosition*, const MethodItemEntry*> goto_at_mark;
     const cfg::ControlFlowGraph* cfg = nullptr;
     if (code.cfg_built()) {
       cfg = &code.cfg();
@@ -320,9 +329,15 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
       copy = std::make_unique<IRCode>(code);
       // The copy holds one entry per entry of the code, in the same order.
       auto it = code.begin();
-      for (const auto& copied : *copy) {
+      for (auto copied = copy->begin(); copied != copy->end(); ++copied) {
         always_assert(it != code.end());
-        to_code.emplace(&copied, &*it);
+        to_code.emplace(&*copied, &*it);
+        if (copied->type == MFLOW_OPCODE &&
+            copied->insn->opcode() == OPCODE_GOTO) {
+          auto mark = std::make_unique<DexPosition>(goto_mark_file, 0);
+          goto_at_mark.emplace(mark.get(), &*it);
+          copy->insert_before(copied, std::move(mark));
+        }
         ++it;
       }
       always_assert(it == code.end());
@@ -330,19 +345,15 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
       cfg = &copy->cfg();
     }
     // Where a block begins in the code itself, given its first DEX-emitting
-    // opcode in the copy: the first entry after the previous DEX-emitting
+    // opcode in the code: the first entry after the previous DEX-emitting
     // opcode, skipping load-params (instruction lowering disposes the `this`
     // one). IRCode::sync gives that entry the address of whatever it emits
     // first for the block -- including an instruction it inserts in front of
     // the opcode, such as the nop before a branch to itself, which would put
     // the opcode's own entry one code unit late.
-    auto block_start_in_code =
-        [&](const MethodItemEntry* first_op) -> const MethodItemEntry* {
-      if (copy == nullptr) {
-        return first_op;
-      }
-      auto op =
-          code.iterator_to(const_cast<MethodItemEntry&>(*to_code.at(first_op)));
+    auto start_in_code =
+        [&](const MethodItemEntry* code_op) -> const MethodItemEntry* {
+      auto op = code.iterator_to(const_cast<MethodItemEntry&>(*code_op));
       auto start = op;
       while (start != code.begin()) {
         auto prev = std::prev(start);
@@ -357,6 +368,40 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
         ++start;
       }
       return &*start;
+    };
+    // The same, given the block's first DEX-emitting opcode in the copy.
+    auto block_start_in_code =
+        [&](const MethodItemEntry* first_op) -> const MethodItemEntry* {
+      return copy == nullptr ? first_op : start_in_code(to_code.at(first_op));
+    };
+    // The code's goto that branches to itself, among the gotos marked in an
+    // instruction-less block of the copy. The CFG keeps such a block only when
+    // it loops to itself (simplify removes every other empty block and may
+    // move its marks along), so its own goto is the one whose branch target
+    // sits right in front of it in the code.
+    auto self_goto_in = [&](const cfg::Block* block) -> const MethodItemEntry* {
+      for (const auto& mie : *block) {
+        if (mie.type != MFLOW_POSITION) {
+          continue;
+        }
+        auto found = goto_at_mark.find(mie.pos.get());
+        if (found == goto_at_mark.end()) {
+          continue;
+        }
+        const MethodItemEntry* go = found->second;
+        for (auto e = code.iterator_to(const_cast<MethodItemEntry&>(*go));
+             e != code.begin();) {
+          --e;
+          if (e->type == MFLOW_TARGET && e->target->src == go) {
+            return go;
+          }
+          if (e->type == MFLOW_OPCODE &&
+              !opcode::is_an_internal(e->insn->opcode())) {
+            break;
+          }
+        }
+      }
+      return nullptr;
     };
 
     // Deterministic in-house CFG text (see render_disasm); hotness is captured
@@ -377,8 +422,8 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
       // address, which then resolves to a wrong offset.
       //
       // A block whose only DEX in the code is a goto the copy's CFG absorbed
-      // into an edge (`while (true) {}`, or an entry block of only
-      // load-params) has no DEX-emitting opcode here and gets no anchor.
+      // into an edge (`while (true) {}`) is anchored on that goto. An entry
+      // block of only load-params emits no DEX and gets no anchor.
       const MethodItemEntry* first_op = nullptr;
       for (const auto& mie : *block) {
         if (mie.type == MFLOW_OPCODE &&
@@ -390,6 +435,8 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
       if (first_op != nullptr) {
         leaders.emplace(block_start_in_code(first_op),
                         static_cast<uint32_t>(block->id()));
+      } else if (const auto* go = self_goto_in(block); go != nullptr) {
+        leaders.emplace(start_in_code(go), static_cast<uint32_t>(block->id()));
       }
       // Source-blocked blocks additionally carry hotness.
       const auto* sb = source_blocks::get_first_source_block(block);
