@@ -114,13 +114,14 @@ struct KeepSpec {
 
 size_t hash_value(const KeepSpec&);
 
-inline size_t hash_value(const std::unique_ptr<KeepSpec>& spec) {
-  return hash_value(*spec);
-}
-
 /*
- * This is a simple implementation of a set that preserves insertion order. The
- * insertion order of keep rules reflects their order in the input .pro
+ * The rules of one kind, in insertion order. Despite the name this is a list,
+ * not a set: identical rules are separate entries, each matched on its own.
+ * Deduplicating would need an equality that covers everything that affects
+ * matching, including the keep flavor (mark_classes, mark_conditionally) and
+ * assumed return values, and the order of assumption rules matters.
+ *
+ * The insertion order of keep rules reflects their order in the input .pro
  * files. At present, the effects of keep rule application on the
  * ReferencedState are order-sensitive, hence the need for this.
  *
@@ -134,11 +135,8 @@ class KeepSpecSet {
   using const_iterator = std::vector<KeepSpec*>::const_iterator;
 
   void emplace(std::unique_ptr<KeepSpec> spec) {
-    const auto& p = m_unordered_set.emplace(std::move(spec));
-    bool did_insert = p.second;
-    if (did_insert) {
-      m_ordered.push_back(p.first->get());
-    }
+    m_ordered.push_back(spec.get());
+    m_owned.push_back(std::move(spec));
   }
 
   iterator begin() const { return m_ordered.begin(); }
@@ -158,9 +156,7 @@ class KeepSpecSet {
 
  private:
   std::vector<KeepSpec*> m_ordered;
-  UnorderedSet<std::unique_ptr<KeepSpec>,
-               boost::hash<std::unique_ptr<KeepSpec>>>
-      m_unordered_set;
+  std::vector<std::unique_ptr<KeepSpec>> m_owned;
 };
 
 template <typename Pred>

@@ -17,6 +17,28 @@
 using namespace keep_rules;
 
 // Make sure we can parse an empty string
+// Identical rules are separate entries, and erasing calls the predicate once
+// per entry.
+TEST(ProguardParserTest, identical_keep_rules_are_separate_entries) {
+  ProguardConfiguration config;
+  std::istringstream ss(R"(
+    -keep class Foo { *; }
+    -keep class Foo { *; }
+)");
+  proguard_parser::parse(ss, &config);
+  ASSERT_TRUE(config.ok);
+  ASSERT_EQ(config.keep_rules.size(), 2);
+  EXPECT_NE(config.keep_rules.elements()[0], config.keep_rules.elements()[1]);
+
+  size_t calls = 0;
+  config.keep_rules.erase_if([&](const KeepSpec&) {
+    ++calls;
+    return true;
+  });
+  EXPECT_EQ(calls, 2);
+  EXPECT_TRUE(config.keep_rules.empty());
+}
+
 TEST(ProguardParserTest, empty1) {
   ProguardConfiguration config;
   std::istringstream ss1("");

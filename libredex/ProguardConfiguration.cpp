@@ -223,19 +223,24 @@ size_t hash_value(const KeepSpec& spec) {
 }
 
 void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
+  // `pred` may count what it removes, so it runs exactly once per rule.
   UnorderedSet<const KeepSpec*> erased;
-  unordered_erase_if(m_unordered_set, [&](auto& v) {
-    if (pred(*v)) {
-      erased.emplace(v.get());
-      return true;
-    }
-    return false;
-  });
-  m_ordered.erase(
-      std::remove_if(m_ordered.begin(),
-                     m_ordered.end(),
-                     [&](const KeepSpec* ks) { return erased.count(ks); }),
-      m_ordered.end());
+  m_ordered.erase(std::remove_if(m_ordered.begin(),
+                                 m_ordered.end(),
+                                 [&](const KeepSpec* ks) {
+                                   if (pred(*ks)) {
+                                     erased.emplace(ks);
+                                     return true;
+                                   }
+                                   return false;
+                                 }),
+                  m_ordered.end());
+  m_owned.erase(std::remove_if(m_owned.begin(),
+                               m_owned.end(),
+                               [&](const std::unique_ptr<KeepSpec>& ks) {
+                                 return erased.count(ks.get()) != 0;
+                               }),
+                m_owned.end());
 }
 
 } // namespace keep_rules
