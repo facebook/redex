@@ -106,32 +106,6 @@ bool TypedefAnnoChecker::should_skip_method(const DexMethod* m) const {
     }
   }
 
-  // Skip valueOfOpt in typedef $Util classes — these are factory methods
-  // that convert raw values to typedef values by design.
-  if (m->get_simple_deobfuscated_name() == "valueOfOpt") {
-    auto* cls = type_class(m->get_class());
-    if (cls != nullptr &&
-        cls->get_deobfuscated_name_or_empty_copy().ends_with("$Util;") &&
-        cls->get_anno_set() != nullptr) {
-      DexAnnotation* anno = get_annotation(
-          cls, DexType::make_type("Ldalvik/annotation/EnclosingClass;"));
-      if (anno != nullptr) {
-        const auto& value = anno->anno_elems().begin()->encoded_value;
-        if (value->evtype() == DexEncodedValueTypes::DEVT_TYPE) {
-          auto* type_value = dynamic_cast<DexEncodedValueType*>(value.get());
-          auto type_name = type_value->show_deobfuscated();
-          auto* typedef_cls = type_class(DexType::make_type(type_name));
-          if (typedef_cls != nullptr &&
-              typedef_cls->get_anno_set() != nullptr &&
-              (get_annotation(typedef_cls, m_config.int_typedef) != nullptr ||
-               get_annotation(typedef_cls, m_config.str_typedef) != nullptr)) {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
   return false;
 }
 
