@@ -125,12 +125,17 @@ struct ClassRecord {
  *     monotonic id reused by emit().
  *   - emit() runs AFTER the dex write loop with the accumulated output_totals,
  *     joins the authoritative sizes onto the captured records, and streams the
- *     NDJSON artifact.
+ *     NDJSON artifact. When the write loop filled `method_to_id` (it does for
+ *     builds that write redex-debug-line-map-v2), emit() also records each
+ *     method's index in its dex and each dex's signature, the two halves of
+ *     the key that map files the method under.
  */
 class Exporter {
  public:
   void capture_pre_lowering(DexStoresVector& stores, ConfigFiles& conf);
-  void emit(ConfigFiles& conf, const enhanced_dex_stats_t& output_totals);
+  void emit(ConfigFiles& conf,
+            const enhanced_dex_stats_t& output_totals,
+            const UnorderedMap<DexMethod*, uint64_t>* method_to_id = nullptr);
 
   // Read-only inspection accessors (used by tests).
   size_t num_captured() const { return m_records.size(); }

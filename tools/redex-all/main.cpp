@@ -1874,7 +1874,7 @@ void redex_backend(ConfigFiles& conf,
     // called here (no active pass in redex_backend); resolution health is
     // reported in the artifact manifest instead (see Exporter::emit).
     conf.process_unresolved_method_profile_lines();
-    dexvt_exporter.emit(conf, output_totals);
+    dexvt_exporter.emit(conf, output_totals, &method_to_id);
   }
 
   std::vector<DexMethod*> needs_debug_line_mapping;

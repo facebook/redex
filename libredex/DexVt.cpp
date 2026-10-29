@@ -9,8 +9,10 @@
 
 #include <algorithm>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
+#include <set>
 #include <unordered_map>
 
 #include <boost/io/quoted.hpp>
@@ -186,6 +188,55 @@ void capture_loops(const cfg::ControlFlowGraph& cfg, MethodRecord* rec) {
   }
   std::sort(rec->block_loop.begin(), rec->block_loop.end());
 }
+// redex-debug-line-map-v2 files each method under DexOutput's method_to_id key:
+// (index of the method in its dex << 32) | the first four bytes of that dex's
+// signature. The export records the index per method and the signature once per
+// dex, so the read side can rebuild the key and find a method's line stacks
+// without parsing any dex.
+struct LineMapKeys {
+  std::map<std::string, uint32_t> dex_signatures; // dex tag -> signature
+  UnorderedMap<const DexMethod*, uint32_t> dex_method_idx;
+};
+
+// Splits each method's key into its two halves. Every method of one dex carries
+// the same signature; a dex whose methods disagree gets none, so no key is
+// built for it rather than a wrong one.
+LineMapKeys split_line_map_keys(
+    const std::vector<const DexMethod*>& order,
+    const UnorderedMap<DexMethod*, uint64_t>* method_to_id,
+    const std::function<const std::string&(const DexMethod*)>& dex_of) {
+  LineMapKeys keys;
+  if (method_to_id == nullptr) {
+    return keys;
+  }
+  std::set<std::string> conflicting_dexes;
+  for (const DexMethod* method : order) {
+    auto it = method_to_id->find(const_cast<DexMethod*>(method));
+    if (it == method_to_id->end()) {
+      continue;
+    }
+    keys.dex_method_idx.emplace(method,
+                                static_cast<uint32_t>(it->second >> 32));
+    const std::string& dex = dex_of(method);
+    if (dex.empty()) {
+      continue;
+    }
+    const auto signature = static_cast<uint32_t>(it->second & 0xffffffffu);
+    auto [sig_it, inserted] = keys.dex_signatures.emplace(dex, signature);
+    if (!inserted && sig_it->second != signature) {
+      conflicting_dexes.insert(dex);
+    }
+  }
+  for (const auto& dex : conflicting_dexes) {
+    TRACE(MAIN, 1,
+          "[dexvt] methods of %s carry different dex signatures; no line map "
+          "key is recorded for it",
+          dex.c_str());
+    keys.dex_signatures.erase(dex);
+  }
+  return keys;
+}
+
 } // namespace
 
 void Exporter::capture_pre_lowering(DexStoresVector& stores,
@@ -519,7 +570,8 @@ void Exporter::capture_pre_lowering(DexStoresVector& stores,
 }
 
 void Exporter::emit(ConfigFiles& conf,
-                    const enhanced_dex_stats_t& output_totals) {
+                    const enhanced_dex_stats_t& output_totals,
+                    const UnorderedMap<DexMethod*, uint64_t>* method_to_id) {
   const std::string path = conf.metafile("redex-dexvt.ndjson");
   std::ofstream ofs(path);
   always_assert_log(ofs.is_open(), "dexvt: failed to open %s for writing",
@@ -594,20 +646,26 @@ void Exporter::emit(ConfigFiles& conf,
     }
   }
 
+  const LineMapKeys line_map_keys = split_line_map_keys(
+      order, method_to_id, [this](const DexMethod* m) -> const std::string& {
+        return m_records.at_unsafe(m).dex;
+      });
+
   // Manifest (first line): schema + the SourceBlock interaction index->name map
   // so consumers can label the blocks[] columns.
   Json::Value manifest;
   manifest["record"] = "manifest";
-  manifest["schema_version"] =
-      // This is the on-disk EXPORT format version, independent of the derived
-      // SQLite catalog's `sqlite._USER_VERSION` -- the two count separately and
-      // are expected to differ (see facebook/dexvt/ARCHITECTURE.md).
-      9; // v9 adds per-method `loops` and `block_loop`; v8 carries
-         // block_offsets for every block with code, entry block
-         // included, so a block's three levels slice to the same region; v7
-         // and v6 carry them for a narrower set of blocks; v5 adds
-         // kind:"class" records (super + interfaces); v4 interns caller lists
-         // into callersets.tsv, referenced per method via caller_set
+  // This is the on-disk EXPORT format version, independent of the derived
+  // SQLite catalog's `sqlite._USER_VERSION` -- the two count separately and are
+  // expected to differ (see facebook/dexvt/ARCHITECTURE.md). v10 adds
+  // per-method `dex_method_idx` and the manifest's `dex_signatures` (the line
+  // maps' method key); v9 adds per-method `loops` and `block_loop`; v8 carries
+  // block_offsets for every block with code, entry block included, so a block's
+  // three levels slice to the same region; v7 and v6 carry them for a narrower
+  // set of blocks; v5 adds kind:"class" records (super + interfaces); v4
+  // interns caller lists into callersets.tsv, referenced per method via
+  // caller_set.
+  manifest["schema_version"] = 10;
   manifest["method_count"] = static_cast<Json::UInt64>(m_records.size());
   manifest["field_count"] = static_cast<Json::UInt64>(m_fields.size());
   manifest["class_count"] = static_cast<Json::UInt64>(m_classes.size());
@@ -632,6 +690,13 @@ void Exporter::emit(ConfigFiles& conf,
   const auto& mp = conf.get_method_profiles();
   manifest["pgo_resolved"] = static_cast<Json::UInt64>(mp.size());
   manifest["pgo_unresolved"] = static_cast<Json::UInt64>(mp.unresolved_size());
+  if (!line_map_keys.dex_signatures.empty()) {
+    Json::Value signatures(Json::objectValue);
+    for (const auto& [dex, signature] : line_map_keys.dex_signatures) {
+      signatures[dex] = static_cast<Json::UInt>(signature);
+    }
+    manifest["dex_signatures"] = signatures;
+  }
   writer->write(manifest, &ofs);
   ofs << "\n";
 
@@ -665,6 +730,10 @@ void Exporter::emit(ConfigFiles& conf,
     r["kind"] = "method";
     if (!rec.dex.empty()) {
       r["dex"] = rec.dex;
+    }
+    if (auto it = line_map_keys.dex_method_idx.find(method);
+        it != line_map_keys.dex_method_idx.end()) {
+      r["dex_method_idx"] = static_cast<Json::UInt>(it->second);
     }
 
     if (auto it = output_totals.method_size.find(method);

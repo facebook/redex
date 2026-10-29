@@ -428,8 +428,8 @@ TEST_F(DexVtTest, capturesCallGraphCallers) {
             callee_rec->callers.end());
 }
 
-// emit() writes schema_version 9, references caller-sets by a `caller_set` int,
-// resolves each set through the redex-dexvt.callersets.tsv sidecar, emits
+// emit() writes schema_version 10, references caller-sets by a `caller_set`
+// int, resolves each set through the redex-dexvt.callersets.tsv sidecar, emits
 // kind:"class" inheritance records (v5), and omits the loop fields on
 // methods without loops (v9).
 TEST_F(DexVtTest, emitInternsCallerSets) {
@@ -453,7 +453,9 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
   ASSERT_TRUE(static_cast<bool>(std::getline(nd, line)));
   Json::Value manifest;
   ASSERT_TRUE(Json::Reader().parse(line, manifest));
-  EXPECT_EQ(manifest["schema_version"].asInt(), 9);
+  EXPECT_EQ(manifest["schema_version"].asInt(), 10);
+  // No method_to_id was passed, so there is no line map key to record.
+  EXPECT_FALSE(manifest.isMember("dex_signatures"));
   EXPECT_GE(manifest["callerset_count"].asUInt(), 1u);
   EXPECT_GE(manifest["class_count"].asUInt(), 1u);
 
@@ -465,6 +467,7 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
     EXPECT_FALSE(r.isMember("callers")); // callers are interned, not inlined
     EXPECT_FALSE(r.isMember("loops")); // no loops in this class
     EXPECT_FALSE(r.isMember("block_loop"));
+    EXPECT_FALSE(r.isMember("dex_method_idx"));
     if (r.isMember("caller_set")) {
       caller_set = r["caller_set"].asInt();
     }
@@ -487,6 +490,89 @@ TEST_F(DexVtTest, emitInternsCallerSets) {
     }
   }
   EXPECT_TRUE(found);
+}
+
+namespace {
+// Reads the emitted NDJSON: the manifest, and every method record by its
+// obfuscated name.
+std::pair<Json::Value, std::map<std::string, Json::Value>> read_emitted(
+    const std::string& outdir) {
+  std::ifstream nd(
+      (std::filesystem::path(outdir) / "meta" / "redex-dexvt.ndjson").string());
+  std::string line;
+  Json::Value manifest;
+  std::map<std::string, Json::Value> methods;
+  if (std::getline(nd, line)) {
+    Json::Reader().parse(line, manifest);
+  }
+  while (std::getline(nd, line)) {
+    Json::Value r;
+    Json::Reader().parse(line, r);
+    if (r["kind"].asString() == "method") {
+      methods[r["obfuscated_name"].asString()] = r;
+    }
+  }
+  return {manifest, methods};
+}
+} // namespace
+
+// The line maps file a method under DexOutput's method_to_id key,
+// (method index << 32) | dex signature. emit() splits it into a per-method
+// `dex_method_idx` and one manifest signature per dex tag; methods absent from
+// the map get no index.
+TEST_F(DexVtTest, emitsLineMapKeyHalves) {
+  auto* cls = create_caller_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+  auto tmp = redex::make_tmp_dir("dexvt_emit_key%%%%%%%%");
+  conf.set_outdir(tmp.path);
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+  auto* callee = const_cast<DexMethod*>(find_method(cls, "LCallers;.callee"));
+  ASSERT_NE(callee, nullptr);
+  UnorderedMap<DexMethod*, uint64_t> method_to_id;
+  method_to_id.emplace(callee, (uint64_t{7} << 32) | 0xfeedbeefu);
+  enhanced_dex_stats_t totals;
+  exporter.emit(conf, totals, &method_to_id);
+
+  auto [manifest, methods] = read_emitted(tmp.path);
+  const auto& dex = methods.at(show(callee))["dex"].asString();
+  ASSERT_FALSE(dex.empty());
+  EXPECT_EQ(manifest["dex_signatures"][dex].asUInt(), 0xfeedbeefu);
+  EXPECT_EQ(manifest["dex_signatures"].size(), 1u);
+  EXPECT_EQ(methods.at(show(callee))["dex_method_idx"].asUInt(), 7u);
+  const auto* caller = find_method(cls, "LCallers;.caller");
+  ASSERT_NE(caller, nullptr);
+  EXPECT_FALSE(methods.at(show(caller)).isMember("dex_method_idx"));
+}
+
+// Every method of one dex has the same signature. If they disagree, emit()
+// records no signature for that dex, so the read side builds no key for its
+// methods rather than a wrong one; the indexes are still written.
+TEST_F(DexVtTest, dropsSignatureOfDexWithConflictingKeys) {
+  auto* cls = create_caller_class();
+  auto stores = make_stores(cls);
+  auto conf = make_config();
+  auto tmp = redex::make_tmp_dir("dexvt_emit_key_conflict%%%%%%%%");
+  conf.set_outdir(tmp.path);
+
+  dexvt::Exporter exporter;
+  exporter.capture_pre_lowering(stores, conf);
+  auto* callee = const_cast<DexMethod*>(find_method(cls, "LCallers;.callee"));
+  auto* caller = const_cast<DexMethod*>(find_method(cls, "LCallers;.caller"));
+  ASSERT_NE(callee, nullptr);
+  ASSERT_NE(caller, nullptr);
+  UnorderedMap<DexMethod*, uint64_t> method_to_id;
+  method_to_id.emplace(callee, (uint64_t{1} << 32) | 0x11111111u);
+  method_to_id.emplace(caller, (uint64_t{2} << 32) | 0x22222222u);
+  enhanced_dex_stats_t totals;
+  exporter.emit(conf, totals, &method_to_id);
+
+  auto [manifest, methods] = read_emitted(tmp.path);
+  EXPECT_FALSE(manifest.isMember("dex_signatures"));
+  EXPECT_EQ(methods.at(show(callee))["dex_method_idx"].asUInt(), 1u);
+  EXPECT_EQ(methods.at(show(caller))["dex_method_idx"].asUInt(), 2u);
 }
 
 // Dex strings are MUTF-8: a supplementary char (here U+1F9D9) is a surrogate
