@@ -6,10 +6,13 @@
  */
 
 #include <boost/filesystem.hpp>
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "BundleResources.h"
 #include "RedexResources.h"
@@ -19,9 +22,12 @@
 #include "ResourcesTestDefs.h"
 #include "ResourcesValidationHelper.h"
 #include "androidfw/ResourceTypes.h"
+#include "protores/Resources.pb.h"
 
 using namespace boost::filesystem;
+using ::testing::AllOf;
 using ::testing::Contains;
+using ::testing::Each;
 using ::testing::Eq;
 using ::testing::IsEmpty;
 using ::testing::Key;
@@ -56,6 +62,41 @@ uint32_t get_resource_id(const std::string& name, BundleResources& resources) {
   auto res_table = resources.load_res_table();
   auto ids = res_table->get_res_ids_by_name(name);
   return *ids.begin();
+}
+
+// Returns the kind of primitive stored for `attr_id` by every serialized
+// definition of the style named `style_name`.
+std::vector<aapt::pb::Primitive::OneofValueCase> get_style_primitive_cases(
+    const std::vector<std::string>& resources_pb_paths,
+    const std::string& style_name,
+    uint32_t attr_id) {
+  std::vector<aapt::pb::Primitive::OneofValueCase> cases;
+  for (const auto& path : resources_pb_paths) {
+    std::ifstream input(path, std::ios::binary);
+    aapt::pb::ResourceTable table;
+    EXPECT_TRUE(table.ParseFromIstream(&input)) << "Could not parse " << path;
+    for (const auto& pb_package : table.package()) {
+      for (const auto& pb_type : pb_package.type()) {
+        if (pb_type.name() != "style") {
+          continue;
+        }
+        for (const auto& pb_entry : pb_type.entry()) {
+          if (pb_entry.name() != style_name) {
+            continue;
+          }
+          for (const auto& config_value : pb_entry.config_value()) {
+            for (const auto& style_entry :
+                 config_value.value().compound_value().style().entry()) {
+              if (style_entry.key().id() == attr_id) {
+                cases.push_back(style_entry.item().prim().oneof_value_case());
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return cases;
 }
 } // namespace
 
@@ -795,6 +836,42 @@ TEST_F(BundleResourcesTest, TestAddStyleAttribute) {
           << " is missing from style 0x" << std::hex << resource_id;
     }
   }
+}
+
+TEST_F(BundleResourcesTest, TestAddNullAndEmptyStyleAttributes) {
+  using Value = resources::StyleResource::Value;
+  auto res_table = resources.load_res_table();
+  const auto& paths = resources.find_resources_files();
+  uint32_t style_id = res_table->get_res_ids_by_name("CustomText").at(0);
+
+  // @empty and @null both have TYPE_NULL and differ only in their data.
+  std::vector<resources::StyleModificationSpec::Modification> modifications;
+  modifications.emplace_back(style_id, kFloatAttrId,
+                             Value(android::Res_value::TYPE_NULL,
+                                   android::Res_value::DATA_NULL_EMPTY));
+  modifications.emplace_back(style_id, kDimensionAttrId,
+                             Value(android::Res_value::TYPE_NULL,
+                                   android::Res_value::DATA_NULL_UNDEFINED));
+  res_table->apply_attribute_removals_and_additions(modifications, paths);
+
+  // A Primitive with no value set also reads back as @null, so check what was
+  // written before reading it back.
+  EXPECT_THAT(get_style_primitive_cases(paths, "CustomText", kFloatAttrId),
+              AllOf(Not(IsEmpty()), Each(aapt::pb::Primitive::kEmptyValue)));
+  EXPECT_THAT(get_style_primitive_cases(paths, "CustomText", kDimensionAttrId),
+              AllOf(Not(IsEmpty()), Each(aapt::pb::Primitive::kNullValue)));
+
+  auto updated_style_map = resources.load_res_table()->get_style_map();
+  const auto& attributes = updated_style_map.at(style_id).at(0).attributes;
+
+  const auto& empty_attr = attributes.at(kFloatAttrId);
+  EXPECT_EQ(empty_attr.get_data_type(), android::Res_value::TYPE_NULL);
+  EXPECT_EQ(empty_attr.get_value_bytes(), android::Res_value::DATA_NULL_EMPTY);
+
+  const auto& null_attr = attributes.at(kDimensionAttrId);
+  EXPECT_EQ(null_attr.get_data_type(), android::Res_value::TYPE_NULL);
+  EXPECT_EQ(null_attr.get_value_bytes(),
+            android::Res_value::DATA_NULL_UNDEFINED);
 }
 
 TEST_F(BundleResourcesTest, TestRemoveAndAddStyleAttributes) {

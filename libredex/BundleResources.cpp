@@ -2593,8 +2593,16 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
     data_type = android::Res_value::TYPE_INT_COLOR_RGB8;
     value = prim.color_rgb8_value();
     break;
+  case aapt::pb::Primitive::kNullValue:
+    data_type = android::Res_value::TYPE_NULL;
+    value = android::Res_value::DATA_NULL_UNDEFINED;
+    break;
+  case aapt::pb::Primitive::kEmptyValue:
+    data_type = android::Res_value::TYPE_NULL;
+    value = android::Res_value::DATA_NULL_EMPTY;
+    break;
   default:
-    // Empty, null and deprecated values.
+    // Unset and deprecated float values.
     break;
   }
 
@@ -2900,6 +2908,13 @@ void add_attribute_to_style(aapt::pb::Item* item,
     break;
   case android::Res_value::TYPE_FRACTION:
     prim->set_fraction_value(value_bytes);
+    break;
+  case android::Res_value::TYPE_NULL:
+    if (value_bytes == android::Res_value::DATA_NULL_EMPTY) {
+      prim->mutable_empty_value();
+    } else {
+      prim->mutable_null_value();
+    }
     break;
   default:
     TRACE(RES, 9, "Unsupported primitive type: %d", value.get_data_type());
