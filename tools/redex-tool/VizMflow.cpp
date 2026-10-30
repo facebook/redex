@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <iostream>
+
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
@@ -17,7 +19,8 @@ namespace {
 
 void dump_viz(const Scope& scope,
               const char* cls_filter,
-              const char* meth_filter) {
+              const char* meth_filter,
+              bool mermaid) {
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
     if ((cls_filter != nullptr) &&
         (strstr(meth->get_class()->c_str(), cls_filter) == nullptr)) {
@@ -28,6 +31,12 @@ void dump_viz(const Scope& scope,
       return;
     }
     cfg::ScopedCFG cfg(&code);
+    if (mermaid) {
+      std::cerr << "%% " << show(meth) << "\n";
+      cfg->write_mermaid_format(std::cerr);
+      std::cerr << "\n";
+      return;
+    }
     const auto& blocks = cfg->blocks();
     fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
     for (const auto& block : blocks) {
@@ -64,7 +73,10 @@ class VizMflow : public Tool {
         "substring of method name to match")
       ("end-block-before-throw,e",
         po::value<bool>()->value_name("true")->default_value(true),
-        "should get_method_transform place end blocks before throw");
+        "should get_method_transform place end blocks before throw")
+      ("mermaid",
+        po::bool_switch(),
+        "print Mermaid flowcharts instead of Graphviz dot");
     /* clang-format on */
   }
 
@@ -81,7 +93,7 @@ class VizMflow : public Tool {
         options.count("method-filter") != 0u
             ? options["method-filter"].as<std::string>().c_str()
             : nullptr;
-    dump_viz(scope, class_filter, method_filter);
+    dump_viz(scope, class_filter, method_filter, options["mermaid"].as<bool>());
   }
 
  private:
