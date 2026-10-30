@@ -1271,6 +1271,9 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
             : 0;
     method_write_stats[bp_name] =
         write_methods(root_scope, bp, bp_write_config, ofs);
+    ofs.flush();
+    always_assert_log(ofs.good(), "Could not write baseline profile %s",
+                      output_name.c_str());
   }
   std::ofstream ofs{conf.metafile(BASELINE_PROFILES_FILE)};
   if (!resolve_strip_classes(conf.get_default_baseline_profile_config())) {
@@ -1279,6 +1282,8 @@ void ArtProfileWriterPass::run_pass(DexStoresVector& stores,
   }
   method_write_stats["manual"] =
       write_methods(root_scope, manual_profile, write_config, ofs);
+  ofs.flush();
+  always_assert_log(ofs.good(), "Could not write additional baseline profiles");
 
   auto gather_metrics = [&](const auto& bp_name, const auto& bp_config_name,
                             const auto& profile) {
