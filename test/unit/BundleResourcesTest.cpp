@@ -5,10 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <bit>
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -97,6 +99,44 @@ std::vector<aapt::pb::Primitive::OneofValueCase> get_style_primitive_cases(
     }
   }
   return cases;
+}
+
+// Reads the float that a resources.pb file stores for attribute `attr_id` of
+// style `style_id`, bypassing BundleResources.
+std::optional<float> read_style_float_value(const std::string& path,
+                                            uint32_t style_id,
+                                            uint32_t attr_id) {
+  aapt::pb::ResourceTable table;
+  std::ifstream in(path, std::ifstream::binary);
+  if (!table.ParseFromIstream(&in)) {
+    return std::nullopt;
+  }
+  for (const auto& pkg : table.package()) {
+    if (pkg.package_id().id() != (style_id >> 24)) {
+      continue;
+    }
+    for (const auto& type : pkg.type()) {
+      if (type.type_id().id() != ((style_id >> 16) & 0xFF)) {
+        continue;
+      }
+      for (const auto& entry : type.entry()) {
+        if (entry.entry_id().id() != (style_id & 0xFFFF)) {
+          continue;
+        }
+        for (const auto& config_value : entry.config_value()) {
+          const auto& style = config_value.value().compound_value().style();
+          for (const auto& style_entry : style.entry()) {
+            if (style_entry.key().id() == attr_id &&
+                style_entry.item().prim().oneof_value_case() ==
+                    aapt::pb::Primitive::kFloatValue) {
+              return style_entry.item().prim().float_value();
+            }
+          }
+        }
+      }
+    }
+  }
+  return std::nullopt;
 }
 } // namespace
 
@@ -873,6 +913,46 @@ TEST_F(BundleResourcesTest, TestAddNullAndEmptyStyleAttributes) {
   EXPECT_EQ(null_attr.get_value_bytes(),
             android::Res_value::DATA_NULL_UNDEFINED);
 }
+
+class BundleResourcesFloatStyleTest
+    : public BundleResourcesTest,
+      public ::testing::WithParamInterface<uint32_t> {};
+
+TEST_P(BundleResourcesFloatStyleTest, TestAddFloatStyleAttribute) {
+  auto res_table = resources.load_res_table();
+  const auto& paths = resources.find_resources_files();
+  ASSERT_THAT(paths, SizeIs(1));
+  auto style_ids = res_table->get_res_ids_by_name("CustomText.Prickly");
+  ASSERT_THAT(style_ids, SizeIs(1));
+  const uint32_t style_id = style_ids[0];
+
+  const uint32_t expected_bits = GetParam();
+  std::vector<resources::StyleModificationSpec::Modification> modifications;
+  modifications.emplace_back(
+      style_id,
+      kFloatAttrId,
+      resources::StyleResource::Value(android::Res_value::TYPE_FLOAT,
+                                      expected_bits));
+  res_table->apply_attribute_removals_and_additions(modifications, paths);
+
+  auto written_value = read_style_float_value(paths[0], style_id, kFloatAttrId);
+  ASSERT_TRUE(written_value.has_value());
+  EXPECT_EQ(std::bit_cast<uint32_t>(*written_value), expected_bits);
+
+  auto style_map = resources.load_res_table()->get_style_map();
+  const auto& attributes = style_map.at(style_id).at(0).attributes;
+  ASSERT_THAT(attributes, Contains(Key(kFloatAttrId)));
+  const auto& attr = attributes.at(kFloatAttrId);
+  EXPECT_EQ(attr.get_data_type(), android::Res_value::TYPE_FLOAT);
+  EXPECT_EQ(attr.get_value_bytes(), expected_bits);
+}
+
+INSTANTIATE_TEST_SUITE_P(FloatValues,
+                         BundleResourcesFloatStyleTest,
+                         ::testing::Values(0x3f000000u, // 0.5f
+                                           0x3f400000u, // 0.75f
+                                           0xbf000000u, // -0.5f
+                                           0x80000000u)); // -0.0f
 
 TEST_F(BundleResourcesTest, TestRemoveAndAddStyleAttributes) {
   using Value = resources::StyleResource::Value;

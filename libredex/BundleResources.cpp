@@ -12,6 +12,7 @@
 #ifdef HAS_PROTOBUF
 #include "BundleResources.h"
 
+#include <bit>
 #include <fstream>
 #include <map>
 #include <queue>
@@ -2555,7 +2556,7 @@ std::pair<uint8_t, uint32_t> convert_primitive_to_res_value_data(
   switch (prim.oneof_value_case()) {
   case aapt::pb::Primitive::kFloatValue:
     data_type = android::Res_value::TYPE_FLOAT;
-    value = static_cast<uint32_t>(prim.float_value());
+    value = std::bit_cast<uint32_t>(prim.float_value());
     break;
   case aapt::pb::Primitive::kDimensionValue:
     data_type = android::Res_value::TYPE_DIMENSION;
@@ -2901,7 +2902,7 @@ void add_attribute_to_style(aapt::pb::Item* item,
     prim->set_int_hexadecimal_value(value_bytes);
     break;
   case android::Res_value::TYPE_FLOAT:
-    prim->set_float_value(static_cast<float>(value_bytes));
+    prim->set_float_value(std::bit_cast<float>(value_bytes));
     break;
   case android::Res_value::TYPE_DIMENSION:
     prim->set_dimension_value(value_bytes);
