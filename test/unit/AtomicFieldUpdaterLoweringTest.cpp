@@ -20,6 +20,7 @@
 #include "IRCode.h"
 #include "IRTemplate.h"
 #include "IRTypeChecker.h"
+#include "MethodProfiles.h"
 #include "PassManager.h"
 #include "RedexTest.h"
 #include "ScopedCFG.h"
@@ -75,6 +76,8 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
   UnorderedMap<std::string, int64_t> metrics;
   // What `run()` passes as the app's min_sdk.
   int min_sdk{24};
+  // The method profiles `run()` hands the pass, read back after it.
+  method_profiles::MethodProfiles profiles;
 
   // `Class.name` of every method `method` invokes, one entry per call. The
   // pass manager tears the CFGs down after the last pass, hence the rebuild.
@@ -158,6 +161,7 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
     config.parse_global_config();
     RedexOptions options;
     options.min_sdk = min_sdk;
+    config.get_method_profiles() = std::move(profiles);
     PassManager manager({&pass}, config, options);
     DexStore store("classes");
     std::vector<DexClass*> in_store{cls};
@@ -166,6 +170,7 @@ class AtomicFieldUpdaterLoweringTest : public RedexTest {
     std::vector<DexStore> stores;
     stores.emplace_back(std::move(store));
     manager.run_passes(stores, config);
+    profiles = std::move(config.get_method_profiles());
     capture(manager);
   }
 
@@ -721,6 +726,87 @@ TEST_F(AtomicFieldUpdaterLoweringTest, forwarderCallLowersThroughRetryHelper) {
   EXPECT_EQ(count(calls, "LFwdK;.m"), 0u);
   EXPECT_EQ(count(calls, kRawCas), 0u)
       << "a raw reference CAS can fail spuriously on Android 12";
+}
+
+// The helpers are synthesized by the pass, so no input profile has them, and
+// ArtProfileWriterPass would take them for cold: out of the baseline profile,
+// and @NeverInline once hot code calls them. They inherit their callers' stats.
+TEST_F(AtomicFieldUpdaterLoweringTest, helpersInheritCallerProfiles) {
+  auto* fwd = make_forwarder("LFwdP;", kForwarder);
+  auto* caller = make_caller(
+      "LCasP;", kCallForwarder,
+      {{"$CLS", "LCasP;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdP;"}});
+  method_profiles::Stats hot;
+  hot.appear_percent = 80;
+  hot.call_count = 12;
+  hot.order_percent = 30;
+  profiles = method_profiles::MethodProfiles::initialize(
+      method_profiles::COLD_START, {{caller, hot}});
+
+  run("LCasP;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  ASSERT_EQ(metric("cas_retry_calls_emitted"), 1);
+  ASSERT_EQ(metric("null_checks_emitted"), 1);
+  EXPECT_EQ(metric("helper_profile_stats_derived"), 2);
+
+  for (const std::string& helper_desc :
+       {kRetryHelper +
+            ":(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z",
+        std::string(atomic_field_updaters::SYNTH_HOLDER_DESC) +
+            ".checkHolder:(Ljava/lang/Object;)V"}) {
+    auto* helper = DexMethod::get_method(helper_desc);
+    ASSERT_NE(helper, nullptr) << helper_desc;
+    auto stats = profiles.get_method_stat(method_profiles::COLD_START, helper);
+    ASSERT_TRUE(stats.has_value()) << helper_desc;
+    EXPECT_EQ(stats->appear_percent, 80) << helper_desc;
+    EXPECT_EQ(stats->call_count, 12) << helper_desc;
+    EXPECT_EQ(stats->order_percent, 30) << helper_desc;
+  }
+}
+
+// The retry helper does the forwarder's job, so the forwarder's stats come
+// first; the callers only fill what it lacks. `checkHolder` replaces nothing
+// and keeps its callers' stats.
+TEST_F(AtomicFieldUpdaterLoweringTest, retryHelperPrefersForwarderProfile) {
+  auto* fwd = make_forwarder("LFwdQ;", kForwarder);
+  auto* caller = make_caller(
+      "LCasQ;", kCallForwarder,
+      {{"$CLS", "LCasQ;"}, {"$UPD", REFERENCE_DESC}, {"$FWD", "LFwdQ;"}});
+  method_profiles::Stats forwarder_stats;
+  forwarder_stats.appear_percent = 40;
+  forwarder_stats.call_count = 3;
+  forwarder_stats.order_percent = 50;
+  method_profiles::Stats caller_stats;
+  caller_stats.appear_percent = 80;
+  caller_stats.call_count = 12;
+  caller_stats.order_percent = 30;
+  profiles = method_profiles::MethodProfiles::initialize(
+      method_profiles::COLD_START,
+      {{fwd->get_dmethods().at(0), forwarder_stats}, {caller, caller_stats}});
+
+  run("LCasQ;", REFERENCE_DESC, "next", "Ljava/lang/Object;", {caller}, {fwd});
+  ASSERT_EQ(metric("cas_retry_calls_emitted"), 1);
+  ASSERT_EQ(metric("null_checks_emitted"), 1);
+  EXPECT_EQ(metric("helper_profile_stats_derived"), 2);
+
+  auto* retry = DexMethod::get_method(
+      kRetryHelper +
+      ":(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z");
+  ASSERT_NE(retry, nullptr);
+  auto retry_stats =
+      profiles.get_method_stat(method_profiles::COLD_START, retry);
+  ASSERT_TRUE(retry_stats.has_value());
+  EXPECT_EQ(retry_stats->appear_percent, 40);
+  EXPECT_EQ(retry_stats->call_count, 3);
+  EXPECT_EQ(retry_stats->order_percent, 50);
+
+  auto* check = DexMethod::get_method(
+      std::string(atomic_field_updaters::SYNTH_HOLDER_DESC) +
+      ".checkHolder:(Ljava/lang/Object;)V");
+  ASSERT_NE(check, nullptr);
+  auto check_stats =
+      profiles.get_method_stat(method_profiles::COLD_START, check);
+  ASSERT_TRUE(check_stats.has_value());
+  EXPECT_EQ(check_stats->appear_percent, 80);
 }
 
 // Where the platform cannot fail spuriously there is nothing to retry, so the

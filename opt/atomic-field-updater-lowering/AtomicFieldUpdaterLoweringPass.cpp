@@ -1852,13 +1852,20 @@ std::vector<IRInstruction*> build_replacement(
   return repl;
 }
 
-// What emission did, for the metrics.
+// What emission did: the counts for the metrics, and the methods that now call
+// each synthesized helper.
 struct EmitStats {
   size_t rewritten{0};
   size_t null_checks{0};
   // Subsets of `rewritten`.
   size_t backport_calls_rewritten{0};
   size_t cas_retry_calls{0};
+  std::vector<DexMethod*> check_holder_callers;
+  std::vector<DexMethod*> cas_retry_callers;
+  // The d8 forwarders that lowered sites used to call, each once.
+  std::vector<DexMethod*> forwarders_replaced;
+  // Filled after emission, by `derive_helper_profiles`.
+  size_t helper_profile_stats{0};
 };
 
 // Applies the plan. Single threaded and in scope order: emission is
@@ -1869,6 +1876,7 @@ EmitStats emit_rewrites(const Scope& scope,
                         const RewritePlan& rewrites,
                         const Helpers& helpers) {
   EmitStats emitted;
+  UnorderedSet<DexMethod*> forwarders_seen;
   walk::methods(scope, [&](DexMethod* method) {
     const auto* planned = rewrites.get(method);
     if (planned == nullptr) {
@@ -1880,6 +1888,8 @@ EmitStats emit_rewrites(const Scope& scope,
     }
     auto& cfg = method->get_code()->cfg();
     cfg::CFGMutation mutation(cfg);
+    bool calls_check_holder = false;
+    bool calls_cas_retry = false;
     auto iterable = cfg::InstructionIterable(cfg);
     for (auto it = iterable.begin(); it != iterable.end(); ++it) {
       auto rit = by_insn.find(it->insn);
@@ -1895,21 +1905,61 @@ EmitStats emit_rewrites(const Scope& scope,
       if (rewrite.info->offset_field == nullptr) {
         continue;
       }
+      if (rewrite.via_backport) {
+        auto* forwarder =
+            resolve_method(rewrite.insn->get_method(), MethodSearch::Static);
+        if (forwarder != nullptr && forwarders_seen.insert(forwarder).second) {
+          emitted.forwarders_replaced.push_back(forwarder);
+        }
+      }
       mutation.replace(it, build_replacement(cfg, it, rewrite, helpers));
       emitted.rewritten++;
       if (rewrite.needs_guard) {
         emitted.null_checks++;
+        calls_check_holder = true;
       }
       if (rewrite.via_backport) {
         emitted.backport_calls_rewritten++;
       }
       if (rewrite.plan.retry_spurious_failure) {
         emitted.cas_retry_calls++;
+        calls_cas_retry = true;
       }
     }
     mutation.flush();
+    if (calls_check_holder) {
+      emitted.check_holder_callers.push_back(method);
+    }
+    if (calls_cas_retry) {
+      emitted.cas_retry_callers.push_back(method);
+    }
   });
   return emitted;
+}
+
+// The helpers are synthesized here, so no input profile mentions them, and
+// profile-guided passes read that as cold. ArtProfileWriterPass then leaves
+// them out of the baseline profile and, since hot code calls them, annotates
+// them @NeverInline, so ART keeps every hot call to them a call.
+//
+// The retry helper does the job of the d8 forwarders it replaced, so their
+// stats measure it most closely. `derive_stats` only fills interactions the
+// target has no stats for, so the callers come second: they fill what the
+// forwarders lack, and they are all a direct reference CAS has. `checkHolder`
+// replaces nothing, so it takes its callers' stats.
+size_t derive_helper_profiles(ConfigFiles& conf,
+                              const Helpers& helpers,
+                              const EmitStats& emitted) {
+  auto& method_profiles = conf.get_method_profiles();
+  size_t derived = method_profiles.derive_stats(helpers.check_holder,
+                                                emitted.check_holder_callers);
+  if (helpers.cas_object_retry != nullptr) {
+    derived += method_profiles.derive_stats(helpers.cas_object_retry,
+                                            emitted.forwarders_replaced);
+    derived += method_profiles.derive_stats(helpers.cas_object_retry,
+                                            emitted.cas_retry_callers);
+  }
+  return derived;
 }
 
 void report(PassManager& mgr,
@@ -1921,6 +1971,7 @@ void report(PassManager& mgr,
   mgr.set_metric("backport_cas_calls_rewritten",
                  emitted.backport_calls_rewritten);
   mgr.set_metric("cas_retry_calls_emitted", emitted.cas_retry_calls);
+  mgr.set_metric("helper_profile_stats_derived", emitted.helper_profile_stats);
   mgr.set_metric("blocked_min_sdk", totals.blocked_min_sdk);
   mgr.set_metric("blocked_hidden_api", totals.blocked_hidden_api);
   mgr.set_metric("calls_skipped_unresolved_updater", totals.skipped_unresolved);
@@ -2305,6 +2356,8 @@ void AtomicFieldUpdaterLoweringPass::run_pass(DexStoresVector& stores,
     const Helpers helpers = synthesize_unsafe_holder(stores, needs_cas_retry);
     add_offsets_to_holders(updaters, helpers.s_unsafe, mgr);
     emitted = emit_rewrites(scope, rewrites, helpers);
+    emitted.helper_profile_stats =
+        derive_helper_profiles(conf, helpers, emitted);
     dce_rewritten_methods(scope, conf, rewrites);
   }
   report(mgr, totals, emitted, ops.kinds());
