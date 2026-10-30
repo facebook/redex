@@ -204,9 +204,17 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
   auto& types = m_types_to_configs.at(package_type_id);
   types.emplace_back(type);
   android::TypeVariant tv(type);
-  uint16_t entry_id = 0;
-  for (auto it = tv.beginEntries(); it != tv.endEntries(); ++it, ++entry_id) {
-    const android::ResTable_entry* entry = *it;
+  auto it = tv.beginEntries();
+  const auto end = tv.endEntries();
+  // The spec, not the iterator, bounds the entries: a sparse type's iterator
+  // stops after the last entry its config defines.
+  const uint32_t entry_count = dtohl(type_spec->entryCount);
+  for (uint32_t entry_id = 0; entry_id < entry_count; ++entry_id) {
+    const android::ResTable_entry* entry = nullptr;
+    if (it != end) {
+      entry = *it;
+      ++it;
+    }
     uint32_t res_id = package_type_id << 16 | entry_id;
     if (entry == nullptr) {
       arsc::EntryValueData data(nullptr, 0);
@@ -219,6 +227,9 @@ bool TableEntryParser::visit_type(android::ResTable_package* package,
     m_res_id_to_flags.emplace(res_id,
                               arsc::get_spec_flags(type_spec, entry_id));
   }
+  always_assert_log(it == end,
+                    "ResTable_type 0x%x has more entries than its spec (%u)",
+                    type_spec->id, entry_count);
   return true;
 }
 

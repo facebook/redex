@@ -1692,6 +1692,98 @@ TEST(ResTable, BuildDumpAndParseSparseType) {
   }
 }
 
+TEST(ResTable, SparseTypeTrailingEntries) {
+  // A sparse land config that defines only the middle entry. Its
+  // ResTable_type lists entries up to "one" only, yet "two" still belongs to
+  // the land config as an empty entry.
+  // zero: default=5dp
+  // one:  default=7dp, land=77dp
+  // two:  default=5dp
+  auto pool_flags = android::ResStringPool_header::UTF8_FLAG;
+  auto global_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  auto key_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  key_strings_builder->add_string("zero");
+  key_strings_builder->add_string("one");
+  key_strings_builder->add_string("two");
+  auto type_strings_builder =
+      std::make_shared<arsc::ResStringPoolBuilder>(pool_flags);
+  type_strings_builder->add_string("dimen");
+
+  auto package_builder =
+      std::make_shared<arsc::ResPackageBuilder>(&foo_package);
+  package_builder->set_key_strings(key_strings_builder);
+  package_builder->set_type_strings(type_strings_builder);
+
+  auto table_builder = std::make_shared<arsc::ResTableBuilder>();
+  table_builder->set_global_strings(global_strings_builder);
+  table_builder->add_package(package_builder);
+
+  std::vector<android::ResTable_config*> dimen_configs = {&default_config,
+                                                          &land_config};
+  std::vector<uint32_t> flags = {
+      0, android::ResTable_config::CONFIG_ORIENTATION, 0};
+  auto type_definer = std::make_shared<arsc::ResTableTypeDefiner>(
+      foo_package.id, 1, dimen_configs, flags, false, true);
+  package_builder->add_type(type_definer);
+
+  EntryAndValue zero(0, android::Res_value::TYPE_DIMENSION, 0x501);
+  EntryAndValue one(1, android::Res_value::TYPE_DIMENSION, 0x701);
+  EntryAndValue one_land(1, android::Res_value::TYPE_DIMENSION, 0x4d01);
+  EntryAndValue two(2, android::Res_value::TYPE_DIMENSION, 0x501);
+  type_definer->add(&default_config, &zero);
+  type_definer->add_empty(&land_config);
+  type_definer->add(&default_config, &one);
+  type_definer->add(&land_config, &one_land);
+  type_definer->add(&default_config, &two);
+  type_definer->add_empty(&land_config);
+
+  android::Vector<char> out;
+  table_builder->serialize(&out);
+
+  auto tmp_dir = redex::make_tmp_dir("ResTable_SparseTrailing%%%%%%%%");
+  auto arsc_path = tmp_dir.path + "/resources.arsc";
+  write_to_file(arsc_path, out);
+
+  {
+    ResourcesArscFile arsc_file(arsc_path);
+    auto& parsed_table = arsc_file.get_table_snapshot().get_parsed_table();
+    auto& types = parsed_table.m_types_to_configs.begin()->second;
+    ASSERT_EQ(types.size(), 2);
+    ASSERT_NE(types.at(1)->flags & android::ResTable_type::FLAG_SPARSE, 0)
+        << "Expected land config to be sparsely encoded";
+
+    // Every entry of the type has a record for both configs.
+    for (uint32_t id = 0x7f010000; id <= 0x7f010002; id++) {
+      EXPECT_EQ(parsed_table.m_res_id_to_entries.at(id).size(), 2)
+          << "Missing config for 0x" << std::hex << id;
+    }
+    // "zero" and "two" have the same flags and the same values in every
+    // config.
+    EXPECT_TRUE(arsc_file.resource_value_identical(0x7f010000, 0x7f010002));
+
+    // Swap "one" and "two", moving the only land value to the last entry.
+    std::map<uint32_t, uint32_t> old_to_new{{0x7f010000, 0x7f010000},
+                                            {0x7f010001, 0x7f010002},
+                                            {0x7f010002, 0x7f010001}};
+    arsc_file.remap_reorder_and_serialize({}, old_to_new);
+  }
+  {
+    auto round_trip_dump = aapt_dump_and_parse(arsc_path);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010001).data,
+              0x501);
+    EXPECT_EQ(round_trip_dump.get_simple_value("default", 0x7f010002).data,
+              0x701);
+    EXPECT_EQ(round_trip_dump.get_simple_value("land", 0x7f010002).data,
+              0x4d01);
+
+    ResourcesArscFile arsc_file(arsc_path);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010001), 1);
+    EXPECT_EQ(arsc_file.resource_value_count(0x7f010002), 2);
+  }
+}
+
 constexpr uint32_t WRAP_CONTENT = 0xFFFFFFFE;
 // A class which will mess around with the first Button element it finds, wiping
 // out all its attributes and replacing them with layout_width/layout_height.
