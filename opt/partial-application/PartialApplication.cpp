@@ -1313,7 +1313,8 @@ void PartialApplicationPass::run_pass(DexStoresVector& stores,
     }
     auto* callee = resolve_method_deprecated(insn->get_method(),
                                              opcode_to_search(insn), caller);
-    if ((callee == nullptr) || callee->is_external()) {
+    if ((callee == nullptr) || callee->is_external() ||
+        callee->rstate.should_not_outline()) {
       return nullptr;
     }
     auto* cls = type_class(callee->get_class());
