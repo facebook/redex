@@ -1033,11 +1033,15 @@ std::string BundleResources::get_base_assets_dir() {
 }
 
 namespace {
-// Collect all resource ids referred in a given xml element.
-// attr->compiled_item->ref->id
+// Collect all resource ids referred in a given xml element: the ids of
+// app-defined attributes (attr->resource_id) and of referenced resources
+// (attr->compiled_item->ref->id).
 void collect_rids_for_element(const aapt::pb::XmlElement& element,
                               UnorderedSet<uint32_t>& result) {
   for (const aapt::pb::XmlAttribute& pb_attr : element.attribute()) {
+    if (pb_attr.resource_id() > PACKAGE_RESID_START) {
+      result.emplace(pb_attr.resource_id());
+    }
     if (!pb_attr.has_compiled_item()) {
       continue;
     }

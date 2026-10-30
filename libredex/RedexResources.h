@@ -583,8 +583,9 @@ class AndroidResources {
 
   virtual UnorderedSet<std::string> get_service_loader_classes() = 0;
 
-  // Given the xml file name, return the list of resource ids referred in xml
-  // attributes.
+  // Given the xml file name, return the app resource ids its attributes use:
+  // the ids of the attributes themselves and of the resources their values
+  // refer to.
   virtual UnorderedSet<uint32_t> get_xml_reference_attributes(
       const std::string& filename) = 0;
 

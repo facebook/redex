@@ -252,6 +252,17 @@ TEST_F(BundleResourcesTest, TestCollectRidsFromXmlAttrs) {
   EXPECT_EQ(rids.size(), 3);
 }
 
+// An app-defined attribute used in a layout must be returned even when its
+// value is not a reference, or it looks unreachable.
+TEST_F(BundleResourcesTest, TestCollectRidsFromAppDefinedXmlAttrs) {
+  auto rids = resources.get_xml_reference_attributes(
+      extract_dir + "/base/res/layout/activity_main.xml");
+  for (const auto* name :
+       {"a_boolean", "fancy_effects", "reverb_type", "dangerous"}) {
+    EXPECT_TRUE(rids.contains(get_resource_id(name, resources))) << name;
+  }
+}
+
 // Test collecting resource ids from xml attributes.
 TEST_F(BundleResourcesTest, TestCollectResFilesByRid) {
   auto res_table = resources.load_res_table();
