@@ -17,6 +17,8 @@
 
 #include "InsertSourceBlocks.h"
 #include "PartialApplication.h"
+#include "ReachableNatives.h"
+#include "RedexContext.h"
 
 static IRCode* get_code(const std::string& s) {
   auto* method = DexMethod::get_method(s);
@@ -347,6 +349,109 @@ TEST_F(PartialApplicationTest, source_blocks_are_off_by_default) {
       get_code("Lcom/facebook/redextest/"
                "PartialApplication$Callees;.foo$spa$0$3b9e1bb0b5617ee4$0:()V"),
       expected_code.get());
+}
+
+TEST_F(PartialApplicationTest, preserves_no_outlining_static_callee) {
+  auto* callee =
+      DexMethod::get_method(
+          "Lcom/facebook/redextest/PartialApplication$Callees;.foo:(IIIIIIII)V")
+          ->as_def();
+  callee->rstate.set_no_outlining();
+  auto* caller =
+      get_code("Lcom/facebook/redextest/PartialApplication;.call_foo4:()V");
+  auto expected = assembler::ircode_from_s_expr(assembler::to_s_expr(caller));
+
+  run_passes({new PartialApplicationPass()});
+
+  EXPECT_CODE_EQ(caller, expected.get());
+  EXPECT_EQ(nullptr, DexMethod::get_method(
+                         "Lcom/facebook/redextest/PartialApplication$Callees;"
+                         ".foo$spa$0$3b9e1bb0b5617ee4$0:()V"));
+  EXPECT_NE(nullptr, DexMethod::get_method(
+                         "Lcom/facebook/redextest/PartialApplication$Callees;"
+                         ".bar$spa$0$8477e08f7d55cc6f$0:()V"));
+}
+
+TEST_F(PartialApplicationTest, preserves_no_outlining_virtual_callee) {
+  auto* callee = DexMethod::get_method(
+                     "Lcom/facebook/redextest/PartialApplication$MoreCallees;"
+                     ".baz:(IIIIIIII)I")
+                     ->as_def();
+  callee->rstate.set_no_outlining();
+  auto* caller =
+      get_code("Lcom/facebook/redextest/PartialApplication;.call_baz4:()I");
+  auto expected = assembler::ircode_from_s_expr(assembler::to_s_expr(caller));
+
+  run_passes({new PartialApplicationPass()});
+
+  EXPECT_CODE_EQ(caller, expected.get());
+  EXPECT_EQ(nullptr,
+            DexMethod::get_method(
+                "Lcom/facebook/redextest/PartialApplication$MoreCallees;"
+                ".baz$ipa$0$310a286dd75824f4$0:(II)I"));
+}
+
+TEST_F(PartialApplicationTest, preserves_constant_load_library_names) {
+  auto* string_type = type::java_lang_String();
+  auto* loader_type = DexType::make_type("Lcom/facebook/soloader/SoLoader;");
+  ClassCreator loader(loader_type);
+  loader.set_super(type::java_lang_Object());
+  for (const auto* name : {"loadLibrary", "loadLibraryUnsafe"}) {
+    for (bool with_flags : {false, true}) {
+      auto* args =
+          with_flags ? DexTypeList::make_type_list({string_type, type::_int()})
+                     : DexTypeList::make_type_list({string_type});
+      auto* method =
+          DexMethod::make_method(loader_type, DexString::make_string(name),
+                                 DexProto::make_proto(type::_boolean(), args))
+              ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+      method->set_code(assembler::ircode_from_string(
+          with_flags ? "((load-param-object v0) (load-param v1) "
+                       "(const v2 0) (return v2))"
+                     : "((load-param-object v0) (const v1 0) (return v1))"));
+      loader.add_method(method);
+    }
+  }
+  classes->push_back(loader.create());
+
+  auto* caller_type = DexType::make_type("LNativeLoaders;");
+  ClassCreator callers(caller_type);
+  callers.set_super(type::java_lang_Object());
+  for (size_t i = 0; i < 7; ++i) {
+    auto* method = DexMethod::make_method(
+                       caller_type,
+                       DexString::make_string("load" + std::to_string(i)),
+                       DexProto::make_proto(type::_void(),
+                                            DexTypeList::make_type_list({})))
+                       ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    method->rstate.set_root();
+    method->set_code(assembler::ircode_from_string(
+        "((const-string \"library" + std::to_string(i) +
+        "\") (move-result-pseudo-object v0) (const v1 16) "
+        "(invoke-static (v0 v1) \"Lcom/facebook/soloader/SoLoader;"
+        ".loadLibrary:(Ljava/lang/String;I)Z\") (return-void))"));
+    callers.add_method(method);
+  }
+  auto* callers_class = callers.create();
+  callers_class->rstate.set_root();
+  classes->push_back(callers_class);
+
+  Json::Value config(Json::objectValue);
+  config["ReachableNativesPass"]["analyze_load_library"] = true;
+  config["PartialApplicationPass"]["cost_method"] = 0;
+  auto* reachable_natives = new ReachableNativesPass();
+  auto* partial_application = new PartialApplicationPass();
+  run_passes({reachable_natives, partial_application, partial_application,
+              reachable_natives},
+             nullptr, config);
+
+  EXPECT_EQ(7u, g_redex->library_names.size());
+  const auto& metrics = pass_manager->get_pass_info().back().metrics;
+  EXPECT_EQ(7, metrics.at("initial_library_names"));
+  EXPECT_EQ(7, metrics.at("final_library_names"));
+  for (auto* method : type_class(loader_type)->get_dmethods()) {
+    EXPECT_EQ(std::string_view::npos, method->get_name()->str().find("$spa$"));
+  }
 }
 
 TEST_F(PartialApplicationTest, does_not_bind_unproven_constant) {
