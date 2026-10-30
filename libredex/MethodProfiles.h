@@ -157,11 +157,13 @@ class MethodProfiles {
                          std::vector<DexMethodRef*>>& map);
 
   // If there are no observed stats for the target, derive it from the given
-  // sources.
+  // sources. Aggregation uses DexSpec method order, independent of source
+  // order; repeated sources contribute repeatedly.
   size_t derive_stats(DexMethod* target,
                       const std::vector<DexMethod*>& sources);
 
-  // Substitute target method's stat with derived stats from given sources.
+  // Substitute target method's stat with derived stats from given sources,
+  // using the same source ordering and multiplicity as derive_stats.
   size_t substitute_stats(DexMethod* target,
                           const std::vector<DexMethod*>& sources);
 

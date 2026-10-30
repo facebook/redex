@@ -133,6 +133,7 @@ check_PROGRAMS = \
     match_flow_test \
     match_test \
     method_inline_test \
+    method_profiles_test \
     method_splitting_test \
     method_splitter_region_test_fixture_test \
     method_util_test \
@@ -453,6 +454,8 @@ match_flow_test_SOURCES = MatchFlowTest.cpp
 match_flow_test_LDADD = $(COMMON_MOCK_TEST_LIBS)
 
 method_inline_test_SOURCES = MethodInlineTest.cpp
+
+method_profiles_test_SOURCES = MethodProfilesTest.cpp
 
 tail_duplication_test_SOURCES = TailDuplicationTest.cpp
 

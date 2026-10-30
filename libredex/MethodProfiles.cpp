@@ -7,6 +7,7 @@
 
 #include "MethodProfiles.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "Debug.h"
@@ -738,6 +739,8 @@ void MethodProfiles::set_method_stats(const std::string& interaction_id,
 
 size_t MethodProfiles::derive_stats(DexMethod* target,
                                     const std::vector<DexMethod*>& sources) {
+  auto ordered_sources = sources;
+  std::sort(ordered_sources.begin(), ordered_sources.end(), compare_dexmethods);
   size_t res = 0;
   for (auto& [interaction_id, method_stats] : m_method_stats) {
     if (method_stats.count(target) != 0u) {
@@ -746,7 +749,7 @@ size_t MethodProfiles::derive_stats(DexMethod* target,
     }
 
     std::optional<Stats> stats;
-    for (auto* src : sources) {
+    for (auto* src : ordered_sources) {
       auto it = method_stats.find(src);
       if (it == method_stats.end()) {
         continue;
@@ -774,10 +777,12 @@ size_t MethodProfiles::derive_stats(DexMethod* target,
 
 size_t MethodProfiles::substitute_stats(
     DexMethod* target, const std::vector<DexMethod*>& sources) {
+  auto ordered_sources = sources;
+  std::sort(ordered_sources.begin(), ordered_sources.end(), compare_dexmethods);
   size_t res = 0;
   for (auto& [interaction_id, method_stats] : m_method_stats) {
     std::optional<Stats> stats;
-    for (auto* src : sources) {
+    for (auto* src : ordered_sources) {
       auto it = method_stats.find(src);
       if (it == method_stats.end()) {
         continue;
