@@ -418,10 +418,11 @@ public class InlineTestCode {
       InlineTestCodeKt.callKotlinInlineThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertThat(TraceUtil.traceToString(trace, 3))
+      assertThat(TraceUtil.traceToString(trace, 4))
           .isEqualTo(
               Arrays.asList(
-                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineThrower(InlineTestCodeKt.kt:38)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineThrower(KotlinInlineFunctions.kt:12)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineThrower(InlineTestCodeKt.kt:21)",
                   "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinInlineThrower(InlineTestCodeKt.kt:22)",
                   "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:418)"));
     }
@@ -430,26 +431,29 @@ public class InlineTestCode {
       InlineTestCodeKt.callKotlinInlineRegularThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertThat(TraceUtil.traceToString(trace, 4))
+      assertThat(TraceUtil.traceToString(trace, 5))
           .isEqualTo(
               Arrays.asList(
                   "com.facebook.redexlinemap.KotlinInlineFunctionsKt.kotlinRegularThrower(KotlinInlineFunctions.kt:17)",
-                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineRegularThrower(InlineTestCodeKt.kt:39)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineRegularThrower(KotlinInlineFunctions.kt:22)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinInlineRegularThrower(InlineTestCodeKt.kt:27)",
                   "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinInlineRegularThrower(InlineTestCodeKt.kt:28)",
-                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:430)"));
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:431)"));
     }
 
     try {
       InlineTestCodeKt.callKotlinNestedInlineRegularThrower();
     } catch (Exception e) {
       ArrayList<StackTraceElement> trace = lm.mapStackTrace(e.getStackTrace());
-      assertThat(TraceUtil.traceToString(trace, 4))
+      assertThat(TraceUtil.traceToString(trace, 6))
           .isEqualTo(
               Arrays.asList(
                   "com.facebook.redexlinemap.KotlinInlineFunctionsKt.kotlinRegularThrower(KotlinInlineFunctions.kt:17)",
-                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinNestedInlineRegularThrower(InlineTestCodeKt.kt:42)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinNestedInlineRegularThrower(KotlinInlineFunctions.kt:22)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinNestedInlineRegularThrower(KotlinInlineFunctions.kt:27)",
+                  "com.facebook.redexlinemap.InlineTestCodeKt$Companion.callKotlinNestedInlineRegularThrower(InlineTestCodeKt.kt:33)",
                   "com.facebook.redexlinemap.InlineTestCodeKt.callKotlinNestedInlineRegularThrower(InlineTestCodeKt.kt:34)",
-                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:443)"));
+                  "com.facebook.redexlinemap.InlineTestCode.testKotlinPrecondition(InlineTestCode.java:445)"));
     }
   }
 }
