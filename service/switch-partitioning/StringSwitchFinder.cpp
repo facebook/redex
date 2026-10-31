@@ -24,7 +24,8 @@
 
 // This finder implements two forms:
 //   - Form A (HASH_SWITCH): the two-stage hashCode->switch->equals->ordinal->
-//     switch shape.
+//     switch shape, or its one-stage variant (HASH_SWITCH_DIRECT) whose equals
+//     branches target the bodies directly.
 //   - Form B (EQUALS_CHAIN): a linear `if (equals(subject, lit))` chain
 //     anchored by a (discarded) hashCode null-guard.
 // Both forms are supported inside a try/catch. Exception control flow changes
@@ -468,7 +469,8 @@ bool StringSwitchFinder::decode_hash_switch(
   }
   if (ord_switch_block == nullptr ||
       !block_ends_with_switch(ord_switch_block)) {
-    return false;
+    return decode_direct_hash_switch(subject_reg, subject_defs, origin_block,
+                                     hash_switch_insn, hash_sef);
   }
   auto* ord_switch_insn = ord_switch_block->get_last_insn()->insn;
   reg_t ordinal_reg = ord_switch_insn->src(0);
@@ -608,6 +610,108 @@ bool StringSwitchFinder::decode_hash_switch(
   }
 
   m_info.form = StringSwitchInfo::Form::HASH_SWITCH;
+  m_info.origin_insn = hash_switch_insn;
+  m_info.origin_block = origin_block;
+  m_info.hashcode_insn = hashcode_insn;
+  m_info.hashcode_block = hashcode_block;
+  m_info.subject_reg = subject_reg;
+  m_info.key_to_case = std::move(key_to_case);
+  m_info.region_blocks = std::move(region);
+  return true;
+}
+
+bool StringSwitchFinder::decode_direct_hash_switch(
+    reg_t subject_reg,
+    const sparta::PatriciaTreeSet<live_range::Def>& subject_defs,
+    cfg::Block* origin_block,
+    IRInstruction* hash_switch_insn,
+    const SwitchEquivFinder& hash_sef) {
+  auto& cfg = m_ctx.cfg();
+  const auto& ud = m_ctx.use_def();
+  auto* hashcode_insn = m_hashcode_insn->insn;
+
+  // The hash switch's no-match edge must land on the default body itself; any
+  // plumbing in between would be bypassed by a rewrite.
+  cfg::Block* default_body = *hash_sef.default_case();
+  if (origin_block->goes_to() != default_body) {
+    return false;
+  }
+
+  LeafPaths leaf_paths;
+  leaf_paths[default_body].emplace_back();
+
+  StringSwitchInfo::KeyToCase key_to_case;
+  UnorderedSet<const DexString*> seen_literals;
+  for (const auto& [key, bucket_entry] : hash_sef.key_to_case()) {
+    if (SwitchEquivFinder::is_default_case(key)) {
+      continue;
+    }
+    int32_t hash_key = boost::get<int32_t>(key);
+
+    cfg::Block* cur = bucket_entry;
+    bool first = true;
+    std::vector<cfg::Block*> prefix;
+    CycleGuard guard;
+    while (guard.visit(cur)) {
+      if (cur == default_body) {
+        if (first) {
+          return false; // a bucket must contain at least one equals
+        }
+        leaf_paths[default_body].push_back(prefix);
+        break;
+      }
+      EqualsLink link = find_equals_link(cur, subject_reg, subject_defs);
+      if (!link.found()) {
+        return false; // a miss that does not reach the common default body
+      }
+      first = false;
+
+      if (link.literal->java_hashcode() != hash_key) {
+        return false; // decoy / mismatched hash bucket
+      }
+      cfg::Edge* equal_e = nullptr;
+      cfg::Edge* neq_e = nullptr;
+      if (!equal_neq_edges(cfg, ud, link.branch_block(), link.equals_insn,
+                           &equal_e, &neq_e)) {
+        return false;
+      }
+      always_assert(equal_e != nullptr && neq_e != nullptr);
+      if (!seen_literals.insert(link.literal).second) {
+        return false; // duplicate literal
+      }
+      // Distinct literals may share a body (e.g. `case "a": case "b":`).
+      key_to_case[StringSwitchInfo::StringKey(link.literal)] =
+          equal_e->target();
+
+      auto link_blocks = link.path_blocks();
+      prefix.insert(prefix.end(), link_blocks.begin(), link_blocks.end());
+      leaf_paths[equal_e->target()].push_back(prefix);
+      cur = neq_e->target();
+    }
+    if (cur != default_body) {
+      return false; // the collision chain cycled
+    }
+  }
+  if (key_to_case.empty()) {
+    return false;
+  }
+  key_to_case[StringSwitchInfo::StringKey(StringSwitchInfo::DefaultCase{})] =
+      default_body;
+
+  auto region = region_from_leaf_paths(origin_block, leaf_paths);
+  // The region is assumed dead after a rewrite. A destination inside it would
+  // keep that block alive and break the region and size accounting.
+  for (const auto& [key, dest] : key_to_case) {
+    if (region.count(dest) != 0u) {
+      return false;
+    }
+  }
+  cfg::Block* hashcode_block = m_ctx.block_of(hashcode_insn);
+  if (!finalize_region(origin_block, hashcode_block, region, leaf_paths)) {
+    return false;
+  }
+
+  m_info.form = StringSwitchInfo::Form::HASH_SWITCH_DIRECT;
   m_info.origin_insn = hash_switch_insn;
   m_info.origin_block = origin_block;
   m_info.hashcode_insn = hashcode_insn;

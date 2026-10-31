@@ -1312,6 +1312,256 @@ TEST_F(StringSwitchFinderTest, hash_switch_in_try_multi_catch) {
   code->clear_cfg();
 }
 
+// The one-stage hash switch d8 9.0 emits for some switches: each bucket's
+// equals() branches straight to its body, and every miss reaches one default
+// body. "Aa" and "BB" collide (hash 2112), so that bucket chains two links.
+TEST_F(StringSwitchFinderTest, hash_switch_direct) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (switch v0 (:hone :hcoll))
+
+      (:default)
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hcoll 2112)
+      (const-string "Aa")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :aa)
+      (const-string "BB")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_BB")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+      (:aa)
+      (const-string "RES_Aa")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::HASH_SWITCH_DIRECT);
+  EXPECT_EQ(info.key_to_case.size(), 4u);
+
+  std::map<std::string, std::string> string_to_dest;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (std::holds_alternative<StringSwitchInfo::DefaultCase>(key)) {
+      string_to_dest["<default>"] = first_string_literal(block);
+    } else {
+      string_to_dest[std::string(key_string(key)->str())] =
+          first_string_literal(block);
+    }
+  }
+  EXPECT_EQ(string_to_dest["one"], "RES_one");
+  EXPECT_EQ(string_to_dest["Aa"], "RES_Aa");
+  EXPECT_EQ(string_to_dest["BB"], "RES_BB");
+  EXPECT_EQ(string_to_dest["<default>"], "RES_default");
+  EXPECT_TRUE(info.catch_exits.empty());
+  code->clear_cfg();
+}
+
+// The one-stage hash switch wrapped in a try/catch, as d8 9.0 lowers
+// Example.wrappedInTryCatch.
+TEST_F(StringSwitchFinderTest, hash_switch_direct_in_try) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (.try_start tc)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (switch v0 (:hone :htwo :hthree))
+
+      (:default)
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hthree 110339486)
+      (const-string "three")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_three")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+      (.try_end tc)
+
+      (.catch (tc) "Ljava/lang/Exception;")
+      (move-exception v5)
+      (const-string "RES_caught")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+
+  auto switches = find_string_switches(cfg, fp);
+  ASSERT_EQ(switches.size(), 1u);
+  const auto& info = switches[0];
+  EXPECT_EQ(info.form, StringSwitchInfo::Form::HASH_SWITCH_DIRECT);
+  EXPECT_EQ(info.key_to_case.size(), 4u);
+
+  std::map<std::string, std::string> string_to_dest;
+  for (const auto& [key, block] : info.key_to_case) {
+    if (std::holds_alternative<StringSwitchInfo::DefaultCase>(key)) {
+      string_to_dest["<default>"] = first_string_literal(block);
+    } else {
+      string_to_dest[std::string(key_string(key)->str())] =
+          first_string_literal(block);
+    }
+  }
+  EXPECT_EQ(string_to_dest["one"], "RES_one");
+  EXPECT_EQ(string_to_dest["two"], "RES_two");
+  EXPECT_EQ(string_to_dest["three"], "RES_three");
+  EXPECT_EQ(string_to_dest["<default>"], "RES_default");
+
+  ASSERT_EQ(info.catch_exits.size(), 1u);
+  EXPECT_EQ(info.catch_exits[0].catch_type,
+            DexType::get_type("Ljava/lang/Exception;"));
+  EXPECT_EQ(info.catch_exits[0].index, 0u);
+  EXPECT_EQ(first_string_literal(info.catch_exits[0].handler), "RES_caught");
+  code->clear_cfg();
+}
+
+// One bucket's miss reaches a different block than the hash default, so there
+// is no single default body: must be rejected.
+TEST_F(StringSwitchFinderTest, hash_switch_direct_divergent_defaults_rejected) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (switch v0 (:hone :htwo))
+
+      (:default)
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_one")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:htwo 115276)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :other)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:other)
+      (const-string "RES_other")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+  EXPECT_TRUE(find_string_switches(cfg, fp).empty());
+  code->clear_cfg();
+}
+
+// Bucket "one"'s equal edge targets bucket "two"'s test block instead of a
+// body, so a destination lies inside the region. Every predecessor of that
+// block is in the region, so only the destination check can reject it.
+TEST_F(StringSwitchFinderTest, hash_switch_direct_dest_in_region_rejected) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v3)
+      (invoke-virtual (v3) "Ljava/lang/String;.hashCode:()I")
+      (move-result v0)
+      (switch v0 (:hone :htwo))
+
+      (:default)
+      (const-string "RES_default")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+
+      (:hone 110182)
+      (const-string "one")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-nez v2 :testtwo)
+      (goto :default)
+
+      (:htwo 115276)
+      (:testtwo)
+      (const-string "two")
+      (move-result-pseudo-object v4)
+      (invoke-virtual (v3 v4) "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z")
+      (move-result v2)
+      (if-eqz v2 :default)
+      (const-string "RES_two")
+      (move-result-pseudo-object v4)
+      (return-object v4)
+    )
+  )");
+  code->build_cfg();
+  auto& cfg = code->cfg();
+  auto fp = make_fixpoint(cfg);
+  EXPECT_TRUE(find_string_switches(cfg, fp).empty());
+  code->clear_cfg();
+}
+
 // Form B (equals-chain) wrapped in a try/catch. Verifies the chain is recovered
 // across the may-throw block splits and the handler is recorded.
 TEST_F(StringSwitchFinderTest, equals_chain_in_try) {
