@@ -185,6 +185,7 @@ check_PROGRAMS = \
     signed_constant_propagation_test \
     compact_pointer_vector_test \
     source_blocks_test \
+    source_debug_extension_test \
     synthetic_block_counts_test \
     split_huge_switch_test \
     static_field_dependency_graph_test \
@@ -575,6 +576,8 @@ signed_constant_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/spart
 compact_pointer_vector_test_SOURCES = CompactPointerVectorTest.cpp
 
 source_blocks_test_SOURCES = SourceBlocksTest.cpp
+
+source_debug_extension_test_SOURCES = SourceDebugExtensionTest.cpp
 
 synthetic_block_counts_test_SOURCES = SyntheticBlockCountsTest.cpp
 
