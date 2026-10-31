@@ -45,6 +45,7 @@ check_PROGRAMS = \
     array_propagation_test \
     arsc_attribution_test \
     art_profile_writer_never_compile_test \
+    art_profile_writer_never_inline_min_hot_callsites_test \
     art_profile_writer_pass_test \
     assert_test \
     atomic_field_updater_lowering_test \
@@ -244,6 +245,9 @@ arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(t
 
 art_profile_writer_never_compile_test_SOURCES = \
     ArtProfileWriterNeverCompileTest.cpp
+
+art_profile_writer_never_inline_min_hot_callsites_test_SOURCES = \
+    ArtProfileWriterNeverInlineMinHotCallsitesTest.cpp
 
 art_profile_writer_pass_test_SOURCES = ArtProfileWriterPassTest.cpp
 
