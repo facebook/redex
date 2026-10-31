@@ -14,5 +14,23 @@ class InlineTestCodeKt {
     fun withPrecond(s: String): Boolean {
       throw RuntimeException(s)
     }
+
+    @JvmStatic
+    @NoInline
+    fun callKotlinInlineThrower() {
+      kotlinInlineThrower()
+    }
+
+    @JvmStatic
+    @NoInline
+    fun callKotlinInlineRegularThrower() {
+      kotlinInlineCallsRegularThrower()
+    }
+
+    @JvmStatic
+    @NoInline
+    fun callKotlinNestedInlineRegularThrower() {
+      kotlinNestedInlineCallsRegularThrower()
+    }
   }
 }
