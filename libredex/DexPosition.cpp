@@ -70,18 +70,26 @@ PositionPatternSwitchManager::PositionPatternSwitchManager()
 
 DexPosition* PositionPatternSwitchManager::internalize(DexPosition* pos) {
   always_assert(pos);
-  auto it = m_positions.find(pos);
-  if (it != m_positions.end()) {
-    return it->second.get();
-  }
-
-  auto* cloned_position = new DexPosition(*pos);
+  // An interned position is its own hash key, so it must never be mutated
+  // afterwards -- and `process_pattern_switch_positions` does rewrite the line
+  // of every switch position it emits. That is safe only because a pattern or
+  // switch position never reaches here, which is what this checks. Enabling
+  // CAN_OUTLINED_METHOD_INVOKE_OUTLINED_METHOD is what would break it.
+  always_assert_log(!is_pattern_position(pos) && !is_switch_position(pos),
+                    "interning a synthetic pattern/switch position; its line "
+                    "is rewritten at output time, which would corrupt the key "
+                    "it is stored under");
+  m_internalize_calls.fetch_add(1, std::memory_order_relaxed);
+  // Copy ctor, not the (method, file, line) ctor: that one always_asserts a
+  // non-null file, and a parent in the chain may legitimately have none.
+  DexPosition probe(*pos);
   if (pos->parent != nullptr) {
-    cloned_position->parent = internalize(pos->parent);
+    // Bottom-up, so the probe's parent is already canonical when it is hashed.
+    probe.parent = internalize(pos->parent);
   }
-  m_positions.emplace(cloned_position,
-                      std::unique_ptr<DexPosition>(cloned_position));
-  return cloned_position;
+  // No `std::move`: DexPosition is trivially copyable -- a static_assert here
+  // keeps it that way -- so moving is a copy and clang-tidy flags it.
+  return m_positions.insert_unsafe(probe).first;
 }
 
 uint32_t PositionPatternSwitchManager::make_pattern(
