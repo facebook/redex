@@ -36,6 +36,10 @@ struct StringSwitchInfo {
     // `subject.hashCode()`; switch(hash); per bucket chained equals() set an
     // ordinal; switch(ordinal) -> bodies.
     HASH_SWITCH,
+    // `subject.hashCode()`; switch(hash); per bucket chained equals() branching
+    // directly to bodies, with every miss reaching one common default body (no
+    // ordinal stage).
+    HASH_SWITCH_DIRECT,
     // No hash switch; a linear chain of `if (equals(subject, lit))` branching
     // directly to bodies (hashCode() present only as a discarded null-guard).
     EQUALS_CHAIN,
@@ -195,6 +199,17 @@ class StringSwitchFinder {
       const sparta::PatriciaTreeSet<live_range::Def>& subject_defs,
       cfg::Block* origin_block,
       IRInstruction* hash_switch_insn);
+
+  // Form A without the ordinal stage: each bucket's equal edges target the
+  // bodies directly, and the hash default plus every exhausted bucket reach the
+  // same default body. Tried only when `decode_hash_switch` finds no ordinal
+  // switch.
+  bool decode_direct_hash_switch(
+      reg_t subject_reg,
+      const sparta::PatriciaTreeSet<live_range::Def>& subject_defs,
+      cfg::Block* origin_block,
+      IRInstruction* hash_switch_insn,
+      const SwitchEquivFinder& hash_sef);
 
   // Form B: a linear chain of `if (equals(subject, lit))` anchored by a
   // (discarded) hashCode null-guard in `origin_block`.

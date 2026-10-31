@@ -56,8 +56,15 @@ struct CombineMethodResults {
 };
 
 const char* form_name(StringSwitchInfo::Form form) {
-  return form == StringSwitchInfo::Form::HASH_SWITCH ? "HASH_SWITCH"
-                                                     : "EQUALS_CHAIN";
+  switch (form) {
+  case StringSwitchInfo::Form::HASH_SWITCH:
+    return "HASH_SWITCH";
+  case StringSwitchInfo::Form::HASH_SWITCH_DIRECT:
+    return "HASH_SWITCH_DIRECT";
+  case StringSwitchInfo::Form::EQUALS_CHAIN:
+    return "EQUALS_CHAIN";
+  }
+  not_reached();
 }
 
 void write_block(std::ostream& os, cfg::Block* block) {
