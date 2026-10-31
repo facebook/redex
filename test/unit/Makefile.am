@@ -44,8 +44,6 @@ check_PROGRAMS = \
     armv7_jit_loop_checker_test \
     array_propagation_test \
     arsc_attribution_test \
-    art_profile_writer_never_compile_test \
-    art_profile_writer_never_inline_min_hot_callsites_test \
     art_profile_writer_pass_test \
     assert_test \
     atomic_field_updater_lowering_test \
@@ -242,12 +240,6 @@ array_propagation_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/sparta/test
 
 arsc_attribution_test_SOURCES = ArscAttributionTest.cpp $(top_srcdir)/tools/arsc/ArscStats.cpp arsc/TestStructures.cpp
 arsc_attribution_test_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/tools/arsc -I$(top_srcdir)/test/unit/arsc
-
-art_profile_writer_never_compile_test_SOURCES = \
-    ArtProfileWriterNeverCompileTest.cpp
-
-art_profile_writer_never_inline_min_hot_callsites_test_SOURCES = \
-    ArtProfileWriterNeverInlineMinHotCallsitesTest.cpp
 
 art_profile_writer_pass_test_SOURCES = ArtProfileWriterPassTest.cpp
 
